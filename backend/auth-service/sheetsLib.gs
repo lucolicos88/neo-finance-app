@@ -1,3 +1,20 @@
+var sheetCache = (function () {
+  var cache = {};
+  return {
+    getTable: function (spreadsheetId, sheetName) {
+      var key = spreadsheetId + '::' + sheetName;
+      if (cache[key]) return cache[key];
+      var sheet = getSheetByName(spreadsheetId, sheetName);
+      var values = sheet.getDataRange().getValues();
+      cache[key] = values;
+      return values;
+    },
+    clearCache: function () {
+      cache = {};
+    }
+  };
+})();
+
 /**
  * Returns a Sheet by name with error handling.
  * @param {string} spreadsheetId
@@ -20,8 +37,7 @@ function getSheetByName(spreadsheetId, sheetName) {
  * @return {Object[]}
  */
 function readTable(spreadsheetId, sheetName) {
-  var sheet = getSheetByName(spreadsheetId, sheetName);
-  var values = sheet.getDataRange().getValues();
+  var values = sheetCache.getTable(spreadsheetId, sheetName);
   if (!values.length) {
     return [];
   }

@@ -45,6 +45,55 @@ function setupBaseSheets() {
     'faixa_max',
     'cor'
   ]);
+
+  ensureSheetWithHeader(ss, 'tb_contas_pagar', [
+    'id',
+    'fornecedor',
+    'descricao',
+    'categoria',
+    'centro_custo',
+    'plano_contas',
+    'filial',
+    'data_lancamento',
+    'data_vencimento',
+    'data_pagamento',
+    'valor_bruto',
+    'valor_pago',
+    'status',
+    'origem',
+    'observacao'
+  ]);
+
+  ensureSheetWithHeader(ss, 'tb_contas_receber', [
+    'id',
+    'cliente',
+    'origem',
+    'filial',
+    'grupo_receita',
+    'data_emissao',
+    'data_vencimento',
+    'data_recebimento',
+    'valor_bruto',
+    'descontos',
+    'impostos',
+    'valor_liquido',
+    'status',
+    'forma_pagamento'
+  ]);
+
+  ensureSheetWithHeader(ss, 'tb_movimentos_caixa', [
+    'id',
+    'data',
+    'tipo',
+    'categoria',
+    'subcategoria',
+    'descricao',
+    'valor',
+    'servico_origem',
+    'id_origem',
+    'conta_bancaria',
+    'filial'
+  ]);
 }
 
 /**

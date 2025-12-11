@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contas a Pagar</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="p-3">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3>Contas a Pagar</h3>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoModal">Novo lancamento</button>
+    </div>
+
+    <form id="filtroForm" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <label class="form-label">Data Inicio</label>
+        <input type="date" name="dataInicio" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Data Fim</label>
+        <input type="date" name="dataFim" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Fornecedor</label>
+        <input type="text" name="fornecedor" class="form-control">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select">
+          <option value="">Todos</option>
+          <option value="aberto">Aberto</option>
+          <option value="pago">Pago</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Filial</label>
+        <input type="text" name="filial" class="form-control">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button type="submit" class="btn btn-secondary w-100">Buscar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Fornecedor</th>
+            <th>Descricao</th>
+            <th>Vencimento</th>
+            <th>Valor bruto</th>
+            <th>Status</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="apTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal fade" id="novoModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Novo lancamento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="novoForm" class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Fornecedor</label>
+              <input name="fornecedor" class="form-control" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descricao</label>
+              <input name="descricao" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Vencimento</label>
+              <input type="date" name="data_vencimento" class="form-control" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Valor bruto</label>
+              <input type="number" step="0.01" name="valor_bruto" class="form-control" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Filial</label>
+              <input name="filial" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Status</label>
+              <select name="status" class="form-select">
+                <option value="aberto">Aberto</option>
+                <option value="pago">Pago</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-primary" id="salvarNovo">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJB-tyl6EtDEWiJFAZaszhCwRTUsE6XTs1M4rV8CdeK86o2iRdf5HW8001BokutJTWFg/exec';
+    const AUTH_TOKEN = 'COLOQUE_TOKEN_AQUI';
+
+    async function callApi(path, payload) {
+      const res = await fetch(`${WEB_APP_URL}?path=${encodeURIComponent(path)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': AUTH_TOKEN },
+        body: JSON.stringify(payload || {})
+      });
+      return res.json();
+    }
+
+    const apApi = {
+      async listar(filtros) {
+        return callApi('/ap/list', filtros);
+      },
+      async criar(data) {
+        return callApi('/ap/create', data);
+      }
+    };
+
+    const tbody = document.getElementById('apTableBody');
+    const filtroForm = document.getElementById('filtroForm');
+    const novoForm = document.getElementById('novoForm');
+    const salvarNovoBtn = document.getElementById('salvarNovo');
+
+    filtroForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = Object.fromEntries(new FormData(filtroForm).entries());
+      const data = await apApi.listar(formData);
+      renderTabela(data);
+    });
+
+    salvarNovoBtn.addEventListener('click', async () => {
+      const data = Object.fromEntries(new FormData(novoForm).entries());
+      await apApi.criar(data);
+      bootstrap.Modal.getInstance(document.getElementById('novoModal')).hide();
+      filtroForm.dispatchEvent(new Event('submit'));
+    });
+
+    function renderTabela(data) {
+      tbody.innerHTML = '';
+      data.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.fornecedor || ''}</td>
+          <td>${item.descricao || ''}</td>
+          <td>${item.data_vencimento || ''}</td>
+          <td>${item.valor_bruto || ''}</td>
+          <td>${item.status || ''}</td>
+          <td><button class="btn btn-sm btn-outline-primary">Pagar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    filtroForm.dispatchEvent(new Event('submit'));
+  </script>
+</body>
+</html>

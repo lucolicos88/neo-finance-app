@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DRE Gerencial</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="p-3">
+  <div class="container">
+    <h3>DRE Gerencial</h3>
+    <form id="filtroForm" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <label class="form-label">Ano</label>
+        <input name="ano" class="form-control" placeholder="2025">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Mes</label>
+        <input name="mes" class="form-control" placeholder="01">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Filial</label>
+        <input name="filial" class="form-control">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-secondary w-100" type="submit">Buscar</button>
+      </div>
+    </form>
+
+    <table class="table table-bordered">
+      <tbody id="dreTable">
+        <tr><th>Receita Bruta</th><td id="rb">0</td></tr>
+        <tr><th>Impostos</th><td id="imp">0</td></tr>
+        <tr><th>Receita Liquida</th><td id="rl">0</td></tr>
+        <tr><th>CPV</th><td><span id="cpv">0</span> <span id="cls_cpv" class="badge bg-secondary"></span></td></tr>
+        <tr><th>Margem de Contribuicao</th><td id="mc">0</td></tr>
+        <tr><th>Despesas Variaveis</th><td><span id="dv">0</span> <span id="cls_dv" class="badge bg-secondary"></span></td></tr>
+        <tr><th>Despesas Fixas</th><td><span id="df">0</span> <span id="cls_df" class="badge bg-secondary"></span></td></tr>
+        <tr><th>EBITDA</th><td id="eb">0</td></tr>
+        <tr><th>Lucro Liquido</th><td id="ll">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJB-tyl6EtDEWiJFAZaszhCwRTUsE6XTs1M4rV8CdeK86o2iRdf5HW8001BokutJTWFg/exec';
+    const AUTH_TOKEN = 'COLOQUE_TOKEN_AQUI';
+
+    async function callApi(path, payload) {
+      const res = await fetch(`${WEB_APP_URL}?path=${encodeURIComponent(path)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': AUTH_TOKEN },
+        body: JSON.stringify(payload || {})
+      });
+      return res.json();
+    }
+
+    const dreApi = {
+      async getMensal(filtros) {
+        return callApi('/dre/mensal', filtros);
+      }
+    };
+
+    const ids = ['rb','imp','rl','cpv','mc','dv','df','eb','ll'];
+    const filtroForm = document.getElementById('filtroForm');
+    filtroForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const filtros = Object.fromEntries(new FormData(filtroForm).entries());
+      const resp = await dreApi.getMensal(filtros);
+      renderDre(resp.dre, resp.classificacao);
+    });
+
+    function renderDre(d, cls) {
+      document.getElementById('rb').textContent = d.receita_bruta;
+      document.getElementById('imp').textContent = d.impostos_venda;
+      document.getElementById('rl').textContent = d.receita_liquida;
+      document.getElementById('cpv').textContent = d.cpv_total;
+      document.getElementById('mc').textContent = d.margem_contribuicao;
+      document.getElementById('dv').textContent = d.despesas_variaveis;
+      document.getElementById('df').textContent = d.despesas_fixas;
+      document.getElementById('eb').textContent = d.ebitda;
+      document.getElementById('ll').textContent = d.lucro_liquido;
+      applyBadge('cls_cpv', cls && cls.classificacao_cpv);
+      applyBadge('cls_dv', cls && cls.classificacao_desp_var);
+      applyBadge('cls_df', cls && cls.classificacao_desp_fixa);
+    }
+    function applyBadge(id, c) {
+      const el = document.getElementById(id);
+      if (!c) { el.textContent=''; el.className='badge bg-secondary'; return; }
+      el.textContent = c.label;
+      el.style.backgroundColor = c.cor || '#6c757d';
+    }
+
+    filtroForm.dispatchEvent(new Event('submit'));
+  </script>
+</body>
+</html>

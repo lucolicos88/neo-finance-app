@@ -3,3 +3,9 @@ node_modules/**
 .vscode/**
 package-lock.json
 package.json
+backend/*/node_modules/**
+frontend/**
+docs/**
+infra/**
+README.md
+.gitignore

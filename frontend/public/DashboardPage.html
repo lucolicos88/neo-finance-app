@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="p-3">
+  <div class="container">
+    <h3>Dashboard Executivo</h3>
+    <form id="filtroForm" class="row g-2 mb-3">
+      <div class="col-md-3">
+        <label class="form-label">Data Inicio</label>
+        <input type="date" name="dataInicio" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Data Fim</label>
+        <input type="date" name="dataFim" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Filial</label>
+        <input name="filial" class="form-control">
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-secondary w-100" type="submit">Buscar</button>
+      </div>
+    </form>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Faturamento do mes</div><div id="cardFat" class="fw-bold fs-5">0</div></div></div></div>
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Lucro do mes</div><div id="cardLucro" class="fw-bold fs-5">0</div></div></div></div>
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Saldo de caixa</div><div id="cardCaixa" class="fw-bold fs-5">0</div></div></div></div>
+      <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">CPV %</div><div id="cardCpv" class="fw-bold fs-5">0%</div></div></div></div>
+    </div>
+
+    <canvas id="fatLucroChart" height="120"></canvas>
+
+    <div class="table-responsive mt-3">
+      <table class="table table-striped">
+        <thead><tr><th>Filial</th><th>Faturamento</th><th>Margem</th></tr></thead>
+        <tbody id="rankingBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxJB-tyl6EtDEWiJFAZaszhCwRTUsE6XTs1M4rV8CdeK86o2iRdf5HW8001BokutJTWFg/exec';
+    const AUTH_TOKEN = 'COLOQUE_TOKEN_AQUI';
+
+    async function callApi(path, payload) {
+      const res = await fetch(`${WEB_APP_URL}?path=${encodeURIComponent(path)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': AUTH_TOKEN },
+        body: JSON.stringify(payload || {})
+      });
+      return res.json();
+    }
+
+    const reportingApi = {
+      async getDashboardGeral(filtros) {
+        return callApi('/reports/dashboard', filtros);
+      }
+    };
+
+    const filtroForm = document.getElementById('filtroForm');
+    const cardFat = document.getElementById('cardFat');
+    const cardLucro = document.getElementById('cardLucro');
+    const cardCaixa = document.getElementById('cardCaixa');
+    const cardCpv = document.getElementById('cardCpv');
+    const chartCtx = document.getElementById('fatLucroChart').getContext('2d');
+    let chart;
+
+    filtroForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const filtros = Object.fromEntries(new FormData(filtroForm).entries());
+      const data = await reportingApi.getDashboardGeral(filtros);
+      renderCards(data.cards);
+      renderChart(data.series);
+      renderRanking(data.rankingFiliais);
+    });
+
+    function renderCards(cards) {
+      cardFat.textContent = cards.faturamentoMes || 0;
+      cardLucro.textContent = cards.lucroMes || 0;
+      cardCaixa.textContent = cards.saldoCaixa || 0;
+      cardCpv.textContent = ((cards.cpvPercentual || 0) * 100).toFixed(1) + '%';
+    }
+
+    function renderChart(series) {
+      const labels = (series.faturamentoPorMes || []).map(s => s.mes);
+      const fatData = (series.faturamentoPorMes || []).map(s => s.valor);
+      const lucroData = (series.lucroPorMes || []).map(s => s.valor);
+      if (chart) chart.destroy();
+      chart = new Chart(chartCtx, {
+        type: 'line',
+        data: { labels, datasets: [
+          { label:'Faturamento', data: fatData, borderColor:'#0d6efd', fill:false },
+          { label:'Lucro', data: lucroData, borderColor:'#198754', fill:false }
+        ]},
+        options: { responsive: true }
+      });
+    }
+
+    function renderRanking(ranking) {
+      const body = document.getElementById('rankingBody');
+      body.innerHTML = '';
+      (ranking||[]).forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.filial||''}</td><td>${r.faturamento||0}</td><td>${r.margem||0}</td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    filtroForm.dispatchEvent(new Event('submit'));
+  </script>
+</body>
+</html>
