@@ -47,10 +47,10 @@
     const AUTH_TOKEN = 'sr2alk724hL3fSDx/TQBELrC66bXYv2yRInXxeTDAPY=';
 
     async function callApi(path, payload) {
+      const body = Object.assign({}, payload || {}, { token: AUTH_TOKEN });
       const res = await fetch(`${WEB_APP_URL}?path=${encodeURIComponent(path)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': AUTH_TOKEN },
-        body: JSON.stringify(payload || {})
+        body: JSON.stringify(body)
       });
       return res.json();
     }
