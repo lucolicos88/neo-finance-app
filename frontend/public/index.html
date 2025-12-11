@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neo Finance - Hello World</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 640px; }
+    button { padding: 10px 16px; font-size: 14px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 12px; border-radius: 6px; min-height: 120px; }
+    .status { margin-top: 12px; font-size: 13px; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Hello World - Frontend → Apps Script</h1>
+  <p>Clique para testar o endpoint do Web App (doPost) no Apps Script.</p>
+  <button id="testButton">Testar API</button>
+  <div class="status" id="status"></div>
+  <pre id="responseArea">{}</pre>
+
+  <script>
+    // Substitua pela URL do Web App publicada (Deploy > Nova implantação > Tipo Web App).
+    const WEB_APP_URL = 'PASTE_WEB_APP_URL_HERE';
+
+    const statusEl = document.getElementById('status');
+    const responseEl = document.getElementById('responseArea');
+    const btn = document.getElementById('testButton');
+
+    async function testApi() {
+      statusEl.textContent = 'Chamando API...';
+      responseEl.textContent = '{}';
+      try {
+        const res = await fetch(WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ping: 'test' })
+        });
+        const json = await res.json();
+        responseEl.textContent = JSON.stringify(json, null, 2);
+        statusEl.textContent = 'OK';
+      } catch (err) {
+        responseEl.textContent = JSON.stringify({ error: err.message }, null, 2);
+        statusEl.textContent = 'Erro na chamada';
+      }
+    }
+
+    btn.addEventListener('click', testApi);
+  </script>
+</body>
+</html>
