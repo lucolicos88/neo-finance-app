@@ -1,43 +1,62 @@
 /**
- * GET handler: returns a simple JSON hello.
+ * Roteia requisições para WebApp (HTML) ou APIs (path).
  */
 function doGet(e) {
-  try {
-    var payload = {
-      status: 'ok',
-      message: 'Hello World from Apps Script'
-    };
-    return ContentService.createTextOutput(JSON.stringify(payload))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return createErrorResponse(err);
+  var path = e && e.parameter && e.parameter.path;
+  if (!path) {
+    // Serve HTML do próprio Apps Script para evitar CORS.
+    return HtmlService.createHtmlOutputFromFile('WebApp')
+      .setTitle('Neo Finance App');
   }
+  return routeRequest(e, 'GET');
 }
 
-/**
- * POST handler: echoes JSON body with a receivedAt timestamp.
- */
 function doPost(e) {
-  try {
-    var rawBody = e && e.postData && e.postData.contents;
-    var data = rawBody ? JSON.parse(rawBody) : {};
-    data.receivedAt = new Date().toISOString();
-
-    return ContentService.createTextOutput(JSON.stringify(data))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return createErrorResponse(err);
-  }
+  return routeRequest(e, 'POST');
 }
 
-/**
- * Builds an error JSON response.
- * @param {Error} err
- * @return {GoogleAppsScript.Content.TextOutput}
- */
-function createErrorResponse(err) {
-  var message = (err && err.message) ? err.message : 'Unexpected error';
-  var payload = { error: message };
-  return ContentService.createTextOutput(JSON.stringify(payload))
+function routeRequest(e, method) {
+  var path = (e && e.parameter && e.parameter.path) ? e.parameter.path : '';
+  if (path.indexOf('/ap') === 0 && typeof handleRequest === 'function') {
+    return handleRequest(e);
+  }
+  if (path.indexOf('/ar') === 0 && typeof handleArRequest === 'function') {
+    return handleArRequest(e);
+  }
+  if (path.indexOf('/cashflow') === 0 && typeof handleCashflowRequest === 'function') {
+    return handleCashflowRequest(e);
+  }
+  if (path.indexOf('/dre') === 0 && typeof handleDreRequest === 'function') {
+    return handleDreRequest(e);
+  }
+  if (path.indexOf('/reports') === 0 && typeof handleReportsRequest === 'function') {
+    return handleReportsRequest(e);
+  }
+  var payload = { status: 'ok', message: 'Hello World from Apps Script' };
+  var out = ContentService.createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
+  if (out.setHeader) {
+    out.setHeader('Access-Control-Allow-Origin', '*');
+    out.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    out.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  return out;
+}
+
+function parseBody(e) {
+  if (e && e.postData && e.postData.contents) {
+    try { return JSON.parse(e.postData.contents); } catch (err) { return {}; }
+  }
+  return {};
+}
+
+function jsonResponseSafe(obj) {
+  var out = ContentService.createTextOutput(JSON.stringify(obj || {}))
+    .setMimeType(ContentService.MimeType.JSON);
+  if (out.setHeader) {
+    out.setHeader('Access-Control-Allow-Origin', '*');
+    out.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    out.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  return out;
 }
