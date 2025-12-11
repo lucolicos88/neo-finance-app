@@ -1,0 +1,24 @@
+{
+  "name": "neo-finance-app",
+  "version": "1.0.0",
+  "description": "Sistema de gestao financeira com backend em Google Apps Script (microservicos) e frontend web em HTML/JS com Bootstrap.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucolicos88/neo-finance-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/lucolicos88/neo-finance-app/issues"
+  },
+  "homepage": "https://github.com/lucolicos88/neo-finance-app#readme"
+}
