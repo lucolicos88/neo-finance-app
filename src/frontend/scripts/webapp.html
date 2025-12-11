@@ -659,4 +659,31 @@ function updateBatchButtonsReceber() {
   document.getElementById('btn-receber-lote').disabled = selected.length === 0;
   document.getElementById('btn-cancelar-receber-lote').disabled = selected.length === 0;
 }
+
+// ============================================================================
+// STUBS / PLACEHOLDERS DE AÇÔES
+// ============================================================================
+
+// Dashboard
+function viewTransaction(id) {
+  showToast(`Visualização de lançamento ${id} em desenvolvimento`, 'info');
+}
+
+// Contas a pagar
+function editContaPagar(id) {
+  showToast(`Edição da conta a pagar ${id} em desenvolvimento`, 'info');
+}
+
+function exportContasPagar() {
+  showToast('Exportação de contas a pagar em desenvolvimento', 'info');
+}
+
+// Contas a receber
+function openNovaContaReceber() {
+  showToast('Cadastro de nova conta a receber em desenvolvimento', 'info');
+}
+
+function editContaReceber(id) {
+  showToast(`Edição da conta a receber ${id} em desenvolvimento`, 'info');
+}
 </script>
