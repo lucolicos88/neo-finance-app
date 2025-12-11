@@ -1,0 +1,15 @@
+**/**~
+**/.DS_Store
+**/node_modules/**
+**/.git/**
+**/.vscode/**
+.prettierrc
+.eslintrc
+tsconfig.json
+temp-bound/**
+*.md
+setup-*.js
+setup-*.ps1
+bind-*.js
+src/frontend/scripts/**
+src/frontend/styles/**

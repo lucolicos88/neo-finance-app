@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neoformula Finance - Sistema Financeiro</title>
+  <?!= include('frontend/styles/theme-neoformula'); ?>
+  <?!= include('frontend/styles/webapp'); ?>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <img src="https://via.placeholder.com/40x40/00a8e8/ffffff?text=NF" alt="Neoformula" class="logo">
+      <span class="brand-name">Neoformula Finance</span>
+    </div>
+    <div class="navbar-menu">
+      <a href="#" class="nav-item active" data-view="dashboard">
+        <i class="icon">📊</i>
+        Dashboard
+      </a>
+      <a href="#" class="nav-item" data-view="contas-pagar">
+        <i class="icon">💳</i>
+        Contas a Pagar
+      </a>
+      <a href="#" class="nav-item" data-view="contas-receber">
+        <i class="icon">💰</i>
+        Contas a Receber
+      </a>
+      <a href="#" class="nav-item" data-view="conciliacao">
+        <i class="icon">🔄</i>
+        Conciliação
+      </a>
+      <a href="#" class="nav-item" data-view="relatorios">
+        <i class="icon">📈</i>
+        Relatórios
+      </a>
+    </div>
+    <div class="navbar-user">
+      <span class="user-name">Usuário</span>
+      <img src="https://via.placeholder.com/32x32/666666/ffffff?text=U" alt="User" class="user-avatar">
+    </div>
+  </nav>
+
+  <!-- Main Content Area -->
+  <main class="main-content" id="main-content">
+    <!-- Views will be loaded here dynamically -->
+  </main>
+
+  <!-- Loading Spinner -->
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="spinner"></div>
+    <p>Carregando...</p>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <?!= include('frontend/scripts/webapp'); ?>
+</body>
+</html>

@@ -1,0 +1,645 @@
+<script>
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+
+let currentView = 'dashboard';
+let appData = {
+  contasPagar: [],
+  contasReceber: [],
+  extratos: [],
+  lancamentos: [],
+  filiais: [],
+  canais: []
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+  initializeApp();
+});
+
+function initializeApp() {
+  // Setup navigation
+  setupNavigation();
+
+  // Load reference data
+  loadReferenceData();
+
+  // Load initial view
+  navigateTo('dashboard');
+}
+
+// ============================================================================
+// NAVIGATION
+// ============================================================================
+
+function setupNavigation() {
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      const view = this.getAttribute('data-view');
+      navigateTo(view);
+    });
+  });
+}
+
+function navigateTo(view) {
+  // Update active nav item
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  document.querySelector(`[data-view="${view}"]`)?.classList.add('active');
+
+  // Load view content
+  currentView = view;
+  loadView(view);
+}
+
+function loadView(view) {
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function(html) {
+      document.getElementById('main-content').innerHTML = html;
+      hideLoading();
+
+      // Initialize view-specific logic
+      switch(view) {
+        case 'dashboard':
+          loadDashboardData();
+          break;
+        case 'contas-pagar':
+          loadContasPagarData();
+          break;
+        case 'contas-receber':
+          loadContasReceberData();
+          break;
+        case 'conciliacao':
+          loadConciliacaoData();
+          break;
+        case 'relatorios':
+          loadRelatoriosData();
+          break;
+      }
+    })
+    .withFailureHandler(handleError)
+    .getViewHtml(view);
+}
+
+// ============================================================================
+// REFERENCE DATA
+// ============================================================================
+
+function loadReferenceData() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      appData.filiais = data.filiais || [];
+      appData.canais = data.canais || [];
+      populateFilters();
+    })
+    .withFailureHandler(handleError)
+    .getReferenceData();
+}
+
+function populateFilters() {
+  // Populate filial filters
+  const filiaisSelects = document.querySelectorAll('#filter-cp-filial, #filter-cr-filial');
+  filiaisSelects.forEach(select => {
+    select.innerHTML = '<option value="">Todas</option>';
+    appData.filiais.forEach(filial => {
+      select.innerHTML += `<option value="${filial.codigo}">${filial.nome}</option>`;
+    });
+  });
+}
+
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+
+function loadDashboardData() {
+  google.script.run
+    .withSuccessHandler(function(data) {
+      // Update stats
+      updateElement('stat-pagar-vencidas', formatCurrency(data.pagarVencidas.valor));
+      updateElement('stat-pagar-vencidas-qtd', `${data.pagarVencidas.quantidade} contas`);
+      updateElement('stat-pagar-proximas', formatCurrency(data.pagarProximas.valor));
+      updateElement('stat-pagar-proximas-qtd', `${data.pagarProximas.quantidade} contas`);
+      updateElement('stat-receber-hoje', formatCurrency(data.receberHoje.valor));
+      updateElement('stat-receber-hoje-qtd', `${data.receberHoje.quantidade} contas`);
+      updateElement('stat-conciliacao-pendentes', data.conciliacaoPendentes.quantidade);
+      updateElement('stat-conciliacao-valor', formatCurrency(data.conciliacaoPendentes.valor));
+
+      // Render recent transactions
+      renderDashboardTransactions(data.recentTransactions);
+
+      // Render alerts
+      renderDashboardAlerts(data.alerts);
+    })
+    .withFailureHandler(handleError)
+    .getDashboardData();
+}
+
+function renderDashboardTransactions(transactions) {
+  const tbody = document.getElementById('dashboard-transactions');
+
+  if (!transactions || transactions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum lançamento encontrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = transactions.map(t => `
+    <tr>
+      <td>${formatDate(t.data)}</td>
+      <td>${t.descricao}</td>
+      <td><span class="badge ${t.tipo === 'RECEITA' ? 'badge-success' : 'badge-danger'}">${t.tipo}</span></td>
+      <td class="${t.tipo === 'RECEITA' ? 'text-success' : 'text-danger'}">${formatCurrency(t.valor)}</td>
+      <td><span class="badge badge-${getStatusClass(t.status)}">${t.status}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="viewTransaction('${t.id}')">Ver</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderDashboardAlerts(alerts) {
+  const container = document.getElementById('dashboard-alerts');
+
+  if (!alerts || alerts.length === 0) {
+    container.innerHTML = '<p class="text-muted">Nenhum alerta no momento</p>';
+    return;
+  }
+
+  container.innerHTML = alerts.map(alert => `
+    <div class="alert alert-${alert.type}" style="padding: 1rem; margin-bottom: 0.5rem; border-left: 4px solid; border-radius: 4px;">
+      <strong>${alert.title}</strong>
+      <p style="margin: 0.5rem 0 0 0;">${alert.message}</p>
+    </div>
+  `).join('');
+}
+
+function refreshDashboard() {
+  loadDashboardData();
+  showToast('Dashboard atualizado', 'success');
+}
+
+// ============================================================================
+// CONTAS A PAGAR
+// ============================================================================
+
+function loadContasPagarData() {
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      appData.contasPagar = data.contas || [];
+
+      // Update stats
+      updateElement('cp-vencidas-valor', formatCurrency(data.stats.vencidas.valor));
+      updateElement('cp-vencidas-qtd', `${data.stats.vencidas.quantidade} contas`);
+      updateElement('cp-vencer-valor', formatCurrency(data.stats.vencer7.valor));
+      updateElement('cp-vencer-qtd', `${data.stats.vencer7.quantidade} contas`);
+      updateElement('cp-futuro-valor', formatCurrency(data.stats.vencer30.valor));
+      updateElement('cp-futuro-qtd', `${data.stats.vencer30.quantidade} contas`);
+      updateElement('cp-pagas-valor', formatCurrency(data.stats.pagas.valor));
+      updateElement('cp-pagas-qtd', `${data.stats.pagas.quantidade} contas`);
+
+      // Render table
+      renderContasPagarTable(data.contas);
+    })
+    .withFailureHandler(handleError)
+    .getContasPagar();
+}
+
+function renderContasPagarTable(contas) {
+  const tbody = document.getElementById('table-contas-pagar');
+  updateElement('cp-total-registros', contas.length);
+
+  if (!contas || contas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhuma conta encontrada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = contas.map(c => `
+    <tr>
+      <td><input type="checkbox" class="select-cp" value="${c.id}"></td>
+      <td>${c.id}</td>
+      <td>${formatDate(c.vencimento)}</td>
+      <td>${c.fornecedor}</td>
+      <td>${c.descricao}</td>
+      <td class="text-danger">${formatCurrency(c.valor)}</td>
+      <td><span class="badge badge-${getStatusClass(c.status)}">${c.status}</span></td>
+      <td>${c.filial}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="editContaPagar('${c.id}')">✏️</button>
+        <button class="btn btn-sm btn-success" onclick="pagarConta('${c.id}')" ${c.status !== 'PENDENTE' ? 'disabled' : ''}>✓</button>
+      </td>
+    </tr>
+  `).join('');
+
+  // Setup checkbox listeners
+  document.querySelectorAll('.select-cp').forEach(cb => {
+    cb.addEventListener('change', updateBatchButtons);
+  });
+}
+
+function filterContasPagar() {
+  const status = document.getElementById('filter-cp-status').value;
+  const filial = document.getElementById('filter-cp-filial').value;
+  const dataInicio = document.getElementById('filter-cp-data-inicio').value;
+  const dataFim = document.getElementById('filter-cp-data-fim').value;
+
+  let filtered = appData.contasPagar;
+
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (filial) filtered = filtered.filter(c => c.filial === filial);
+  if (dataInicio) filtered = filtered.filter(c => c.vencimento >= dataInicio);
+  if (dataFim) filtered = filtered.filter(c => c.vencimento <= dataFim);
+
+  renderContasPagarTable(filtered);
+}
+
+function clearFilters(type) {
+  if (type === 'pagar') {
+    document.getElementById('filter-cp-status').value = '';
+    document.getElementById('filter-cp-filial').value = '';
+    document.getElementById('filter-cp-data-inicio').value = '';
+    document.getElementById('filter-cp-data-fim').value = '';
+    filterContasPagar();
+  } else if (type === 'receber') {
+    document.getElementById('filter-cr-status').value = '';
+    document.getElementById('filter-cr-cliente').value = '';
+    document.getElementById('filter-cr-data-inicio').value = '';
+    document.getElementById('filter-cr-data-fim').value = '';
+    filterContasReceber();
+  }
+}
+
+function openNovaContaPagar() {
+  showToast('Funcionalidade em desenvolvimento', 'info');
+  // TODO: Open modal form
+}
+
+function pagarConta(id) {
+  if (!confirm('Confirmar pagamento desta conta?')) return;
+
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function() {
+      hideLoading();
+      showToast('Conta paga com sucesso', 'success');
+      loadContasPagarData();
+    })
+    .withFailureHandler(handleError)
+    .pagarConta(id);
+}
+
+function pagarEmLote() {
+  const selected = getSelectedIds('cp');
+  if (selected.length === 0) {
+    showToast('Selecione ao menos uma conta', 'warning');
+    return;
+  }
+
+  if (!confirm(`Confirmar pagamento de ${selected.length} contas?`)) return;
+
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function() {
+      hideLoading();
+      showToast(`${selected.length} contas pagas com sucesso`, 'success');
+      loadContasPagarData();
+    })
+    .withFailureHandler(handleError)
+    .pagarContasEmLote(selected);
+}
+
+// ============================================================================
+// CONTAS A RECEBER
+// ============================================================================
+
+function loadContasReceberData() {
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      appData.contasReceber = data.contas || [];
+
+      // Update stats
+      updateElement('cr-vencidas-valor', formatCurrency(data.stats.vencidas.valor));
+      updateElement('cr-vencidas-qtd', `${data.stats.vencidas.quantidade} contas`);
+      updateElement('cr-receber-valor', formatCurrency(data.stats.receber7.valor));
+      updateElement('cr-receber-qtd', `${data.stats.receber7.quantidade} contas`);
+      updateElement('cr-futuro-valor', formatCurrency(data.stats.receber30.valor));
+      updateElement('cr-futuro-qtd', `${data.stats.receber30.quantidade} contas`);
+      updateElement('cr-recebidas-valor', formatCurrency(data.stats.recebidas.valor));
+      updateElement('cr-recebidas-qtd', `${data.stats.recebidas.quantidade} contas`);
+
+      // Render table
+      renderContasReceberTable(data.contas);
+    })
+    .withFailureHandler(handleError)
+    .getContasReceber();
+}
+
+function renderContasReceberTable(contas) {
+  const tbody = document.getElementById('table-contas-receber');
+  updateElement('cr-total-registros', contas.length);
+
+  if (!contas || contas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhuma conta encontrada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = contas.map(c => `
+    <tr>
+      <td><input type="checkbox" class="select-cr" value="${c.id}"></td>
+      <td>${c.id}</td>
+      <td>${formatDate(c.vencimento)}</td>
+      <td>${c.cliente}</td>
+      <td>${c.descricao}</td>
+      <td class="text-success">${formatCurrency(c.valor)}</td>
+      <td><span class="badge badge-${getStatusClass(c.status)}">${c.status}</span></td>
+      <td>${c.canal}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="editContaReceber('${c.id}')">✏️</button>
+        <button class="btn btn-sm btn-success" onclick="receberConta('${c.id}')" ${c.status !== 'PENDENTE' ? 'disabled' : ''}>✓</button>
+      </td>
+    </tr>
+  `).join('');
+
+  // Setup checkbox listeners
+  document.querySelectorAll('.select-cr').forEach(cb => {
+    cb.addEventListener('change', updateBatchButtonsReceber);
+  });
+}
+
+function filterContasReceber() {
+  const status = document.getElementById('filter-cr-status').value;
+  const cliente = document.getElementById('filter-cr-cliente').value.toLowerCase();
+  const dataInicio = document.getElementById('filter-cr-data-inicio').value;
+  const dataFim = document.getElementById('filter-cr-data-fim').value;
+
+  let filtered = appData.contasReceber;
+
+  if (status) filtered = filtered.filter(c => c.status === status);
+  if (cliente) filtered = filtered.filter(c => c.cliente.toLowerCase().includes(cliente));
+  if (dataInicio) filtered = filtered.filter(c => c.vencimento >= dataInicio);
+  if (dataFim) filtered = filtered.filter(c => c.vencimento <= dataFim);
+
+  renderContasReceberTable(filtered);
+}
+
+// ============================================================================
+// CONCILIAÇÃO
+// ============================================================================
+
+function loadConciliacaoData() {
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      appData.extratos = data.extratos || [];
+      appData.lancamentos = data.lancamentos || [];
+
+      // Update stats
+      updateElement('conc-extratos-pendentes', data.stats.extratosPendentes);
+      updateElement('conc-extratos-valor', formatCurrency(data.stats.extratosValor));
+      updateElement('conc-lancamentos-pendentes', data.stats.lancamentosPendentes);
+      updateElement('conc-lancamentos-valor', formatCurrency(data.stats.lancamentosValor));
+      updateElement('conc-hoje', data.stats.conciliadosHoje);
+      updateElement('conc-hoje-valor', formatCurrency(data.stats.conciliadosHojeValor));
+      updateElement('conc-taxa', `${data.stats.taxaConciliacao}%`);
+
+      // Render lists
+      renderExtratosList(data.extratos);
+      renderLancamentosList(data.lancamentos);
+      renderHistoricoConciliacao(data.historico);
+    })
+    .withFailureHandler(handleError)
+    .getConciliacaoData();
+}
+
+function renderExtratosList(extratos) {
+  const container = document.getElementById('extratos-list');
+
+  if (!extratos || extratos.length === 0) {
+    container.innerHTML = '<p class="text-muted text-center">Nenhum extrato pendente</p>';
+    return;
+  }
+
+  container.innerHTML = extratos.map(e => `
+    <div class="extrato-item" data-id="${e.id}" onclick="selectExtrato('${e.id}')">
+      <div class="item-header">
+        <span class="item-date">${formatDate(e.data)}</span>
+        <span class="item-value ${e.valor >= 0 ? 'positive' : 'negative'}">${formatCurrency(e.valor)}</span>
+      </div>
+      <div class="item-description">${e.descricao}</div>
+      <div class="item-meta">
+        <span>🏦 ${e.banco}</span>
+        <span>📄 ${e.id}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderLancamentosList(lancamentos) {
+  const container = document.getElementById('lancamentos-list');
+
+  if (!lancamentos || lancamentos.length === 0) {
+    container.innerHTML = '<p class="text-muted text-center">Nenhum lançamento pendente</p>';
+    return;
+  }
+
+  container.innerHTML = lancamentos.map(l => `
+    <div class="lancamento-item" data-id="${l.id}" onclick="selectLancamento('${l.id}')">
+      <div class="item-header">
+        <span class="item-date">${formatDate(l.data)}</span>
+        <span class="item-value ${l.tipo === 'RECEITA' ? 'positive' : 'negative'}">${formatCurrency(l.valor)}</span>
+      </div>
+      <div class="item-description">${l.descricao}</div>
+      <div class="item-meta">
+        <span>📊 ${l.tipo}</span>
+        <span>📄 ${l.id}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+let selectedExtrato = null;
+let selectedLancamento = null;
+
+function selectExtrato(id) {
+  document.querySelectorAll('.extrato-item').forEach(item => item.classList.remove('selected'));
+  document.querySelector(`.extrato-item[data-id="${id}"]`).classList.add('selected');
+  selectedExtrato = id;
+  checkConciliacaoPossivel();
+}
+
+function selectLancamento(id) {
+  document.querySelectorAll('.lancamento-item').forEach(item => item.classList.remove('selected'));
+  document.querySelector(`.lancamento-item[data-id="${id}"]`).classList.add('selected');
+  selectedLancamento = id;
+  checkConciliacaoPossivel();
+}
+
+function checkConciliacaoPossivel() {
+  if (selectedExtrato && selectedLancamento) {
+    if (confirm('Deseja conciliar os itens selecionados?')) {
+      conciliar(selectedExtrato, selectedLancamento);
+    }
+  }
+}
+
+function conciliar(extratoId, lancamentoId) {
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function() {
+      hideLoading();
+      showToast('Conciliação realizada com sucesso', 'success');
+      selectedExtrato = null;
+      selectedLancamento = null;
+      loadConciliacaoData();
+    })
+    .withFailureHandler(handleError)
+    .conciliarItens(extratoId, lancamentoId);
+}
+
+function conciliarAutomatico() {
+  if (!confirm('Executar conciliação automática? Isso pode levar alguns segundos.')) return;
+
+  showLoading('Processando conciliação automática...');
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      showToast(`${result.conciliados} itens conciliados automaticamente`, 'success');
+      loadConciliacaoData();
+    })
+    .withFailureHandler(handleError)
+    .conciliarAutomatico();
+}
+
+function renderHistoricoConciliacao(historico) {
+  const tbody = document.getElementById('table-historico-conciliacao');
+
+  if (!historico || historico.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma conciliação realizada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = historico.slice(0, 50).map(h => `
+    <tr>
+      <td>${formatDate(h.dataConciliacao)}</td>
+      <td>${h.extratoId}</td>
+      <td>${h.lancamentoId}</td>
+      <td>${h.descricao}</td>
+      <td>${formatCurrency(h.valor)}</td>
+      <td>${h.banco}</td>
+      <td>${h.usuario || 'Sistema'}</td>
+      <td>
+        <button class="btn btn-sm btn-danger" onclick="desfazerConciliacao('${h.extratoId}', '${h.lancamentoId}')">↩️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+function formatCurrency(value) {
+  if (value === null || value === undefined) return 'R$ 0,00';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('pt-BR');
+}
+
+function getStatusClass(status) {
+  const map = {
+    'PENDENTE': 'warning',
+    'PAGA': 'success',
+    'RECEBIDA': 'success',
+    'VENCIDA': 'danger',
+    'CANCELADA': 'secondary',
+    'CONCILIADO': 'success'
+  };
+  return map[status] || 'secondary';
+}
+
+function updateElement(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function showLoading(message = 'Carregando...') {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    const text = overlay.querySelector('p');
+    if (text) text.textContent = message;
+  }
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `
+    <span>${message}</span>
+  `;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
+function handleError(error) {
+  hideLoading();
+  console.error('Error:', error);
+  showToast(error.message || 'Ocorreu um erro', 'error');
+}
+
+function toggleSelectAll(type) {
+  const checked = document.getElementById(`select-all-${type}`).checked;
+  document.querySelectorAll(`.select-${type}`).forEach(cb => {
+    cb.checked = checked;
+  });
+  if (type === 'cp') updateBatchButtons();
+  if (type === 'cr') updateBatchButtonsReceber();
+}
+
+function getSelectedIds(type) {
+  return Array.from(document.querySelectorAll(`.select-${type}:checked`))
+    .map(cb => cb.value);
+}
+
+function updateBatchButtons() {
+  const selected = getSelectedIds('cp');
+  document.getElementById('btn-pagar-lote').disabled = selected.length === 0;
+  document.getElementById('btn-cancelar-lote').disabled = selected.length === 0;
+}
+
+function updateBatchButtonsReceber() {
+  const selected = getSelectedIds('cr');
+  document.getElementById('btn-receber-lote').disabled = selected.length === 0;
+  document.getElementById('btn-cancelar-receber-lote').disabled = selected.length === 0;
+}
+</script>

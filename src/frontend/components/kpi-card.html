@@ -1,0 +1,27 @@
+<!--
+  KPI Card Component
+
+  Uso: Este componente deve ser clonado via JavaScript
+  e populado com dados de KPI dinamicamente
+-->
+
+<template id="kpi-card-template">
+  <div class="card kpi-card">
+    <div class="flex justify-between items-center mb-2">
+      <h3 class="text-sm text-secondary kpi-metric-name">Métrica</h3>
+      <span class="kpi-badge">BOM</span>
+    </div>
+    <div class="kpi-value text-3xl font-bold mb-1">0,00</div>
+    <div class="kpi-unit text-xs text-muted">%</div>
+  </div>
+</template>
+
+<style>
+  .kpi-card {
+    min-height: 120px;
+  }
+
+  .kpi-value {
+    line-height: 1.2;
+  }
+</style>

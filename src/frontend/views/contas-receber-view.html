@@ -1,0 +1,122 @@
+<div class="view-container" id="contas-receber-view">
+  <h1 class="view-title">Contas a Receber</h1>
+
+  <!-- Summary Cards -->
+  <div class="stats-grid">
+    <div class="stat-card danger">
+      <div class="stat-label">Vencidas</div>
+      <div class="stat-value" id="cr-vencidas-valor">R$ 0,00</div>
+      <div class="stat-change" id="cr-vencidas-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-label">A Receber (7 dias)</div>
+      <div class="stat-value" id="cr-receber-valor">R$ 0,00</div>
+      <div class="stat-change" id="cr-receber-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">A Receber (30 dias)</div>
+      <div class="stat-value" id="cr-futuro-valor">R$ 0,00</div>
+      <div class="stat-change" id="cr-futuro-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-label">Recebidas no Mês</div>
+      <div class="stat-value" id="cr-recebidas-valor">R$ 0,00</div>
+      <div class="stat-change" id="cr-recebidas-qtd">0 contas</div>
+    </div>
+  </div>
+
+  <!-- Filters and Actions -->
+  <div class="card">
+    <div class="filters">
+      <div class="d-flex justify-between align-center mb-2">
+        <h3 class="filters-title">Filtros</h3>
+        <button class="btn btn-outline" onclick="clearFilters('receber')">Limpar</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-control" id="filter-cr-status" onchange="filterContasReceber()">
+            <option value="">Todos</option>
+            <option value="PENDENTE">Pendente</option>
+            <option value="VENCIDA">Vencida</option>
+            <option value="RECEBIDA">Recebida</option>
+            <option value="CANCELADA">Cancelada</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Cliente</label>
+          <input type="text" class="form-control" id="filter-cr-cliente" placeholder="Buscar cliente..." onkeyup="filterContasReceber()">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data Início</label>
+          <input type="date" class="form-control" id="filter-cr-data-inicio" onchange="filterContasReceber()">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data Fim</label>
+          <input type="date" class="form-control" id="filter-cr-data-fim" onchange="filterContasReceber()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Lista de Contas a Receber</h2>
+      <div class="card-actions">
+        <button class="btn btn-primary" onclick="openNovaContaReceber()">
+          ➕ Nova Conta
+        </button>
+        <button class="btn btn-outline" onclick="exportContasReceber()">
+          📥 Exportar
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>
+              <input type="checkbox" id="select-all-cr" onchange="toggleSelectAll('cr')">
+            </th>
+            <th>ID</th>
+            <th>Vencimento</th>
+            <th>Cliente</th>
+            <th>Descrição</th>
+            <th>Valor</th>
+            <th>Status</th>
+            <th>Canal</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="table-contas-receber">
+          <tr>
+            <td colspan="9" class="text-center text-muted">Carregando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-between align-center mt-2">
+      <div class="text-muted">
+        <span id="cr-total-registros">0</span> registros encontrados
+      </div>
+      <div class="d-flex gap-1">
+        <button class="btn btn-success" onclick="receberEmLote()" id="btn-receber-lote" disabled>
+          ✓ Receber Selecionadas
+        </button>
+        <button class="btn btn-danger" onclick="cancelarReceberEmLote()" id="btn-cancelar-receber-lote" disabled>
+          ✗ Cancelar Selecionadas
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

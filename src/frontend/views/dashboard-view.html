@@ -1,0 +1,72 @@
+<div class="view-container" id="dashboard-view">
+  <h1 class="view-title">Dashboard Financeiro</h1>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Contas a Pagar (Vencidas)</div>
+      <div class="stat-value" id="stat-pagar-vencidas">R$ 0,00</div>
+      <div class="stat-change negative" id="stat-pagar-vencidas-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card warning">
+      <div class="stat-label">Contas a Pagar (Próximos 7 dias)</div>
+      <div class="stat-value" id="stat-pagar-proximas">R$ 0,00</div>
+      <div class="stat-change" id="stat-pagar-proximas-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-label">Contas a Receber (Hoje)</div>
+      <div class="stat-value" id="stat-receber-hoje">R$ 0,00</div>
+      <div class="stat-change positive" id="stat-receber-hoje-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Pendentes de Conciliação</div>
+      <div class="stat-value" id="stat-conciliacao-pendentes">0</div>
+      <div class="stat-change" id="stat-conciliacao-valor">R$ 0,00</div>
+    </div>
+  </div>
+
+  <!-- Recent Transactions -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Últimos Lançamentos</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="refreshDashboard()">
+          🔄 Atualizar
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Descrição</th>
+            <th>Tipo</th>
+            <th>Valor</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="dashboard-transactions">
+          <tr>
+            <td colspan="6" class="text-center text-muted">Carregando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Alertas e Pendências</h2>
+    </div>
+    <div id="dashboard-alerts">
+      <p class="text-muted">Carregando alertas...</p>
+    </div>
+  </div>
+</div>

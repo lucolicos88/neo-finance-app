@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lançamentos - Neoformula Finance</title>
+
+  <?!= include('frontend/styles/theme-neoformula'); ?>
+  <?!= include('frontend/styles/base'); ?>
+</head>
+<body>
+  <div class="app-container">
+    <?!= include('frontend/components/header'); ?>
+
+    <div class="app-body">
+      <?!= include('frontend/components/sidebar'); ?>
+
+      <main class="app-main">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h2 class="text-2xl font-bold">Lançamentos Financeiros</h2>
+            <p class="text-secondary">Gerenciar contas a pagar e a receber</p>
+          </div>
+          <button class="btn btn-primary" onclick="openNovoLancamentoModal()">
+            + Novo Lançamento
+          </button>
+        </div>
+
+        <!-- Filtros -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="flex gap-3">
+              <div class="form-group" style="min-width: 150px;">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" id="filter-tipo">
+                  <option value="">Todos</option>
+                  <option value="PAGAR">A Pagar</option>
+                  <option value="RECEBER">A Receber</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="min-width: 150px;">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="filter-status">
+                  <option value="">Todos</option>
+                  <option value="PREVISTO">Previsto</option>
+                  <option value="REALIZADO">Realizado</option>
+                  <option value="CANCELADO">Cancelado</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="min-width: 150px;">
+                <label class="form-label">Filial</label>
+                <select class="form-select" id="filter-filial">
+                  <option value="">Todas</option>
+                  <!-- TODO: Popular dinamicamente -->
+                </select>
+              </div>
+
+              <div class="form-group flex items-end">
+                <button class="btn btn-primary" onclick="aplicarFiltros()">
+                  Filtrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela de Lançamentos -->
+        <div class="card">
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Competência</th>
+                    <th>Tipo</th>
+                    <th>Descrição</th>
+                    <th>Filial</th>
+                    <th class="text-right">Valor</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="lancamentos-tbody">
+                  <tr>
+                    <td colspan="8" class="text-center">
+                      <div class="loading"></div>
+                      Carregando lançamentos...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <?!= include('frontend/scripts/main'); ?>
+  <?!= include('frontend/scripts/forms'); ?>
+
+  <script>
+    // TODO: Carregar lançamentos via google.script.run
+    function carregarLancamentos() {
+      // google.script.run
+      //   .withSuccessHandler(renderLancamentos)
+      //   .listEntries({});
+    }
+
+    function aplicarFiltros() {
+      const tipo = document.getElementById('filter-tipo').value;
+      const status = document.getElementById('filter-status').value;
+      const filial = document.getElementById('filter-filial').value;
+
+      // TODO: Aplicar filtros e recarregar
+    }
+
+    function openNovoLancamentoModal() {
+      // TODO: Abrir modal de novo lançamento
+      alert('Modal de novo lançamento - TODO');
+    }
+
+    // carregarLancamentos();
+  </script>
+</body>
+</html>

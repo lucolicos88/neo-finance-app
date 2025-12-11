@@ -1,0 +1,62 @@
+<aside class="app-sidebar">
+  <nav>
+    <ul class="nav-menu">
+      <li class="nav-item">
+        <a href="?page=dashboard" class="nav-link" id="nav-dashboard">
+          Dashboard
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="?page=lancamentos" class="nav-link" id="nav-lancamentos">
+          Lançamentos
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="?page=conciliacao" class="nav-link" id="nav-conciliacao">
+          Conciliação
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="?page=dre" class="nav-link" id="nav-dre">
+          DRE
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="?page=dfc" class="nav-link" id="nav-dfc">
+          Fluxo de Caixa
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="?page=kpi" class="nav-link" id="nav-kpi">
+          KPIs
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="?page=configuracoes" class="nav-link" id="nav-configuracoes">
+          Configurações
+        </a>
+      </li>
+    </ul>
+  </nav>
+</aside>
+
+<script>
+  // Marca link ativo baseado na URL
+  function setActiveNav() {
+    const params = new URLSearchParams(window.location.search);
+    const page = params.get('page') || 'dashboard';
+    const activeLink = document.getElementById(`nav-${page}`);
+
+    if (activeLink) {
+      // Remove active de todos
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+      });
+
+      // Adiciona active no atual
+      activeLink.classList.add('active');
+    }
+  }
+
+  setActiveNav();
+</script>

@@ -1,0 +1,124 @@
+<div class="view-container" id="contas-pagar-view">
+  <h1 class="view-title">Contas a Pagar</h1>
+
+  <!-- Summary Cards -->
+  <div class="stats-grid">
+    <div class="stat-card danger">
+      <div class="stat-label">Vencidas</div>
+      <div class="stat-value" id="cp-vencidas-valor">R$ 0,00</div>
+      <div class="stat-change" id="cp-vencidas-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card warning">
+      <div class="stat-label">A Vencer (7 dias)</div>
+      <div class="stat-value" id="cp-vencer-valor">R$ 0,00</div>
+      <div class="stat-change" id="cp-vencer-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">A Vencer (30 dias)</div>
+      <div class="stat-value" id="cp-futuro-valor">R$ 0,00</div>
+      <div class="stat-change" id="cp-futuro-qtd">0 contas</div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-label">Pagas no Mês</div>
+      <div class="stat-value" id="cp-pagas-valor">R$ 0,00</div>
+      <div class="stat-change" id="cp-pagas-qtd">0 contas</div>
+    </div>
+  </div>
+
+  <!-- Filters and Actions -->
+  <div class="card">
+    <div class="filters">
+      <div class="d-flex justify-between align-center mb-2">
+        <h3 class="filters-title">Filtros</h3>
+        <button class="btn btn-outline" onclick="clearFilters('pagar')">Limpar</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-control" id="filter-cp-status" onchange="filterContasPagar()">
+            <option value="">Todos</option>
+            <option value="PENDENTE">Pendente</option>
+            <option value="VENCIDA">Vencida</option>
+            <option value="PAGA">Paga</option>
+            <option value="CANCELADA">Cancelada</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Filial</label>
+          <select class="form-control" id="filter-cp-filial" onchange="filterContasPagar()">
+            <option value="">Todas</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data Início</label>
+          <input type="date" class="form-control" id="filter-cp-data-inicio" onchange="filterContasPagar()">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Data Fim</label>
+          <input type="date" class="form-control" id="filter-cp-data-fim" onchange="filterContasPagar()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Lista de Contas a Pagar</h2>
+      <div class="card-actions">
+        <button class="btn btn-primary" onclick="openNovaContaPagar()">
+          ➕ Nova Conta
+        </button>
+        <button class="btn btn-outline" onclick="exportContasPagar()">
+          📥 Exportar
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>
+              <input type="checkbox" id="select-all-cp" onchange="toggleSelectAll('cp')">
+            </th>
+            <th>ID</th>
+            <th>Vencimento</th>
+            <th>Fornecedor</th>
+            <th>Descrição</th>
+            <th>Valor</th>
+            <th>Status</th>
+            <th>Filial</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="table-contas-pagar">
+          <tr>
+            <td colspan="9" class="text-center text-muted">Carregando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="d-flex justify-between align-center mt-2">
+      <div class="text-muted">
+        <span id="cp-total-registros">0</span> registros encontrados
+      </div>
+      <div class="d-flex gap-1">
+        <button class="btn btn-success" onclick="pagarEmLote()" id="btn-pagar-lote" disabled>
+          ✓ Pagar Selecionadas
+        </button>
+        <button class="btn btn-danger" onclick="cancelarEmLote()" id="btn-cancelar-lote" disabled>
+          ✗ Cancelar Selecionadas
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,24 +1,36 @@
 {
-  "name": "neo-finance-app",
+  "name": "neoformula-finance-app",
   "version": "1.0.0",
-  "description": "Sistema de gestao financeira com backend em Google Apps Script (microservicos) e frontend web em HTML/JS com Bootstrap.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "description": "Aplicativo de gestão financeira e contábil em Google Apps Script",
+  "main": "dist/main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "webpack",
+    "watch": "webpack --watch",
+    "push": "clasp push",
+    "deploy": "npm run build && clasp push",
+    "open": "clasp open",
+    "logs": "clasp logs",
+    "setup": "node setup-spreadsheet.js",
+    "setup-bound": "powershell -ExecutionPolicy Bypass -File ./setup-bound.ps1",
+    "bind": "node bind-to-spreadsheet.js",
+    "setup-simples": "powershell -ExecutionPolicy Bypass -File ./setup-manual-simples.ps1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/lucolicos88/neo-finance-app.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/lucolicos88/neo-finance-app/issues"
-  },
-  "homepage": "https://github.com/lucolicos88/neo-finance-app#readme"
+  "keywords": [
+    "google-apps-script",
+    "finance",
+    "accounting",
+    "neoformula"
+  ],
+  "author": "Neoformula",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@google/clasp": "^2.4.2",
+    "@types/google-apps-script": "^1.0.83",
+    "copy-webpack-plugin": "^13.0.1",
+    "gas-webpack-plugin": "^2.6.0",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.3.3",
+    "webpack": "^5.103.0",
+    "webpack-cli": "^6.0.1"
+  }
 }

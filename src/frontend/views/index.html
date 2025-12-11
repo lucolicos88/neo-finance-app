@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neoformula Finance App</title>
+
+  <?!= include('frontend/styles/theme-neoformula'); ?>
+  <?!= include('frontend/styles/base'); ?>
+
+  <style>
+    .welcome-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--neo-navy) 0%, var(--neo-teal) 100%);
+    }
+
+    .welcome-card {
+      background: white;
+      padding: 3rem;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+      max-width: 500px;
+    }
+
+    .welcome-card h1 {
+      color: var(--neo-navy);
+      margin-bottom: 1rem;
+    }
+
+    .welcome-card p {
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="welcome-container">
+    <div class="welcome-card">
+      <h1 class="text-3xl font-bold">Bem-vindo ao Neoformula Finance</h1>
+      <p>Sistema integrado de gestão financeira e contábil</p>
+      <a href="?page=dashboard" class="btn btn-primary btn-lg">
+        Acessar Dashboard
+      </a>
+    </div>
+  </div>
+</body>
+</html>

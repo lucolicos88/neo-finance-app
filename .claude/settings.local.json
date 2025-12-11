@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx clasp open:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx clasp push:*)",
+      "Bash(echo:*)",
+      "Bash(npx clasp deploy:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Estrutura inicial completa do Neoformula Finance App\n\n- Arquitetura modular com 10 microserviços independentes\n- Sistema de tipos TypeScript completo (types, enums, interfaces)\n- Módulo centralizado de acesso ao Google Sheets (sheets-client)\n- Sistema de cache com CacheService\n- Utilitários de data, moeda e validação\n- Frontend completo com tema Neoformula\n- Views: Dashboard, Lançamentos, Conciliação, DRE, DFC, KPIs, Configurações\n- Componentes reutilizáveis (header, sidebar, kpi-card)\n- Scripts JavaScript para interatividade\n- Configuração completa de build e deploy (clasp, tsconfig)\n\nMicroserviços implementados:\n1. config-service - Parâmetros e cache\n2. reference-data-service - Dados de referência\n3. ledger-service - CRUD de lançamentos\n4. reconciliation-service - Conciliação bancária\n5. cashflow-service - Fluxo de caixa\n6. dre-service - DRE gerencial\n7. kpi-analytics-service - KPIs e dashboards\n8. reporting-service - Relatórios para comitê\n9. ui-service - Interface web\n10. scheduler-service - Jobs automatizados\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push)",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"Write-Host ''''; Write-Host ''=================================================================='' -ForegroundColor Cyan; Write-Host ''NEOFORMULA FINANCE APP - INSTRUÇÕES DE SETUP'' -ForegroundColor Green; Write-Host ''=================================================================='' -ForegroundColor Cyan; Write-Host ''''; Write-Host ''Vou abrir sua planilha agora...'' -ForegroundColor Yellow; Start-Process ''https://docs.google.com/spreadsheets/d/1nwEtOMb7uGm0ZXEM_xcQLAJQSOAjhgMSsve_7KXycjI/edit''; Start-Sleep 3; Write-Host ''''; Write-Host ''SIGA ESTES PASSOS NA PLANILHA:'' -ForegroundColor Yellow; Write-Host ''1. Menu: Extensoes -> Apps Script'' -ForegroundColor White; Write-Host ''2. Delete todo o codigo existente'' -ForegroundColor White; Write-Host ''3. Cole o codigo que vou copiar para você'' -ForegroundColor White; Write-Host ''''; Write-Host ''Pressione ENTER para continuar...'' -ForegroundColor Cyan; Read-Host; Write-Host ''''; Write-Host ''Abrindo o script standalone para copiar...'' -ForegroundColor Yellow; Start-Process ''https://script.google.com/home/projects/1oCsDGmEApZkEDwpnK_ZNG3rKCPYXEgxK0me6bqbzLYXTUav1R1TBaoJC/edit''\")",
+      "Bash(git commit:*)",
+      "Bash(if exist temp-bound rmdir /s /q temp-bound)",
+      "Bash(if exist bind-to-spreadsheet.js del bind-to-spreadsheet.js)",
+      "Bash(if exist setup-bound.ps1 del setup-bound.ps1)",
+      "Bash(if exist setup-manual-simples.ps1 del setup-manual-simples.ps1)",
+      "Bash(if exist setup-spreadsheet.js del setup-spreadsheet.js)",
+      "Bash(if exist SETUP-PLANILHA.md del SETUP-PLANILHA.md)",
+      "Bash(powershell:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run deploy:*)"
+    ]
+  }
+}

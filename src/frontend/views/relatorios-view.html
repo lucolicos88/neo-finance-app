@@ -1,0 +1,79 @@
+<div class="view-container" id="relatorios-view">
+  <h1 class="view-title">Relatórios Gerenciais</h1>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Relatórios Disponíveis</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; padding: 1.5rem;">
+      <!-- DRE -->
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-bottom: 1rem;">📊 DRE Gerencial</h3>
+        <p class="text-muted" style="margin-bottom: 1rem;">Demonstração do Resultado do Exercício com visão gerencial</p>
+        <button class="btn btn-primary" onclick="gerarRelatorioDRE()">Gerar Relatório</button>
+      </div>
+
+      <!-- Fluxo de Caixa -->
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-bottom: 1rem;">💰 Fluxo de Caixa</h3>
+        <p class="text-muted" style="margin-bottom: 1rem;">Projeção e realizado do fluxo de caixa</p>
+        <button class="btn btn-primary" onclick="gerarRelatorioFluxoCaixa()">Gerar Relatório</button>
+      </div>
+
+      <!-- Contas a Pagar -->
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-bottom: 1rem;">💳 Contas a Pagar</h3>
+        <p class="text-muted" style="margin-bottom: 1rem;">Relatório detalhado de contas a pagar</p>
+        <button class="btn btn-primary" onclick="gerarRelatorioContasPagar()">Gerar Relatório</button>
+      </div>
+
+      <!-- Contas a Receber -->
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-bottom: 1rem;">📈 Contas a Receber</h3>
+        <p class="text-muted" style="margin-bottom: 1rem;">Relatório detalhado de contas a receber</p>
+        <button class="btn btn-primary" onclick="gerarRelatorioContasReceber()">Gerar Relatório</button>
+      </div>
+
+      <!-- Conciliação -->
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-bottom: 1rem;">🔄 Conciliação Bancária</h3>
+        <p class="text-muted" style="margin-bottom: 1rem;">Status da conciliação bancária</p>
+        <button class="btn btn-primary" onclick="gerarRelatorioConciliacao()">Gerar Relatório</button>
+      </div>
+
+      <!-- KPIs -->
+      <div class="card" style="margin: 0;">
+        <h3 style="margin-bottom: 1rem;">📉 KPIs Financeiros</h3>
+        <p class="text-muted" style="margin-bottom: 1rem;">Indicadores chave de desempenho</p>
+        <button class="btn btn-primary" onclick="gerarRelatorioKPIs()">Gerar Relatório</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function gerarRelatorioDRE() {
+  showToast('Relatório DRE será gerado', 'info');
+}
+
+function gerarRelatorioFluxoCaixa() {
+  showToast('Relatório Fluxo de Caixa será gerado', 'info');
+}
+
+function gerarRelatorioContasPagar() {
+  showToast('Relatório Contas a Pagar será gerado', 'info');
+}
+
+function gerarRelatorioContasReceber() {
+  showToast('Relatório Contas a Receber será gerado', 'info');
+}
+
+function gerarRelatorioConciliacao() {
+  showToast('Relatório Conciliação será gerado', 'info');
+}
+
+function gerarRelatorioKPIs() {
+  showToast('Relatório KPIs será gerado', 'info');
+}
+</script>
