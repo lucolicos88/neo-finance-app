@@ -53,6 +53,11 @@ var authLib = {
 function jsonResponse(obj, code) {
   var output = ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+  if (output.setHeader) {
+    output.setHeader('Access-Control-Allow-Origin', '*');
+    output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
   if (code && output.setResponseCode) return output.setResponseCode(code);
   return output;
 }
