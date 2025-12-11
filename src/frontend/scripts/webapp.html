@@ -13,6 +13,12 @@ let appData = {
   canais: []
 };
 
+function unwrap(res) {
+  if (!res) return {};
+  if (res.success) return res.data || {};
+  return res;
+}
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -84,6 +90,9 @@ function loadView(view) {
         case 'relatorios':
           loadRelatoriosData();
           break;
+        case 'configuracoes':
+          // placeholder, no backend call yet
+          break;
       }
     })
     .withFailureHandler(handleError)
@@ -123,21 +132,23 @@ function populateFilters() {
 function loadDashboardData() {
   google.script.run
     .withSuccessHandler(function(data) {
+      const dash = unwrap(data);
+      if (dash.error) return handleError(dash.error);
       // Update stats
-      updateElement('stat-pagar-vencidas', formatCurrency(data.pagarVencidas.valor));
-      updateElement('stat-pagar-vencidas-qtd', `${data.pagarVencidas.quantidade} contas`);
-      updateElement('stat-pagar-proximas', formatCurrency(data.pagarProximas.valor));
-      updateElement('stat-pagar-proximas-qtd', `${data.pagarProximas.quantidade} contas`);
-      updateElement('stat-receber-hoje', formatCurrency(data.receberHoje.valor));
-      updateElement('stat-receber-hoje-qtd', `${data.receberHoje.quantidade} contas`);
-      updateElement('stat-conciliacao-pendentes', data.conciliacaoPendentes.quantidade);
-      updateElement('stat-conciliacao-valor', formatCurrency(data.conciliacaoPendentes.valor));
+      updateElement('stat-pagar-vencidas', formatCurrency(dash.pagarVencidas?.valor || 0));
+      updateElement('stat-pagar-vencidas-qtd', `${dash.pagarVencidas?.quantidade || 0} contas`);
+      updateElement('stat-pagar-proximas', formatCurrency(dash.pagarProximas?.valor || 0));
+      updateElement('stat-pagar-proximas-qtd', `${dash.pagarProximas?.quantidade || 0} contas`);
+      updateElement('stat-receber-hoje', formatCurrency(dash.receberHoje?.valor || 0));
+      updateElement('stat-receber-hoje-qtd', `${dash.receberHoje?.quantidade || 0} contas`);
+      updateElement('stat-conciliacao-pendentes', dash.conciliacaoPendentes?.quantidade || 0);
+      updateElement('stat-conciliacao-valor', formatCurrency(dash.conciliacaoPendentes?.valor || 0));
 
       // Render recent transactions
-      renderDashboardTransactions(data.recentTransactions);
+      renderDashboardTransactions(dash.recentTransactions);
 
       // Render alerts
-      renderDashboardAlerts(data.alerts);
+      renderDashboardAlerts(dash.alerts);
     })
     .withFailureHandler(handleError)
     .getDashboardData();
@@ -196,20 +207,22 @@ function loadContasPagarData() {
   google.script.run
     .withSuccessHandler(function(data) {
       hideLoading();
-      appData.contasPagar = data.contas || [];
+      const payload = unwrap(data);
+      if (payload.error) return handleError(payload.error);
+      appData.contasPagar = payload.contas || payload || [];
 
       // Update stats
-      updateElement('cp-vencidas-valor', formatCurrency(data.stats.vencidas.valor));
-      updateElement('cp-vencidas-qtd', `${data.stats.vencidas.quantidade} contas`);
-      updateElement('cp-vencer-valor', formatCurrency(data.stats.vencer7.valor));
-      updateElement('cp-vencer-qtd', `${data.stats.vencer7.quantidade} contas`);
-      updateElement('cp-futuro-valor', formatCurrency(data.stats.vencer30.valor));
-      updateElement('cp-futuro-qtd', `${data.stats.vencer30.quantidade} contas`);
-      updateElement('cp-pagas-valor', formatCurrency(data.stats.pagas.valor));
-      updateElement('cp-pagas-qtd', `${data.stats.pagas.quantidade} contas`);
+      updateElement('cp-vencidas-valor', formatCurrency(payload.stats?.vencidas?.valor || 0));
+      updateElement('cp-vencidas-qtd', `${payload.stats?.vencidas?.quantidade || 0} contas`);
+      updateElement('cp-vencer-valor', formatCurrency(payload.stats?.vencer7?.valor || 0));
+      updateElement('cp-vencer-qtd', `${payload.stats?.vencer7?.quantidade || 0} contas`);
+      updateElement('cp-futuro-valor', formatCurrency(payload.stats?.vencer30?.valor || 0));
+      updateElement('cp-futuro-qtd', `${payload.stats?.vencer30?.quantidade || 0} contas`);
+      updateElement('cp-pagas-valor', formatCurrency(payload.stats?.pagas?.valor || 0));
+      updateElement('cp-pagas-qtd', `${payload.stats?.pagas?.quantidade || 0} contas`);
 
       // Render table
-      renderContasPagarTable(data.contas);
+      renderContasPagarTable(appData.contasPagar);
     })
     .withFailureHandler(handleError)
     .getContasPagar();
@@ -328,20 +341,22 @@ function loadContasReceberData() {
   google.script.run
     .withSuccessHandler(function(data) {
       hideLoading();
-      appData.contasReceber = data.contas || [];
+      const payload = unwrap(data);
+      if (payload.error) return handleError(payload.error);
+      appData.contasReceber = payload.contas || payload || [];
 
       // Update stats
-      updateElement('cr-vencidas-valor', formatCurrency(data.stats.vencidas.valor));
-      updateElement('cr-vencidas-qtd', `${data.stats.vencidas.quantidade} contas`);
-      updateElement('cr-receber-valor', formatCurrency(data.stats.receber7.valor));
-      updateElement('cr-receber-qtd', `${data.stats.receber7.quantidade} contas`);
-      updateElement('cr-futuro-valor', formatCurrency(data.stats.receber30.valor));
-      updateElement('cr-futuro-qtd', `${data.stats.receber30.quantidade} contas`);
-      updateElement('cr-recebidas-valor', formatCurrency(data.stats.recebidas.valor));
-      updateElement('cr-recebidas-qtd', `${data.stats.recebidas.quantidade} contas`);
+      updateElement('cr-vencidas-valor', formatCurrency(payload.stats?.vencidas?.valor || 0));
+      updateElement('cr-vencidas-qtd', `${payload.stats?.vencidas?.quantidade || 0} contas`);
+      updateElement('cr-receber-valor', formatCurrency(payload.stats?.receber7?.valor || 0));
+      updateElement('cr-receber-qtd', `${payload.stats?.receber7?.quantidade || 0} contas`);
+      updateElement('cr-futuro-valor', formatCurrency(payload.stats?.receber30?.valor || 0));
+      updateElement('cr-futuro-qtd', `${payload.stats?.receber30?.quantidade || 0} contas`);
+      updateElement('cr-recebidas-valor', formatCurrency(payload.stats?.recebidas?.valor || 0));
+      updateElement('cr-recebidas-qtd', `${payload.stats?.recebidas?.quantidade || 0} contas`);
 
       // Render table
-      renderContasReceberTable(data.contas);
+      renderContasReceberTable(appData.contasReceber);
     })
     .withFailureHandler(handleError)
     .getContasReceber();
@@ -405,22 +420,24 @@ function loadConciliacaoData() {
   google.script.run
     .withSuccessHandler(function(data) {
       hideLoading();
-      appData.extratos = data.extratos || [];
-      appData.lancamentos = data.lancamentos || [];
+      const payload = unwrap(data);
+      if (payload.error) return handleError(payload.error);
+      appData.extratos = payload.extratos || [];
+      appData.lancamentos = payload.lancamentos || [];
 
       // Update stats
-      updateElement('conc-extratos-pendentes', data.stats.extratosPendentes);
-      updateElement('conc-extratos-valor', formatCurrency(data.stats.extratosValor));
-      updateElement('conc-lancamentos-pendentes', data.stats.lancamentosPendentes);
-      updateElement('conc-lancamentos-valor', formatCurrency(data.stats.lancamentosValor));
-      updateElement('conc-hoje', data.stats.conciliadosHoje);
-      updateElement('conc-hoje-valor', formatCurrency(data.stats.conciliadosHojeValor));
-      updateElement('conc-taxa', `${data.stats.taxaConciliacao}%`);
+      updateElement('conc-extratos-pendentes', payload.stats?.extratosPendentes || 0);
+      updateElement('conc-extratos-valor', formatCurrency(payload.stats?.extratosValor || 0));
+      updateElement('conc-lancamentos-pendentes', payload.stats?.lancamentosPendentes || 0);
+      updateElement('conc-lancamentos-valor', formatCurrency(payload.stats?.lancamentosValor || 0));
+      updateElement('conc-hoje', payload.stats?.conciliadosHoje || 0);
+      updateElement('conc-hoje-valor', formatCurrency(payload.stats?.conciliadosHojeValor || 0));
+      updateElement('conc-taxa', `${payload.stats?.taxaConciliacao || 0}%`);
 
       // Render lists
-      renderExtratosList(data.extratos);
-      renderLancamentosList(data.lancamentos);
-      renderHistoricoConciliacao(data.historico);
+      renderExtratosList(appData.extratos);
+      renderLancamentosList(appData.lancamentos);
+      renderHistoricoConciliacao(payload.historico || []);
     })
     .withFailureHandler(handleError)
     .getConciliacaoData();

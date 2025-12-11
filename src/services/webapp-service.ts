@@ -1,517 +1,321 @@
 /**
  * webapp-service.ts
  *
- * Serviço backend para a Web App
- * Fornece dados para o frontend via google.script.run
+ * Camada fina de serviÇõÇœo para o Web App (GAS).
+ * - Fornece HTML das views SPA.
+ * - ExpÇõe endpoints para o frontend (contas a pagar/receber, conciliaÇõÇœo, dashboard).
+ * - Usa mocks em memÇ®ria apenas para demonstraÇõÇœo.
+ *
+ * Quando os microservices reais estiverem prontos, troque as funÇõÇœes de dados
+ * para consumir as planilhas / APIs adequadas mantendo a assinatura.
  */
 
-import { getSheetValues } from '../shared/sheets-client';
-import {
-  SHEET_TB_LANCAMENTOS,
-  SHEET_TB_EXTRATOS,
-  SHEET_REF_FILIAIS,
-  SHEET_REF_CANAIS,
-} from '../config/sheet-mapping';
+import { include } from './ui-service';
 
-// ============================================================================
-// VIEW RENDERING
-// ============================================================================
+// -----------------------------------------------------------------------------
+// Tipos auxiliares
+// -----------------------------------------------------------------------------
 
-/**
- * Retorna o HTML de uma view específica
- */
-export function getViewHtml(viewName: string): string {
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+interface ContaPagar {
+  id: string;
+  fornecedor: string;
+  descricao: string;
+  vencimento: string;
+  valor: number;
+  status: 'PENDENTE' | 'VENCIDA' | 'PAGA';
+  filial: string;
+}
+
+interface ContaReceber {
+  id: string;
+  cliente: string;
+  descricao: string;
+  vencimento: string;
+  valor: number;
+  status: 'PENDENTE' | 'VENCIDA' | 'RECEBIDA';
+  canal: string;
+}
+
+interface Extrato {
+  id: string;
+  data: string;
+  descricao: string;
+  valor: number;
+  banco: string;
+}
+
+interface Lancamento {
+  id: string;
+  data: string;
+  descricao: string;
+  valor: number;
+  tipo: 'RECEITA' | 'DESPESA';
+}
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+const ok = <T>(data: T): ApiResponse<T> => ({ success: true, data });
+const err = (message: string): ApiResponse<never> => ({ success: false, error: message });
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(base: Date, days: number): string {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function currencySum(items: { valor: number }[]): number {
+  return items.reduce((acc, item) => acc + (item.valor || 0), 0);
+}
+
+function buildContasPagarMock(): ContaPagar[] {
+  const base = new Date();
+  return [
+    { id: 'CP-101', fornecedor: 'Fornecedor A', descricao: 'Insumos cozinha', vencimento: addDays(base, -3), valor: 1250.5, status: 'VENCIDA', filial: 'SP' },
+    { id: 'CP-102', fornecedor: 'Fornecedor B', descricao: 'Energia elÇ¦trica', vencimento: addDays(base, 2), valor: 830.9, status: 'PENDENTE', filial: 'RJ' },
+    { id: 'CP-103', fornecedor: 'Fornecedor C', descricao: 'ManutenÇõÇœo', vencimento: addDays(base, 7), valor: 420.0, status: 'PENDENTE', filial: 'SP' },
+    { id: 'CP-104', fornecedor: 'Fornecedor D', descricao: 'Aluguel', vencimento: addDays(base, -1), valor: 5600.0, status: 'VENCIDA', filial: 'MG' },
+    { id: 'CP-105', fornecedor: 'Fornecedor E', descricao: 'Marketing', vencimento: addDays(base, 1), valor: 2150.0, status: 'PAGA', filial: 'SP' },
+  ];
+}
+
+function buildContasReceberMock(): ContaReceber[] {
+  const base = new Date();
+  return [
+    { id: 'CR-201', cliente: 'Cliente X', descricao: 'Contrato mensal', vencimento: addDays(base, -1), valor: 3500, status: 'VENCIDA', canal: 'Online' },
+    { id: 'CR-202', cliente: 'Cliente Y', descricao: 'Projeto pontual', vencimento: addDays(base, 3), valor: 7200, status: 'PENDENTE', canal: 'Loja' },
+    { id: 'CR-203', cliente: 'Cliente Z', descricao: 'Mensalidade', vencimento: addDays(base, 1), valor: 1800, status: 'PENDENTE', canal: 'Online' },
+    { id: 'CR-204', cliente: 'Cliente W', descricao: 'ServiÇõÇœ premium', vencimento: addDays(base, -7), valor: 9500, status: 'RECEBIDA', canal: 'Marketplace' },
+  ];
+}
+
+function buildExtratosMock(): Extrato[] {
+  const base = new Date();
+  return [
+    { id: 'EXT-500', data: addDays(base, -1), descricao: 'TED Cliente X', valor: 3500, banco: 'Banco A' },
+    { id: 'EXT-501', data: addDays(base, -2), descricao: 'CartÇœo - Vendas', valor: 1890.75, banco: 'Banco B' },
+    { id: 'EXT-502', data: addDays(base, -3), descricao: 'PIX - Fornecedor', valor: -420.0, banco: 'Banco A' },
+  ];
+}
+
+function buildLancamentosMock(): Lancamento[] {
+  const base = new Date();
+  return [
+    { id: 'LAN-800', data: addDays(base, -1), descricao: 'Recebimento Cliente X', valor: 3500, tipo: 'RECEITA' },
+    { id: 'LAN-801', data: addDays(base, -3), descricao: 'Pagamento ManutenÇõÇœo', valor: -420, tipo: 'DESPESA' },
+    { id: 'LAN-802', data: addDays(base, -2), descricao: 'Vendas CartÇœo', valor: 1890.75, tipo: 'RECEITA' },
+  ];
+}
+
+// -----------------------------------------------------------------------------
+// View Loader
+// -----------------------------------------------------------------------------
+
+export function getViewHtml(view: string): GoogleAppsScript.HTML.HtmlOutput | string {
   try {
-    return HtmlService.createHtmlOutputFromFile(`frontend/views/${viewName}-view`).getContent();
-  } catch (error) {
-    return `<div class="empty-state">
-      <div class="empty-state-icon">⚠️</div>
-      <div class="empty-state-message">Erro ao carregar view</div>
-      <div class="empty-state-hint">${error}</div>
-    </div>`;
+    const map: Record<string, string> = {
+      dashboard: 'frontend/views/dashboard-view',
+      'contas-pagar': 'frontend/views/contas-pagar-view',
+      'contas-receber': 'frontend/views/contas-receber-view',
+      conciliacao: 'frontend/views/conciliacao-view',
+      relatorios: 'frontend/views/relatorios-view',
+      configuracoes: 'frontend/views/configuracoes-view',
+    };
+
+    const file = map[view] || 'frontend/views/dashboard-view';
+    return HtmlService.createTemplateFromFile(file).evaluate().getContent();
+  } catch (error: any) {
+    console.error('Erro ao carregar view', view, error);
+    return `Erro ao carregar view ${view}: ${error.message}`;
   }
 }
 
-// ============================================================================
-// REFERENCE DATA
-// ============================================================================
+// -----------------------------------------------------------------------------
+// ReferÇõÇœncias
+// -----------------------------------------------------------------------------
 
-export function getReferenceData(): {
-  filiais: Array<{ codigo: string; nome: string }>;
-  canais: Array<{ codigo: string; nome: string }>;
-} {
-  const filiais = getSheetValues(SHEET_REF_FILIAIS).slice(1); // Skip header
-  const canais = getSheetValues(SHEET_REF_CANAIS).slice(1); // Skip header
+export function getReferenceData(): ApiResponse<{ filiais: any[]; canais: any[] }> {
+  try {
+    const filiais = [
+      { codigo: 'SP', nome: 'São Paulo' },
+      { codigo: 'RJ', nome: 'Rio de Janeiro' },
+      { codigo: 'MG', nome: 'Minas Gerais' },
+    ];
 
-  return {
-    filiais: filiais.map((f: any) => ({ codigo: f[0], nome: f[1] })),
-    canais: canais.map((c: any) => ({ codigo: c[0], nome: c[1] })),
-  };
+    const canais = [
+      { codigo: 'ONLINE', nome: 'Online' },
+      { codigo: 'LOJA', nome: 'Loja FÇ­sica' },
+      { codigo: 'MKT', nome: 'Marketplace' },
+    ];
+
+    return ok({ filiais, canais });
+  } catch (error: any) {
+    return err(error.message || 'Erro ao carregar referÇõÇœncias');
+  }
 }
 
-// ============================================================================
-// DASHBOARD
-// ============================================================================
+// -----------------------------------------------------------------------------
+// Dashboard
+// -----------------------------------------------------------------------------
 
-export function getDashboardData() {
-  const lancamentos = getLancamentosFromSheet();
-  const hoje = new Date();
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+export function getDashboardData(): ApiResponse<any> {
+  try {
+    const contasPagar = buildContasPagarMock();
+    const contasReceber = buildContasReceberMock();
+    const hoje = todayISO();
 
-  // Contas a pagar vencidas
-  const pagarVencidas = lancamentos.filter(l =>
-    l.tipo === 'DESPESA' &&
-    l.status === 'VENCIDA' &&
-    new Date(l.dataVencimento) < hoje
-  );
+    const pagarVencidas = contasPagar.filter((c) => c.status === 'VENCIDA');
+    const pagarProximas = contasPagar.filter((c) => c.status === 'PENDENTE' && c.vencimento <= addDays(new Date(), 7));
+    const receberHoje = contasReceber.filter((c) => c.vencimento === hoje);
 
-  // Contas a pagar próximos 7 dias
-  const proximos7Dias = new Date();
-  proximos7Dias.setDate(proximos7Dias.getDate() + 7);
-  const pagarProximas = lancamentos.filter(l =>
-    l.tipo === 'DESPESA' &&
-    l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento) <= proximos7Dias &&
-    new Date(l.dataVencimento) >= hoje
-  );
+    const concPendentes = buildExtratosMock().filter((e) => e.valor !== 0);
 
-  // Contas a receber hoje
-  const receberHoje = lancamentos.filter(l =>
-    l.tipo === 'RECEITA' &&
-    l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento).toDateString() === hoje.toDateString()
-  );
+    const recentTransactions = [
+      ...contasPagar.slice(0, 2).map((c) => ({ id: c.id, data: c.vencimento, descricao: c.descricao, valor: -Math.abs(c.valor), tipo: 'DESPESA', status: c.status })),
+      ...contasReceber.slice(0, 2).map((c) => ({ id: c.id, data: c.vencimento, descricao: c.descricao, valor: c.valor, tipo: 'RECEITA', status: c.status })),
+    ];
 
-  // Extratos pendentes
-  const extratos = getExtratosFromSheet();
-  const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
+    const alerts = [
+      { type: 'warning', title: 'Contas vencidas', message: `${pagarVencidas.length} contas a pagar vencidas` },
+      { type: 'info', title: 'Recebimentos', message: `${receberHoje.length} recebimentos previstos hoje` },
+    ];
 
-  // Últimos lançamentos
-  const recentTransactions = lancamentos
-    .slice(0, 10)
-    .map(l => ({
-      id: l.id,
-      data: l.dataCompetencia,
-      descricao: l.descricao,
-      tipo: l.tipo,
-      valor: l.valorLiquido,
-      status: l.status,
-    }));
-
-  // Alertas
-  const alerts: Array<{ type: string; title: string; message: string }> = [];
-
-  if (pagarVencidas.length > 0) {
-    alerts.push({
-      type: 'danger',
-      title: 'Contas Vencidas',
-      message: `Você tem ${pagarVencidas.length} contas a pagar vencidas no valor de ${formatCurrency(sumValues(pagarVencidas))}`,
+    return ok({
+      pagarVencidas: { quantidade: pagarVencidas.length, valor: currencySum(pagarVencidas) },
+      pagarProximas: { quantidade: pagarProximas.length, valor: currencySum(pagarProximas) },
+      receberHoje: { quantidade: receberHoje.length, valor: currencySum(receberHoje) },
+      conciliacaoPendentes: { quantidade: concPendentes.length, valor: currencySum(concPendentes) },
+      recentTransactions,
+      alerts,
     });
+  } catch (error: any) {
+    return err(error.message || 'Erro ao carregar dashboard');
   }
+}
 
-  if (pagarProximas.length > 0) {
-    alerts.push({
-      type: 'warning',
-      title: 'Vencimentos Próximos',
-      message: `${pagarProximas.length} contas a pagar vencem nos próximos 7 dias`,
-    });
-  }
+// -----------------------------------------------------------------------------
+// Contas a Pagar
+// -----------------------------------------------------------------------------
 
-  if (extratosPendentes.length > 5) {
-    alerts.push({
-      type: 'info',
-      title: 'Conciliação Pendente',
-      message: `${extratosPendentes.length} extratos bancários aguardando conciliação`,
-    });
+export function getContasPagar(): ApiResponse<any> {
+  try {
+    const contas = buildContasPagarMock();
+    const stats = buildStats(contas, 'PAGAR');
+    return ok({ contas, stats });
+  } catch (error: any) {
+    return err(error.message || 'Erro ao listar contas a pagar');
   }
+}
+
+export function pagarConta(id: string): ApiResponse<{ id: string }> {
+  // Mock: apenas confirmaÇõÇœo
+  console.log('Conta paga', id);
+  return ok({ id });
+}
+
+export function pagarContasEmLote(ids: string[]): ApiResponse<{ quantidade: number }> {
+  console.log('Pagando em lote', ids);
+  return ok({ quantidade: ids?.length || 0 });
+}
+
+// -----------------------------------------------------------------------------
+// Contas a Receber
+// -----------------------------------------------------------------------------
+
+export function getContasReceber(): ApiResponse<any> {
+  try {
+    const contas = buildContasReceberMock();
+    const stats = buildStatsReceber(contas);
+    return ok({ contas, stats });
+  } catch (error: any) {
+    return err(error.message || 'Erro ao listar contas a receber');
+  }
+}
+
+export function receberConta(id: string): ApiResponse<{ id: string }> {
+  console.log('Conta recebida', id);
+  return ok({ id });
+}
+
+// -----------------------------------------------------------------------------
+// ConciliaÇõÇœo
+// -----------------------------------------------------------------------------
+
+export function getConciliacaoData(): ApiResponse<any> {
+  try {
+    const extratos = buildExtratosMock();
+    const lancamentos = buildLancamentosMock();
+
+    const stats = {
+      extratosPendentes: extratos.length,
+      extratosValor: currencySum(extratos),
+      lancamentosPendentes: lancamentos.length,
+      lancamentosValor: currencySum(lancamentos),
+      conciliadosHoje: 0,
+      conciliadosHojeValor: 0,
+      taxaConciliacao: 0,
+    };
+
+    const historico: any[] = []; // Mock vazio
+
+    return ok({ extratos, lancamentos, stats, historico });
+  } catch (error: any) {
+    return err(error.message || 'Erro ao carregar conciliaÇõÇœo');
+  }
+}
+
+export function conciliarItens(extratoId: string, lancamentoId: string): ApiResponse<{ extratoId: string; lancamentoId: string }> {
+  console.log('Conciliando', extratoId, lancamentoId);
+  return ok({ extratoId, lancamentoId });
+}
+
+export function conciliarAutomatico(): ApiResponse<{ conciliados: number }> {
+  console.log('Conciliando automaticamente');
+  return ok({ conciliados: 2 });
+}
+
+// -----------------------------------------------------------------------------
+// EstatÇ¸sticas auxiliares
+// -----------------------------------------------------------------------------
+
+function buildStats(contas: ContaPagar[], tipo: 'PAGAR') {
+  const hoje = todayISO();
+  const base = new Date();
 
   return {
-    pagarVencidas: {
-      quantidade: pagarVencidas.length,
-      valor: sumValues(pagarVencidas),
-    },
-    pagarProximas: {
-      quantidade: pagarProximas.length,
-      valor: sumValues(pagarProximas),
-    },
-    receberHoje: {
-      quantidade: receberHoje.length,
-      valor: sumValues(receberHoje),
-    },
-    conciliacaoPendentes: {
-      quantidade: extratosPendentes.length,
-      valor: extratosPendentes.reduce((sum, e) => sum + parseFloat(String(e.valor || 0)), 0),
-    },
-    recentTransactions,
-    alerts,
+    vencidas: summarize(contas.filter((c) => c.status === 'VENCIDA' || c.vencimento < hoje)),
+    vencer7: summarize(contas.filter((c) => c.status === 'PENDENTE' && c.vencimento <= addDays(base, 7))),
+    vencer30: summarize(contas.filter((c) => c.status === 'PENDENTE' && c.vencimento <= addDays(base, 30))),
+    pagas: summarize(contas.filter((c) => c.status === 'PAGA')),
   };
 }
 
-// ============================================================================
-// CONTAS A PAGAR
-// ============================================================================
-
-export function getContasPagar() {
-  const lancamentos = getLancamentosFromSheet();
-  const hoje = new Date();
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-
-  const contasPagar = lancamentos.filter(l => l.tipo === 'DESPESA');
-
-  const vencidas = contasPagar.filter(l =>
-    l.status === 'VENCIDA' || (l.status === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
-  );
-
-  const proximos7Dias = new Date();
-  proximos7Dias.setDate(proximos7Dias.getDate() + 7);
-  const vencer7 = contasPagar.filter(l =>
-    l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento) <= proximos7Dias &&
-    new Date(l.dataVencimento) >= hoje
-  );
-
-  const proximos30Dias = new Date();
-  proximos30Dias.setDate(proximos30Dias.getDate() + 30);
-  const vencer30 = contasPagar.filter(l =>
-    l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento) <= proximos30Dias &&
-    new Date(l.dataVencimento) > proximos7Dias
-  );
-
-  const pagas = contasPagar.filter(l =>
-    l.status === 'PAGA' &&
-    new Date(l.dataPagamento || l.dataCompetencia) >= inicioMes
-  );
+function buildStatsReceber(contas: ContaReceber[]) {
+  const hoje = todayISO();
+  const base = new Date();
 
   return {
-    stats: {
-      vencidas: { quantidade: vencidas.length, valor: sumValues(vencidas) },
-      vencer7: { quantidade: vencer7.length, valor: sumValues(vencer7) },
-      vencer30: { quantidade: vencer30.length, valor: sumValues(vencer30) },
-      pagas: { quantidade: pagas.length, valor: sumValues(pagas) },
-    },
-    contas: contasPagar.map(l => ({
-      id: l.id,
-      vencimento: l.dataVencimento,
-      fornecedor: l.descricao.split('-')[0].trim(),
-      descricao: l.descricao,
-      valor: l.valorLiquido,
-      status: l.status,
-      filial: l.filial,
-    })),
+    vencidas: summarize(contas.filter((c) => c.status === 'VENCIDA' || c.vencimento < hoje)),
+    receber7: summarize(contas.filter((c) => c.status === 'PENDENTE' && c.vencimento <= addDays(base, 7))),
+    receber30: summarize(contas.filter((c) => c.status === 'PENDENTE' && c.vencimento <= addDays(base, 30))),
+    recebidas: summarize(contas.filter((c) => c.status === 'RECEBIDA')),
   };
 }
 
-export function pagarConta(id: string): { success: boolean; message: string } {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
-    if (!sheet) throw new Error('Aba de lançamentos não encontrada');
-
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idCol = headers.indexOf('ID');
-    const statusCol = headers.indexOf('Status');
-    const dataPagCol = headers.indexOf('Data Pagamento');
-
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idCol] === id) {
-        sheet.getRange(i + 1, statusCol + 1).setValue('PAGA');
-        sheet.getRange(i + 1, dataPagCol + 1).setValue(new Date());
-        return { success: true, message: 'Conta paga com sucesso' };
-      }
-    }
-
-    throw new Error('Conta não encontrada');
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
-}
-
-export function pagarContasEmLote(ids: string[]): { success: boolean; message: string } {
-  try {
-    let count = 0;
-    for (const id of ids) {
-      const result = pagarConta(id);
-      if (result.success) count++;
-    }
-    return { success: true, message: `${count} contas pagas com sucesso` };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
-}
-
-// ============================================================================
-// CONTAS A RECEBER
-// ============================================================================
-
-export function getContasReceber() {
-  const lancamentos = getLancamentosFromSheet();
-  const hoje = new Date();
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-
-  const contasReceber = lancamentos.filter(l => l.tipo === 'RECEITA');
-
-  const vencidas = contasReceber.filter(l =>
-    l.status === 'VENCIDA' || (l.status === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
-  );
-
-  const proximos7Dias = new Date();
-  proximos7Dias.setDate(proximos7Dias.getDate() + 7);
-  const receber7 = contasReceber.filter(l =>
-    l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento) <= proximos7Dias &&
-    new Date(l.dataVencimento) >= hoje
-  );
-
-  const proximos30Dias = new Date();
-  proximos30Dias.setDate(proximos30Dias.getDate() + 30);
-  const receber30 = contasReceber.filter(l =>
-    l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento) <= proximos30Dias &&
-    new Date(l.dataVencimento) > proximos7Dias
-  );
-
-  const recebidas = contasReceber.filter(l =>
-    l.status === 'RECEBIDA' &&
-    new Date(l.dataPagamento || l.dataCompetencia) >= inicioMes
-  );
-
+function summarize(items: { valor: number }[]) {
   return {
-    stats: {
-      vencidas: { quantidade: vencidas.length, valor: sumValues(vencidas) },
-      receber7: { quantidade: receber7.length, valor: sumValues(receber7) },
-      receber30: { quantidade: receber30.length, valor: sumValues(receber30) },
-      recebidas: { quantidade: recebidas.length, valor: sumValues(recebidas) },
-    },
-    contas: contasReceber.map(l => ({
-      id: l.id,
-      vencimento: l.dataVencimento,
-      cliente: l.descricao.split('-')[0].trim(),
-      descricao: l.descricao,
-      valor: l.valorLiquido,
-      status: l.status,
-      canal: l.canal || 'N/A',
-    })),
+    quantidade: items.length,
+    valor: currencySum(items),
   };
-}
-
-export function receberConta(id: string): { success: boolean; message: string } {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
-    if (!sheet) throw new Error('Aba de lançamentos não encontrada');
-
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idCol = headers.indexOf('ID');
-    const statusCol = headers.indexOf('Status');
-    const dataPagCol = headers.indexOf('Data Pagamento');
-
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idCol] === id) {
-        sheet.getRange(i + 1, statusCol + 1).setValue('RECEBIDA');
-        sheet.getRange(i + 1, dataPagCol + 1).setValue(new Date());
-        return { success: true, message: 'Conta recebida com sucesso' };
-      }
-    }
-
-    throw new Error('Conta não encontrada');
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
-}
-
-// ============================================================================
-// CONCILIAÇÃO
-// ============================================================================
-
-export function getConciliacaoData() {
-  const extratos = getExtratosFromSheet();
-  const lancamentos = getLancamentosFromSheet();
-  const hoje = new Date();
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-
-  const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
-  const lancamentosPendentes = lancamentos.filter(l => !l.idExtratoBanco);
-
-  const conciliadosHoje = extratos.filter(e =>
-    e.statusConciliacao === 'CONCILIADO' &&
-    new Date(e.importadoEm).toDateString() === hoje.toDateString()
-  );
-
-  const totalExtratos = extratos.length;
-  const totalConciliados = extratos.filter(e => e.statusConciliacao === 'CONCILIADO').length;
-  const taxaConciliacao = totalExtratos > 0 ? Math.round((totalConciliados / totalExtratos) * 100) : 0;
-
-  // Histórico (últimas 50 conciliações)
-  const historico = extratos
-    .filter(e => e.statusConciliacao === 'CONCILIADO' && e.idLancamento)
-    .slice(0, 50)
-    .map(e => ({
-      dataConciliacao: e.importadoEm,
-      extratoId: e.id,
-      lancamentoId: e.idLancamento,
-      descricao: e.descricao,
-      valor: e.valor,
-      banco: e.banco,
-      usuario: 'Sistema',
-    }));
-
-  return {
-    stats: {
-      extratosPendentes: extratosPendentes.length,
-      extratosValor: extratosPendentes.reduce((sum, e) => sum + parseFloat(String(e.valor || 0)), 0),
-      lancamentosPendentes: lancamentosPendentes.length,
-      lancamentosValor: sumValues(lancamentosPendentes),
-      conciliadosHoje: conciliadosHoje.length,
-      conciliadosHojeValor: conciliadosHoje.reduce((sum, e) => sum + parseFloat(String(e.valor || 0)), 0),
-      taxaConciliacao,
-    },
-    extratos: extratosPendentes.map(e => ({
-      id: e.id,
-      data: e.data,
-      descricao: e.descricao,
-      valor: e.valor,
-      banco: e.banco,
-    })),
-    lancamentos: lancamentosPendentes.slice(0, 50).map(l => ({
-      id: l.id,
-      data: l.dataCompetencia,
-      descricao: l.descricao,
-      valor: l.valorLiquido,
-      tipo: l.tipo,
-    })),
-    historico,
-  };
-}
-
-export function conciliarItens(extratoId: string, lancamentoId: string): { success: boolean; message: string } {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // Atualizar extrato
-    const sheetExtratos = ss.getSheetByName(SHEET_TB_EXTRATOS);
-    if (sheetExtratos) {
-      const dataExtratos = sheetExtratos.getDataRange().getValues();
-      const headersExtratos = dataExtratos[0];
-      const idColE = headersExtratos.indexOf('ID');
-      const statusColE = headersExtratos.indexOf('Status Conciliação');
-      const lancColE = headersExtratos.indexOf('ID Lançamento');
-
-      for (let i = 1; i < dataExtratos.length; i++) {
-        if (dataExtratos[i][idColE] === extratoId) {
-          sheetExtratos.getRange(i + 1, statusColE + 1).setValue('CONCILIADO');
-          sheetExtratos.getRange(i + 1, lancColE + 1).setValue(lancamentoId);
-          break;
-        }
-      }
-    }
-
-    // Atualizar lançamento
-    const sheetLanc = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
-    if (sheetLanc) {
-      const dataLanc = sheetLanc.getDataRange().getValues();
-      const headersLanc = dataLanc[0];
-      const idColL = headersLanc.indexOf('ID');
-      const extratoColL = headersLanc.indexOf('ID Extrato Banco');
-
-      for (let i = 1; i < dataLanc.length; i++) {
-        if (dataLanc[i][idColL] === lancamentoId) {
-          sheetLanc.getRange(i + 1, extratoColL + 1).setValue(extratoId);
-          break;
-        }
-      }
-    }
-
-    return { success: true, message: 'Conciliação realizada com sucesso' };
-  } catch (error: any) {
-    return { success: false, message: error.message };
-  }
-}
-
-export function conciliarAutomatico(): { success: boolean; conciliados: number; message: string } {
-  try {
-    const extratos = getExtratosFromSheet().filter(e => e.statusConciliacao === 'PENDENTE');
-    const lancamentos = getLancamentosFromSheet().filter(l => !l.idExtratoBanco);
-
-    let conciliados = 0;
-
-    for (const extrato of extratos) {
-      // Tentar encontrar lançamento com valor e data próximos
-      const match = lancamentos.find(l =>
-        Math.abs(parseFloat(String(l.valorLiquido)) - parseFloat(String(extrato.valor))) < 0.01 &&
-        Math.abs(new Date(l.dataCompetencia).getTime() - new Date(extrato.data).getTime()) < 7 * 24 * 60 * 60 * 1000
-      );
-
-      if (match) {
-        conciliarItens(extrato.id, match.id);
-        conciliados++;
-      }
-    }
-
-    return { success: true, conciliados, message: `${conciliados} itens conciliados` };
-  } catch (error: any) {
-    return { success: false, conciliados: 0, message: error.message };
-  }
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function getLancamentosFromSheet(): any[] {
-  const data = getSheetValues(SHEET_TB_LANCAMENTOS).slice(1); // Skip header
-  if (data.length === 0) return [];
-
-  return data.map((row: any) => ({
-    id: row[0],
-    dataCompetencia: row[1],
-    dataVencimento: row[2],
-    dataPagamento: row[3],
-    tipo: row[4],
-    filial: row[5],
-    centroCusto: row[6],
-    contaGerencial: row[7],
-    contaContabil: row[8],
-    grupoReceita: row[9],
-    canal: row[10],
-    descricao: row[11],
-    valorBruto: parseFloat(String(row[12] || 0)),
-    desconto: parseFloat(String(row[13] || 0)),
-    juros: parseFloat(String(row[14] || 0)),
-    multa: parseFloat(String(row[15] || 0)),
-    valorLiquido: parseFloat(String(row[16] || 0)),
-    status: row[17],
-    idExtratoBanco: row[18],
-    origem: row[19],
-    observacoes: row[20],
-  }));
-}
-
-function getExtratosFromSheet(): any[] {
-  const data = getSheetValues(SHEET_TB_EXTRATOS).slice(1); // Skip header
-  if (data.length === 0) return [];
-
-  return data.map((row: any) => ({
-    id: row[0],
-    data: row[1],
-    descricao: row[2],
-    valor: parseFloat(String(row[3] || 0)),
-    tipo: row[4],
-    banco: row[5],
-    conta: row[6],
-    statusConciliacao: row[7],
-    idLancamento: row[8],
-    observacoes: row[9],
-    importadoEm: row[10],
-  }));
-}
-
-function sumValues(items: any[]): number {
-  return items.reduce((sum, item) => sum + parseFloat(String(item.valorLiquido || item.valor || 0)), 0);
-}
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
