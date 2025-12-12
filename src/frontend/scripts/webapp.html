@@ -54,7 +54,8 @@ document.addEventListener('keydown', function(e) {
 
 const currentUserInfo = {
   email: 'usuario@empresa.com',
-  role: 'Admin'
+  role: 'Admin',
+  avatar: 'https://www.gravatar.com/avatar/?d=identicon&f=y'
 };
 
 let currentView = 'dashboard';
@@ -85,10 +86,12 @@ function initializeApp() {
   loadReferenceData();
 
   // Render user info
-  const userLabel = document.getElementById('user-info');
-  if (userLabel) {
-    userLabel.textContent = `${currentUserInfo.email} · ${currentUserInfo.role}`;
-  }
+  const userEmail = document.getElementById('user-info-email');
+  const userRole = document.getElementById('user-info-role');
+  const userAvatar = document.getElementById('user-avatar');
+  if (userEmail) userEmail.textContent = currentUserInfo.email;
+  if (userRole) userRole.textContent = currentUserInfo.role;
+  if (userAvatar) userAvatar.src = currentUserInfo.avatar;
 
   // Load initial view
   navigateTo('dashboard');

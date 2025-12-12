@@ -17,12 +17,12 @@ body {
 .navbar {
   background: linear-gradient(135deg, #008E6C 0%, #29376F 100%);
   color: white;
-  padding: 0 2rem;
-  height: 64px;
+  padding: 0 2.2rem;
+  height: 70px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -31,19 +31,19 @@ body {
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .logo {
-  height: 45px;
+  height: 56px;
   width: auto;
   object-fit: contain;
 }
 
 .brand-name {
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: -0.5px;
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .navbar-menu {
@@ -51,6 +51,7 @@ body {
   gap: 8px;
   flex: 1;
   justify-content: center;
+  margin-left: 24px;
 }
 
 .nav-item {
@@ -87,16 +88,39 @@ body {
   gap: 12px;
 }
 
-.user-name {
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.12);
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+.user-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.user-email {
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.user-role {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.8);
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.3);
+  border: 2px solid rgba(255,255,255,0.4);
+  object-fit: cover;
 }
 
 /* Main Content */
