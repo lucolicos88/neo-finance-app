@@ -38,19 +38,29 @@ import {
  * Carrega plano de contas da planilha
  */
 function loadAccountsFromSheet(): Account[] {
-  const values = getSheetValues(Sheets.REF_PLANO_CONTAS, { skipHeader: true });
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(Sheets.REF_PLANO_CONTAS);
+
+  if (!sheet || sheet.getLastRow() <= 1) {
+    return [];
+  }
+
+  // Usa displayValues para preservar códigos como texto (evitar conversão para Date/number)
+  const values = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, Math.max(6, sheet.getLastColumn()))
+    .getDisplayValues();
   const accounts: Account[] = [];
 
   for (const row of values) {
     if (!row || row.length === 0) continue;
 
     const account: Account = {
-      codigo: row[REF_PLANO_CONTAS_COLS.CODIGO],
-      descricao: row[REF_PLANO_CONTAS_COLS.DESCRICAO],
+      codigo: String(row[REF_PLANO_CONTAS_COLS.CODIGO] || '').trim(),
+      descricao: String(row[REF_PLANO_CONTAS_COLS.DESCRICAO] || '').trim(),
       tipo: row[REF_PLANO_CONTAS_COLS.TIPO] as AccountType,
-      grupoDRE: row[REF_PLANO_CONTAS_COLS.GRUPO_DRE],
+      grupoDRE: row[REF_PLANO_CONTAS_COLS.GRUPO_DRE] || '',
       subgrupoDRE: row[REF_PLANO_CONTAS_COLS.SUBGRUPO_DRE] || null,
-      grupoDFC: row[REF_PLANO_CONTAS_COLS.GRUPO_DFC] as CashflowCategory || null,
+      grupoDFC: (row[REF_PLANO_CONTAS_COLS.GRUPO_DFC] as CashflowCategory) || null,
       variavelFixa: row[REF_PLANO_CONTAS_COLS.VARIAVEL_FIXA] as ExpenseClassification || null,
       cmaCmv: row[REF_PLANO_CONTAS_COLS.CMA_CMV] as CostClassification || null,
     };

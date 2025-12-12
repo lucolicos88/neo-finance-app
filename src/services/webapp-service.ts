@@ -79,12 +79,14 @@ export function getReferenceData(): {
     const sheetContas = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
     let contas: any[];
     if (sheetContas && sheetContas.getLastRow() > 1) {
-      const contasData = sheetContas.getDataRange().getValues().slice(1);
-      contas = contasData.filter((c: any) => c[0]).map((c: any) => ({
-        codigo: String(c[0]),
-        nome: String(c[1]),
-        tipo: String(c[2] || '')
-      }));
+      const contasData = sheetContas.getRange(2, 1, sheetContas.getLastRow() - 1, Math.max(3, sheetContas.getLastColumn())).getDisplayValues();
+      contas = contasData
+        .filter((c: any) => c[0])
+        .map((c: any) => ({
+          codigo: String(c[0]).trim(),
+          nome: String(c[1] || '').trim(),
+          tipo: String(c[2] || '').trim(),
+        }));
     } else {
       // Fallback hardcoded
       contas = [
