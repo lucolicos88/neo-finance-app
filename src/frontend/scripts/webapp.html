@@ -52,6 +52,11 @@ document.addEventListener('keydown', function(e) {
 // GLOBAL STATE
 // ============================================================================
 
+const currentUserInfo = {
+  email: 'usuario@empresa.com',
+  role: 'Admin'
+};
+
 let currentView = 'dashboard';
 let appData = {
   contasPagar: [],
@@ -78,6 +83,12 @@ function initializeApp() {
 
   // Load reference data
   loadReferenceData();
+
+  // Render user info
+  const userLabel = document.getElementById('user-info');
+  if (userLabel) {
+    userLabel.textContent = `${currentUserInfo.email} · ${currentUserInfo.role}`;
+  }
 
   // Load initial view
   navigateTo('dashboard');
