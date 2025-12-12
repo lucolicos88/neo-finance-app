@@ -187,37 +187,6 @@
 </style>
 
 <script>
-// Modal Management
-const ModalManager = {
-  currentModal: null,
-
-  open(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-      modal.classList.add('active');
-      this.currentModal = modal;
-      document.body.style.overflow = 'hidden';
-    }
-  },
-
-  close(modalId) {
-    const modal = modalId ? document.getElementById(modalId) : this.currentModal;
-    if (modal) {
-      modal.classList.remove('active');
-      document.body.style.overflow = '';
-      this.currentModal = null;
-    }
-  },
-
-  closeAll() {
-    document.querySelectorAll('.modal-overlay').forEach(modal => {
-      modal.classList.remove('active');
-    });
-    document.body.style.overflow = '';
-    this.currentModal = null;
-  }
-};
-
 // Tab Management
 function switchTab(tabGroup, tabName) {
   // Hide all tabs in group
