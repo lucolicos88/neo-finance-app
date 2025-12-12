@@ -21,6 +21,7 @@ function setupConfigTabs() {
   tabs.forEach(tab => {
     tab.addEventListener('click', function() {
       const tabName = this.getAttribute('data-tab');
+      ModalManager.closeAll();
       switchTab('config', tabName);
     });
   });
@@ -525,6 +526,14 @@ document.addEventListener('DOMContentLoaded', function() {
       salvarUsuario();
     });
   }
+
+  // Fechar modais se o usuÇ­rio sair da aba configuraÇõÇœes
+  document.addEventListener('click', function(e) {
+    const target = e.target;
+    if (target && target.classList && target.classList.contains('modal-overlay')) {
+      ModalManager.closeAll();
+    }
+  });
 });
 
 function salvarUsuario() {

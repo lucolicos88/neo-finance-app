@@ -3,29 +3,50 @@
 // MODAL MANAGER
 // ============================================================================
 const ModalManager = {
-  open: function(modalId) {
+  open(modalId) {
     const modal = document.getElementById(modalId);
-    if (modal) {
-      modal.style.display = 'block';
+    if (!modal) return;
+    modal.classList.add('active');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  },
+  close(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+
+    // Reset form if exists
+    const form = modal.querySelector('form');
+    if (form) {
+      form.reset();
+      const editIndex = modal.querySelector('[id$="-edit-index"]');
+      if (editIndex) editIndex.value = '';
     }
   },
-  close: function(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
+  closeAll() {
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+      modal.classList.remove('active');
       modal.style.display = 'none';
-      // Reset form if exists
-      const form = modal.querySelector('form');
-      if (form) {
-        form.reset();
-        // Reset hidden edit index fields
-        const editIndex = modal.querySelector('[id$="-edit-index"]');
-        if (editIndex) {
-          editIndex.value = '';
-        }
-      }
-    }
+    });
+    document.body.style.overflow = '';
   }
 };
+
+// Fecha modal ao clicar fora
+document.addEventListener('click', function(e) {
+  if (e.target.classList && e.target.classList.contains('modal-overlay')) {
+    ModalManager.closeAll();
+  }
+});
+
+// Fecha modal com ESC
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    ModalManager.closeAll();
+  }
+});
 
 // ============================================================================
 // GLOBAL STATE
@@ -78,6 +99,9 @@ function setupNavigation() {
 }
 
 function navigateTo(view) {
+  // Fechar modais ao trocar de view
+  ModalManager.closeAll();
+
   // Update active nav item
   document.querySelectorAll('.nav-item').forEach(item => {
     item.classList.remove('active');
