@@ -11,16 +11,42 @@
   <!-- Navigation Bar -->
   <nav class="navbar">
     <div class="navbar-brand">
-      <img src="https://via.placeholder.com/40x40/00a8e8/ffffff?text=NF" alt="Neoformula" class="logo">
+      <img src="https://neoformula.com.br/cdn/shop/files/Logotipo-NeoFormula-Manipulacao-Homeopatia_76b2fa98-5ffa-4cc3-ac0a-6d41e1bc8810.png?height=200&v=1677088468" alt="Neoformula" class="logo">
       <span class="brand-name">Neoformula Finance</span>
     </div>
     <div class="navbar-menu">
-      <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
-      <a href="#" class="nav-item" data-view="contas-pagar">Contas a Pagar</a>
-      <a href="#" class="nav-item" data-view="contas-receber">Contas a Receber</a>
-      <a href="#" class="nav-item" data-view="conciliacao">Conciliação</a>
-      <a href="#" class="nav-item" data-view="relatorios">Relatórios</a>
-      <a href="#" class="nav-item" data-view="configuracoes">Configurações</a>
+      <a href="#" class="nav-item active" data-view="dashboard">
+        <i class="icon">📊</i>
+        Dashboard
+      </a>
+      <a href="#" class="nav-item" data-view="contas-pagar">
+        <i class="icon">💳</i>
+        Contas a Pagar
+      </a>
+      <a href="#" class="nav-item" data-view="contas-receber">
+        <i class="icon">💰</i>
+        Contas a Receber
+      </a>
+      <a href="#" class="nav-item" data-view="conciliacao">
+        <i class="icon">🔄</i>
+        Conciliação
+      </a>
+      <a href="#" class="nav-item" data-view="dre">
+        <i class="icon">📊</i>
+        DRE
+      </a>
+      <a href="#" class="nav-item" data-view="fluxo-caixa">
+        <i class="icon">💸</i>
+        Fluxo de Caixa
+      </a>
+      <a href="#" class="nav-item" data-view="kpis">
+        <i class="icon">📈</i>
+        KPIs
+      </a>
+      <a href="#" class="nav-item" data-view="configuracoes">
+        <i class="icon">⚙️</i>
+        Configurações
+      </a>
     </div>
     <div class="navbar-user">
       <span class="user-name">Usuário</span>
@@ -42,6 +68,13 @@
   <!-- Toast Notifications -->
   <div id="toast-container" class="toast-container"></div>
 
+  <!-- Modals -->
+  <?!= include('frontend/components/modal'); ?>
+  <?!= include('frontend/components/modal-novo-lancamento'); ?>
+  <?!= include('frontend/components/modal-config'); ?>
+
   <?!= include('frontend/scripts/webapp'); ?>
+  <?!= include('frontend/scripts/lancamentos'); ?>
+  <?!= include('frontend/scripts/configuracoes'); ?>
 </body>
 </html>

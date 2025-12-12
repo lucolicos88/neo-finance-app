@@ -20,7 +20,9 @@
       "Bash(powershell:*)",
       "Bash(cat:*)",
       "Bash(npm install:*)",
-      "Bash(npm run deploy:*)"
+      "Bash(npm run deploy:*)",
+      "Bash(npx clasp:*)",
+      "Bash(\" inline em todos os modais:\n  - modal-centro-custo\n  - modal-conta-contabil\n  - modal-canal\n  - modal-filial\n  - modal-usuario\n- Atualizado ModalManager para usar style.display em vez de classes CSS\n- Removido CSS .modal.show e .modal-overlay.show (não mais necessários)\n- Inline styles têm prioridade maior que CSS, garantindo que modais fiquem ocultos\n\n## Limpeza de Deployments\n- Versão 11 criada e deployada\n- Versões antigas removidas (undeploy):\n  - Versão 8 ❌\n  - Versão 9 ❌\n  - Versão 10 ❌\n- Apenas Versão 11 ativa ✅\n\n## Arquivos Modificados\n- src/frontend/components/modal-config.html\n- src/frontend/scripts/webapp.html\n- src/frontend/styles/webapp.html\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ]
   }
 }

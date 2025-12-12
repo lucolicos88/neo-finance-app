@@ -1,0 +1,227 @@
+<div class="view-container" id="kpis-view">
+  <h1 class="view-title">KPIs Financeiros - Indicadores de Desempenho</h1>
+
+  <!-- Filtros -->
+  <div class="card">
+    <div class="filters">
+      <div class="d-flex justify-between align-center mb-2">
+        <h3 class="filters-title">Selecionar Período</h3>
+        <button class="btn btn-outline" onclick="voltarRelatorios()">← Voltar</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mês</label>
+          <select class="form-control" id="kpi-mes">
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ano</label>
+          <select class="form-control" id="kpi-ano">
+            <option value="2024">2024</option>
+            <option value="2025" selected>2025</option>
+            <option value="2026">2026</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Filial</label>
+          <select class="form-control" id="kpi-filial">
+            <option value="">Consolidado</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button class="btn btn-primary" onclick="carregarKPIs()" style="width: 100%;">
+            🔍 Gerar KPIs
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs Principais -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title" id="kpi-titulo">KPIs - Aguardando seleção</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="exportarKPIs()">
+          📥 Exportar PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Grid de KPIs -->
+    <div style="padding: 1.5rem;">
+      <h3 style="margin-bottom: 1rem; font-size: 1.1rem; color: #2c3e50;">📊 Indicadores de Rentabilidade</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Margem Bruta</div>
+          <div class="stat-value" id="kpi-margem-bruta">-</div>
+          <div class="stat-change" id="kpi-margem-bruta-class">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Margem EBITDA</div>
+          <div class="stat-value" id="kpi-margem-ebitda">-</div>
+          <div class="stat-change" id="kpi-margem-ebitda-class">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Margem Líquida</div>
+          <div class="stat-value" id="kpi-margem-liquida">-</div>
+          <div class="stat-change" id="kpi-margem-liquida-class">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">ROI (Return on Investment)</div>
+          <div class="stat-value" id="kpi-roi">-</div>
+          <div class="stat-change" id="kpi-roi-desc">-</div>
+        </div>
+      </div>
+
+      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">💰 Indicadores de Liquidez</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Liquidez Corrente</div>
+          <div class="stat-value" id="kpi-liquidez-corrente">-</div>
+          <div class="stat-change" id="kpi-liquidez-corrente-class">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Saldo de Caixa</div>
+          <div class="stat-value" id="kpi-saldo-caixa">-</div>
+          <div class="stat-change" id="kpi-saldo-caixa-desc">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Burn Rate (mensal)</div>
+          <div class="stat-value" id="kpi-burn-rate">-</div>
+          <div class="stat-change" id="kpi-burn-rate-desc">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Runway (meses)</div>
+          <div class="stat-value" id="kpi-runway">-</div>
+          <div class="stat-change" id="kpi-runway-desc">-</div>
+        </div>
+      </div>
+
+      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">📈 Indicadores de Crescimento</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Crescimento de Receita (MoM)</div>
+          <div class="stat-value" id="kpi-crescimento-receita">-</div>
+          <div class="stat-change" id="kpi-crescimento-receita-desc">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Ticket Médio</div>
+          <div class="stat-value" id="kpi-ticket-medio">-</div>
+          <div class="stat-change" id="kpi-ticket-medio-desc">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Taxa de Inadimplência</div>
+          <div class="stat-value" id="kpi-inadimplencia">-</div>
+          <div class="stat-change" id="kpi-inadimplencia-class">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Prazo Médio Recebimento</div>
+          <div class="stat-value" id="kpi-pmr">-</div>
+          <div class="stat-change" id="kpi-pmr-desc">-</div>
+        </div>
+      </div>
+
+      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">⚙️ Indicadores Operacionais</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Custo de Aquisição (CAC)</div>
+          <div class="stat-value" id="kpi-cac">-</div>
+          <div class="stat-change" id="kpi-cac-desc">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Despesas Operacionais / Receita</div>
+          <div class="stat-value" id="kpi-desp-op-receita">-</div>
+          <div class="stat-change" id="kpi-desp-op-receita-class">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Break Even Point</div>
+          <div class="stat-value" id="kpi-break-even">-</div>
+          <div class="stat-change" id="kpi-break-even-desc">-</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-label">Prazo Médio Pagamento</div>
+          <div class="stat-value" id="kpi-pmp">-</div>
+          <div class="stat-change" id="kpi-pmp-desc">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Análise Detalhada -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Análise Detalhada dos Indicadores</h2>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 30%;">Indicador</th>
+            <th style="width: 15%; text-align: right;">Valor Atual</th>
+            <th style="width: 15%; text-align: right;">Mês Anterior</th>
+            <th style="width: 15%; text-align: right;">Variação</th>
+            <th style="width: 25%; text-align: center;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="table-kpis-detalhado">
+          <tr>
+            <td colspan="5" class="text-center text-muted">Selecione um período e clique em "Gerar KPIs"</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Inicializar mês atual
+document.addEventListener('DOMContentLoaded', function() {
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+
+  const selectMes = document.getElementById('kpi-mes');
+  const selectAno = document.getElementById('kpi-ano');
+
+  if (selectMes) selectMes.value = mesAtual;
+  if (selectAno) selectAno.value = anoAtual;
+});
+
+function voltarRelatorios() {
+  navigateTo('relatorios');
+}
+
+function exportarKPIs() {
+  showToast('Exportação em desenvolvimento', 'info');
+}
+</script>

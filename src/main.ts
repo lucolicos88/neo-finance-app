@@ -18,9 +18,27 @@ import {
   pagarContasEmLote,
   getContasReceber,
   receberConta,
+  salvarLancamento,
   getConciliacaoData,
   conciliarItens,
   conciliarAutomatico,
+  salvarCentroCusto,
+  excluirCentroCusto,
+  salvarContaContabil,
+  excluirConta,
+  salvarCanal,
+  excluirCanal,
+  salvarFilial,
+  excluirFilial,
+  getDREMensal,
+  getDREComparativo,
+  getDREPorFilial,
+  getFluxoCaixaMensal,
+  getFluxoCaixaProjecao,
+  getKPIsMensal,
+  getUsuarios,
+  salvarUsuario,
+  excluirUsuario,
 } from './services/webapp-service';
 
 /**
@@ -239,6 +257,34 @@ global.pagarConta = pagarConta;
 global.pagarContasEmLote = pagarContasEmLote;
 global.getContasReceber = getContasReceber;
 global.receberConta = receberConta;
+global.salvarLancamento = salvarLancamento;
 global.getConciliacaoData = getConciliacaoData;
 global.conciliarItens = conciliarItens;
 global.conciliarAutomatico = conciliarAutomatico;
+
+// Configurações CRUD
+global.salvarCentroCusto = salvarCentroCusto;
+global.excluirCentroCusto = excluirCentroCusto;
+global.salvarContaContabil = salvarContaContabil;
+global.excluirConta = excluirConta;
+global.salvarCanal = salvarCanal;
+global.excluirCanal = excluirCanal;
+global.salvarFilial = salvarFilial;
+global.excluirFilial = excluirFilial;
+
+// DRE Functions
+global.getDREMensal = getDREMensal;
+global.getDREComparativo = getDREComparativo;
+global.getDREPorFilial = getDREPorFilial;
+
+// Fluxo de Caixa Functions
+global.getFluxoCaixaMensal = getFluxoCaixaMensal;
+global.getFluxoCaixaProjecao = getFluxoCaixaProjecao;
+
+// KPIs Functions
+global.getKPIsMensal = getKPIsMensal;
+
+// Usuários Functions
+global.getUsuarios = getUsuarios;
+global.salvarUsuario = salvarUsuario;
+global.excluirUsuario = excluirUsuario;

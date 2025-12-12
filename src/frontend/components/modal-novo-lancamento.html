@@ -1,0 +1,272 @@
+<!-- Modal: Novo Lançamento -->
+<div class="modal-overlay" id="modal-novo-lancamento">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Novo Lançamento</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-novo-lancamento')">×</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab-group="tipo-lancamento" data-tab="pagar" onclick="switchTab('tipo-lancamento', 'pagar')">
+          💳 Contas a Pagar
+        </button>
+        <button class="tab" data-tab-group="tipo-lancamento" data-tab="receber" onclick="switchTab('tipo-lancamento', 'receber')">
+          💰 Contas a Receber
+        </button>
+      </div>
+
+      <!-- Tab Content: Contas a Pagar -->
+      <div class="tab-content active" data-tab-content="tipo-lancamento" data-content="pagar">
+        <form id="form-novo-pagar">
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Data de Competência</label>
+              <input type="date" class="form-control" id="pagar-data-competencia" required>
+              <div class="form-error" id="pagar-data-competencia-error"></div>
+            </div>
+
+            <div class="form-group required">
+              <label class="form-label">Data de Vencimento</label>
+              <input type="date" class="form-control" id="pagar-data-vencimento" required>
+              <div class="form-error" id="pagar-data-vencimento-error"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Fornecedor/Descrição</label>
+              <input type="text" class="form-control" id="pagar-descricao" placeholder="Ex: Aluguel - Escritório Centro" required>
+              <div class="form-error" id="pagar-descricao-error"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Valor</label>
+              <input type="number" class="form-control" id="pagar-valor" placeholder="0,00" step="0.01" min="0" required>
+              <div class="form-error" id="pagar-valor-error"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Desconto</label>
+              <input type="number" class="form-control" id="pagar-desconto" placeholder="0,00" step="0.01" min="0" value="0">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Juros</label>
+              <input type="number" class="form-control" id="pagar-juros" placeholder="0,00" step="0.01" min="0" value="0">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Multa</label>
+              <input type="number" class="form-control" id="pagar-multa" placeholder="0,00" step="0.01" min="0" value="0">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Filial</label>
+              <select class="form-control" id="pagar-filial" required>
+                <option value="">Selecione...</option>
+              </select>
+              <div class="form-error" id="pagar-filial-error"></div>
+            </div>
+
+            <div class="form-group required">
+              <label class="form-label">Centro de Custo</label>
+              <select class="form-control" id="pagar-centro-custo" required>
+                <option value="">Selecione...</option>
+                <option value="ADM">Administrativo</option>
+                <option value="COM">Comercial</option>
+                <option value="FIN">Financeiro</option>
+                <option value="MKT">Marketing</option>
+                <option value="OPS">Operações</option>
+                <option value="TI">TI</option>
+              </select>
+              <div class="form-error" id="pagar-centro-custo-error"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Conta Contábil</label>
+              <select class="form-control" id="pagar-conta-contabil" required>
+                <option value="">Selecione...</option>
+                <option value="2.01.001">2.01.001 - Custo de Pessoal Direto</option>
+                <option value="2.01.002">2.01.002 - Materiais Diretos</option>
+                <option value="2.01.003">2.01.003 - Serviços de Terceiros</option>
+                <option value="3.01.001">3.01.001 - Salários Administrativos</option>
+                <option value="3.01.002">3.01.002 - Encargos Sociais</option>
+                <option value="3.02.001">3.02.001 - Aluguel</option>
+                <option value="3.02.002">3.02.002 - Energia Elétrica</option>
+                <option value="3.03.001">3.03.001 - Marketing e Publicidade</option>
+                <option value="3.03.002">3.03.002 - Comissões de Vendas</option>
+                <option value="4.01.001">4.01.001 - Juros de Empréstimos</option>
+                <option value="4.01.002">4.01.002 - Tarifas Bancárias</option>
+              </select>
+              <div class="form-error" id="pagar-conta-contabil-error"></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Observações</label>
+            <textarea class="form-control" id="pagar-observacoes" rows="3" placeholder="Informações adicionais..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <div style="background: #e8f7fd; padding: 1rem; border-radius: 8px; border-left: 4px solid #00a8e8;">
+              <strong>Valor Líquido:</strong>
+              <span id="pagar-valor-liquido" style="font-size: 1.25rem; color: #00a8e8; margin-left: 1rem;">R$ 0,00</span>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tab Content: Contas a Receber -->
+      <div class="tab-content" data-tab-content="tipo-lancamento" data-content="receber">
+        <form id="form-novo-receber">
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Data de Competência</label>
+              <input type="date" class="form-control" id="receber-data-competencia" required>
+              <div class="form-error" id="receber-data-competencia-error"></div>
+            </div>
+
+            <div class="form-group required">
+              <label class="form-label">Data de Vencimento</label>
+              <input type="date" class="form-control" id="receber-data-vencimento" required>
+              <div class="form-error" id="receber-data-vencimento-error"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Cliente/Descrição</label>
+              <input type="text" class="form-control" id="receber-descricao" placeholder="Ex: Cliente ABC - Consultoria Mensal" required>
+              <div class="form-error" id="receber-descricao-error"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Valor</label>
+              <input type="number" class="form-control" id="receber-valor" placeholder="0,00" step="0.01" min="0" required>
+              <div class="form-error" id="receber-valor-error"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Desconto</label>
+              <input type="number" class="form-control" id="receber-desconto" placeholder="0,00" step="0.01" min="0" value="0">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Juros</label>
+              <input type="number" class="form-control" id="receber-juros" placeholder="0,00" step="0.01" min="0" value="0">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Multa</label>
+              <input type="number" class="form-control" id="receber-multa" placeholder="0,00" step="0.01" min="0" value="0">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Filial</label>
+              <select class="form-control" id="receber-filial" required>
+                <option value="">Selecione...</option>
+              </select>
+              <div class="form-error" id="receber-filial-error"></div>
+            </div>
+
+            <div class="form-group required">
+              <label class="form-label">Canal de Venda</label>
+              <select class="form-control" id="receber-canal" required>
+                <option value="">Selecione...</option>
+              </select>
+              <div class="form-error" id="receber-canal-error"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group required">
+              <label class="form-label">Conta Contábil</label>
+              <select class="form-control" id="receber-conta-contabil" required>
+                <option value="">Selecione...</option>
+                <option value="1.01.001">1.01.001 - Receita de Serviços</option>
+                <option value="1.01.002">1.01.002 - Receita de Produtos</option>
+                <option value="4.02.001">4.02.001 - Juros Recebidos</option>
+                <option value="4.02.002">4.02.002 - Descontos Obtidos</option>
+              </select>
+              <div class="form-error" id="receber-conta-contabil-error"></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Observações</label>
+            <textarea class="form-control" id="receber-observacoes" rows="3" placeholder="Informações adicionais..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <div style="background: #d4edda; padding: 1rem; border-radius: 8px; border-left: 4px solid #06d6a0;">
+              <strong>Valor Líquido:</strong>
+              <span id="receber-valor-liquido" style="font-size: 1.25rem; color: #06d6a0; margin-left: 1rem;">R$ 0,00</span>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-novo-lancamento')">Cancelar</button>
+      <button class="btn btn-outline" onclick="salvarENovoLancamento()">Salvar e Novo</button>
+      <button class="btn btn-primary" onclick="salvarLancamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Calculate valor líquido for pagar
+['pagar-valor', 'pagar-desconto', 'pagar-juros', 'pagar-multa'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', calcularValorLiquidoPagar);
+  }
+});
+
+function calcularValorLiquidoPagar() {
+  const valor = parseFloat(document.getElementById('pagar-valor')?.value || 0);
+  const desconto = parseFloat(document.getElementById('pagar-desconto')?.value || 0);
+  const juros = parseFloat(document.getElementById('pagar-juros')?.value || 0);
+  const multa = parseFloat(document.getElementById('pagar-multa')?.value || 0);
+
+  const valorLiquido = valor - desconto + juros + multa;
+  const el = document.getElementById('pagar-valor-liquido');
+  if (el) {
+    el.textContent = formatCurrency(valorLiquido);
+  }
+}
+
+// Calculate valor líquido for receber
+['receber-valor', 'receber-desconto', 'receber-juros', 'receber-multa'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', calcularValorLiquidoReceber);
+  }
+});
+
+function calcularValorLiquidoReceber() {
+  const valor = parseFloat(document.getElementById('receber-valor')?.value || 0);
+  const desconto = parseFloat(document.getElementById('receber-desconto')?.value || 0);
+  const juros = parseFloat(document.getElementById('receber-juros')?.value || 0);
+  const multa = parseFloat(document.getElementById('receber-multa')?.value || 0);
+
+  const valorLiquido = valor - desconto + juros + multa;
+  const el = document.getElementById('receber-valor-liquido');
+  if (el) {
+    el.textContent = formatCurrency(valorLiquido);
+  }
+}
+</script>

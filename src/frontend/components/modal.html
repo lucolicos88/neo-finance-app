@@ -1,0 +1,323 @@
+<style>
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #00a8e8 0%, #0077b6 100%);
+  color: white;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: white;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  padding: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #f8f9fa;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #6c757d;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #00a8e8;
+  background: #f8f9fa;
+}
+
+.tab.active {
+  color: #00a8e8;
+  border-bottom-color: #00a8e8;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Form Groups Enhancement */
+.form-group.required .form-label::after {
+  content: ' *';
+  color: #ef476f;
+}
+
+.form-control.error {
+  border-color: #ef476f;
+}
+
+.form-error {
+  color: #ef476f;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  display: none;
+}
+
+.form-error.show {
+  display: block;
+}
+
+.form-hint {
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+/* Loading state */
+.btn.loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+</style>
+
+<script>
+// Modal Management
+const ModalManager = {
+  currentModal: null,
+
+  open(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.add('active');
+      this.currentModal = modal;
+      document.body.style.overflow = 'hidden';
+    }
+  },
+
+  close(modalId) {
+    const modal = modalId ? document.getElementById(modalId) : this.currentModal;
+    if (modal) {
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+      this.currentModal = null;
+    }
+  },
+
+  closeAll() {
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+      modal.classList.remove('active');
+    });
+    document.body.style.overflow = '';
+    this.currentModal = null;
+  }
+};
+
+// Tab Management
+function switchTab(tabGroup, tabName) {
+  // Hide all tabs in group
+  document.querySelectorAll(`[data-tab-group="${tabGroup}"]`).forEach(tab => {
+    tab.classList.remove('active');
+  });
+
+  document.querySelectorAll(`[data-tab-content="${tabGroup}"]`).forEach(content => {
+    content.classList.remove('active');
+  });
+
+  // Show selected tab
+  document.querySelector(`[data-tab-group="${tabGroup}"][data-tab="${tabName}"]`)?.classList.add('active');
+  document.querySelector(`[data-tab-content="${tabGroup}"][data-content="${tabName}"]`)?.classList.add('active');
+}
+
+// Form Validation
+function validateField(fieldId, rules) {
+  const field = document.getElementById(fieldId);
+  const errorEl = document.getElementById(`${fieldId}-error`);
+
+  if (!field) return true;
+
+  let error = '';
+
+  // Required
+  if (rules.required && !field.value.trim()) {
+    error = rules.requiredMessage || 'Este campo é obrigatório';
+  }
+
+  // Min length
+  if (!error && rules.minLength && field.value.length < rules.minLength) {
+    error = `Mínimo ${rules.minLength} caracteres`;
+  }
+
+  // Max length
+  if (!error && rules.maxLength && field.value.length > rules.maxLength) {
+    error = `Máximo ${rules.maxLength} caracteres`;
+  }
+
+  // Min value
+  if (!error && rules.min && parseFloat(field.value) < rules.min) {
+    error = `Valor mínimo: ${rules.min}`;
+  }
+
+  // Max value
+  if (!error && rules.max && parseFloat(field.value) > rules.max) {
+    error = `Valor máximo: ${rules.max}`;
+  }
+
+  // Pattern
+  if (!error && rules.pattern && !rules.pattern.test(field.value)) {
+    error = rules.patternMessage || 'Formato inválido';
+  }
+
+  // Custom validator
+  if (!error && rules.validator) {
+    error = rules.validator(field.value);
+  }
+
+  // Update UI
+  if (error) {
+    field.classList.add('error');
+    if (errorEl) {
+      errorEl.textContent = error;
+      errorEl.classList.add('show');
+    }
+    return false;
+  } else {
+    field.classList.remove('error');
+    if (errorEl) {
+      errorEl.classList.remove('show');
+    }
+    return true;
+  }
+}
+
+function validateForm(formId, rules) {
+  let isValid = true;
+
+  for (const [fieldId, fieldRules] of Object.entries(rules)) {
+    if (!validateField(fieldId, fieldRules)) {
+      isValid = false;
+    }
+  }
+
+  return isValid;
+}
+
+// Close modal on overlay click
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal-overlay')) {
+    ModalManager.close();
+  }
+});
+
+// Close modal on ESC key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    ModalManager.closeAll();
+  }
+});
+</script>

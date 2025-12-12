@@ -6,6 +6,7 @@
 .prettierrc
 .eslintrc
 tsconfig.json
+dist/**
 temp-bound/**
 *.md
 setup-*.js

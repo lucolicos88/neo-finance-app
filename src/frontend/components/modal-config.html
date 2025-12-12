@@ -1,0 +1,143 @@
+<!-- ============================================================================ -->
+<!-- MODAL: CENTRO DE CUSTO -->
+<!-- ============================================================================ -->
+<div id="modal-centro-custo" class="modal" style="display: none;">
+  <div class="modal-content modal-md">
+    <div class="modal-header">
+      <h2 id="titulo-centro-custo">Novo Centro de Custo</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-centro-custo')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-centro-custo">
+        <input type="hidden" id="cc-edit-index" value="">
+
+        <div class="form-group">
+          <label for="cc-codigo">Código *</label>
+          <input type="text" id="cc-codigo" class="form-control" placeholder="Ex: ADM, COM, FIN" required maxlength="10">
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="cc-nome">Nome *</label>
+          <input type="text" id="cc-nome" class="form-control" placeholder="Ex: Administrativo, Comercial" required>
+          <span class="form-error"></span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-centro-custo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCentroCusto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- MODAL: CONTA CONTÁBIL -->
+<!-- ============================================================================ -->
+<div id="modal-conta-contabil" class="modal" style="display: none;">
+  <div class="modal-content modal-md">
+    <div class="modal-header">
+      <h2 id="titulo-conta">Nova Conta Contábil</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-conta-contabil')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-conta-contabil">
+        <input type="hidden" id="conta-edit-index" value="">
+
+        <div class="form-group">
+          <label for="conta-codigo">Código *</label>
+          <input type="text" id="conta-codigo" class="form-control" placeholder="Ex: 1.01.001" required maxlength="20">
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="conta-nome">Nome *</label>
+          <input type="text" id="conta-nome" class="form-control" placeholder="Ex: Receita de Serviços" required>
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="conta-tipo">Tipo *</label>
+          <select id="conta-tipo" class="form-control" required>
+            <option value="">Selecione...</option>
+            <option value="RECEITA">Receita</option>
+            <option value="DESPESA">Despesa</option>
+            <option value="ATIVO">Ativo</option>
+            <option value="PASSIVO">Passivo</option>
+          </select>
+          <span class="form-error"></span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-conta-contabil')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarContaContabil()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- MODAL: CANAL DE VENDA -->
+<!-- ============================================================================ -->
+<div id="modal-canal" class="modal" style="display: none;">
+  <div class="modal-content modal-md">
+    <div class="modal-header">
+      <h2 id="titulo-canal">Novo Canal de Venda</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-canal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-canal">
+        <input type="hidden" id="canal-edit-index" value="">
+
+        <div class="form-group">
+          <label for="canal-codigo">Código *</label>
+          <input type="text" id="canal-codigo" class="form-control" placeholder="Ex: ECOM, LOJA, B2B" required maxlength="10">
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="canal-nome">Nome *</label>
+          <input type="text" id="canal-nome" class="form-control" placeholder="Ex: E-commerce, Loja Física" required>
+          <span class="form-error"></span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-canal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCanal()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- MODAL: FILIAL -->
+<!-- ============================================================================ -->
+<div id="modal-filial" class="modal" style="display: none;">
+  <div class="modal-content modal-md">
+    <div class="modal-header">
+      <h2 id="titulo-filial">Nova Filial</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-filial')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-filial">
+        <input type="hidden" id="filial-edit-index" value="">
+
+        <div class="form-group">
+          <label for="filial-codigo">Código *</label>
+          <input type="text" id="filial-codigo" class="form-control" placeholder="Ex: SP, RJ, MG" required maxlength="10">
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="filial-nome">Nome *</label>
+          <input type="text" id="filial-nome" class="form-control" placeholder="Ex: Matriz São Paulo" required>
+          <span class="form-error"></span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-filial')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFilial()">Salvar</button>
+    </div>
+  </div>
+</div>

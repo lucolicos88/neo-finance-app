@@ -1,0 +1,185 @@
+<div class="view-container" id="fluxo-caixa-view">
+  <h1 class="view-title">Fluxo de Caixa (DFC) - Demonstrativo do Fluxo de Caixa</h1>
+
+  <!-- Filtros -->
+  <div class="card">
+    <div class="filters">
+      <div class="d-flex justify-between align-center mb-2">
+        <h3 class="filters-title">Selecionar Período</h3>
+        <button class="btn btn-outline" onclick="voltarRelatorios()">← Voltar</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mês</label>
+          <select class="form-control" id="fc-mes">
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ano</label>
+          <select class="form-control" id="fc-ano">
+            <option value="2024">2024</option>
+            <option value="2025" selected>2025</option>
+            <option value="2026">2026</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Filial</label>
+          <select class="form-control" id="fc-filial">
+            <option value="">Consolidado</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button class="btn btn-primary" onclick="carregarFluxoCaixa()" style="width: 100%;">
+            🔍 Gerar Fluxo de Caixa
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Saldo Inicial</div>
+      <div class="stat-value" id="fc-saldo-inicial">R$ 0,00</div>
+      <div class="stat-change" id="fc-data-inicial">Início do período</div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-label">Total Entradas</div>
+      <div class="stat-value" id="fc-total-entradas">R$ 0,00</div>
+      <div class="stat-change" id="fc-qtd-entradas">0 transações</div>
+    </div>
+
+    <div class="stat-card danger">
+      <div class="stat-label">Total Saídas</div>
+      <div class="stat-value" id="fc-total-saidas">R$ 0,00</div>
+      <div class="stat-change" id="fc-qtd-saidas">0 transações</div>
+    </div>
+
+    <div class="stat-card" id="fc-saldo-card">
+      <div class="stat-label">Saldo Final</div>
+      <div class="stat-value" id="fc-saldo-final">R$ 0,00</div>
+      <div class="stat-change" id="fc-variacao">0%</div>
+    </div>
+  </div>
+
+  <!-- Fluxo de Caixa Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title" id="fc-titulo">Fluxo de Caixa - Aguardando seleção</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="exportarFluxoCaixa()">
+          📥 Exportar PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50%;">Descrição</th>
+            <th style="width: 25%; text-align: right;">Valor</th>
+            <th style="width: 25%; text-align: right;">% do Total</th>
+          </tr>
+        </thead>
+        <tbody id="table-fluxo-caixa">
+          <tr>
+            <td colspan="3" class="text-center text-muted">Selecione um período e clique em "Gerar Fluxo de Caixa"</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Análise por Categoria -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+    <!-- Entradas -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Entradas por Categoria</h2>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th style="text-align: right;">Valor</th>
+              <th style="text-align: right;">%</th>
+            </tr>
+          </thead>
+          <tbody id="table-entradas-categorias">
+            <tr>
+              <td colspan="3" class="text-center text-muted">Aguardando dados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Saídas -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Saídas por Categoria</h2>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th style="text-align: right;">Valor</th>
+              <th style="text-align: right;">%</th>
+            </tr>
+          </thead>
+          <tbody id="table-saidas-categorias">
+            <tr>
+              <td colspan="3" class="text-center text-muted">Aguardando dados</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Inicializar mês atual
+document.addEventListener('DOMContentLoaded', function() {
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+
+  const selectMes = document.getElementById('fc-mes');
+  const selectAno = document.getElementById('fc-ano');
+
+  if (selectMes) selectMes.value = mesAtual;
+  if (selectAno) selectAno.value = anoAtual;
+});
+
+function voltarRelatorios() {
+  navigateTo('relatorios');
+}
+
+function exportarFluxoCaixa() {
+  showToast('Exportação em desenvolvimento', 'info');
+}
+</script>

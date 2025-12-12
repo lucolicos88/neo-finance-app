@@ -1,0 +1,159 @@
+<div class="view-container" id="dre-view">
+  <h1 class="view-title">DRE Gerencial - Demonstração do Resultado do Exercício</h1>
+
+  <!-- Filtros -->
+  <div class="card">
+    <div class="filters">
+      <div class="d-flex justify-between align-center mb-2">
+        <h3 class="filters-title">Selecionar Período</h3>
+        <button class="btn btn-outline" onclick="voltarRelatorios()">← Voltar</button>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mês</label>
+          <select class="form-control" id="dre-mes">
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ano</label>
+          <select class="form-control" id="dre-ano">
+            <option value="2024">2024</option>
+            <option value="2025" selected>2025</option>
+            <option value="2026">2026</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Filial</label>
+          <select class="form-control" id="dre-filial">
+            <option value="">Consolidado</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button class="btn btn-primary" onclick="carregarDRE()" style="width: 100%;">
+            🔍 Gerar DRE
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Receita Líquida</div>
+      <div class="stat-value" id="dre-receita-liquida">R$ 0,00</div>
+      <div class="stat-change" id="dre-receita-transacoes">0 transações</div>
+    </div>
+
+    <div class="stat-card success">
+      <div class="stat-label">Margem Bruta</div>
+      <div class="stat-value" id="dre-margem-bruta">R$ 0,00</div>
+      <div class="stat-change" id="dre-margem-bruta-perc">0%</div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">EBITDA</div>
+      <div class="stat-value" id="dre-ebitda">R$ 0,00</div>
+      <div class="stat-change" id="dre-ebitda-perc">0%</div>
+    </div>
+
+    <div class="stat-card" id="dre-lucro-card">
+      <div class="stat-label">Lucro Líquido</div>
+      <div class="stat-value" id="dre-lucro-liquido">R$ 0,00</div>
+      <div class="stat-change" id="dre-lucro-perc">0%</div>
+    </div>
+  </div>
+
+  <!-- DRE Table -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title" id="dre-titulo">DRE - Aguardando seleção</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="exportarDRE()">
+          📥 Exportar PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50%;">Descrição</th>
+            <th style="width: 20%; text-align: right;">Valor</th>
+            <th style="width: 15%; text-align: right;">% Receita</th>
+            <th style="width: 15%; text-align: center;">Classificação</th>
+          </tr>
+        </thead>
+        <tbody id="table-dre">
+          <tr>
+            <td colspan="4" class="text-center text-muted">Selecione um período e clique em "Gerar DRE"</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Análise por Categoria -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Despesas Operacionais por Categoria</h2>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th style="text-align: right;">Valor</th>
+            <th style="text-align: right;">% da Receita</th>
+          </tr>
+        </thead>
+        <tbody id="table-desp-categorias">
+          <tr>
+            <td colspan="3" class="text-center text-muted">Aguardando dados</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Inicializar mês atual
+document.addEventListener('DOMContentLoaded', function() {
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+
+  const selectMes = document.getElementById('dre-mes');
+  const selectAno = document.getElementById('dre-ano');
+
+  if (selectMes) selectMes.value = mesAtual;
+  if (selectAno) selectAno.value = anoAtual;
+});
+
+function voltarRelatorios() {
+  navigateTo('relatorios');
+}
+
+function exportarDRE() {
+  showToast('Exportação em desenvolvimento', 'info');
+}
+</script>

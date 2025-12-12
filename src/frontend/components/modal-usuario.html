@@ -1,0 +1,107 @@
+<!-- Modal para Novo/Editar Usuário -->
+<div class="modal" id="modal-usuario" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modal-usuario-title">Novo Usuário</h2>
+      <button class="modal-close" onclick="closeModalUsuario()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <form id="form-usuario">
+        <input type="hidden" id="usuario-id" />
+
+        <div class="form-group">
+          <label class="form-label" for="usuario-email">
+            Email *
+            <span class="text-muted" style="font-weight: normal; font-size: 0.85rem;">
+              (Email do Google Workspace)
+            </span>
+          </label>
+          <input
+            type="email"
+            class="form-control"
+            id="usuario-email"
+            placeholder="usuario@empresa.com"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="usuario-nome">Nome Completo *</label>
+          <input
+            type="text"
+            class="form-control"
+            id="usuario-nome"
+            placeholder="Nome do usuário"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="usuario-perfil">Perfil de Acesso *</label>
+          <select class="form-control" id="usuario-perfil" required>
+            <option value="">Selecione o perfil</option>
+            <option value="ADMIN">👑 Administrador</option>
+            <option value="GESTOR">👨‍💼 Gestor Financeiro</option>
+            <option value="OPERACIONAL">⚙️ Operacional</option>
+            <option value="VISUALIZADOR">👁️ Visualizador</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="usuario-status">Status</label>
+          <select class="form-control" id="usuario-status">
+            <option value="ATIVO">✅ Ativo</option>
+            <option value="INATIVO">❌ Inativo</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Permissões Específicas</label>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border-radius: 8px;">
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="perm-criar-lancamentos" />
+              <span>Criar lançamentos</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="perm-editar-lancamentos" />
+              <span>Editar lançamentos</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="perm-excluir-lancamentos" />
+              <span>Excluir lançamentos</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="perm-aprovar-pagamentos" />
+              <span>Aprovar pagamentos</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="perm-visualizar-relatorios" />
+              <span>Visualizar relatórios</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="perm-gerenciar-config" />
+              <span>Gerenciar configurações</span>
+            </label>
+          </div>
+        </div>
+
+        <div style="background: #e7f3ff; padding: 1rem; border-radius: 8px; border-left: 4px solid #0066cc; margin-top: 1rem;">
+          <strong style="display: block; margin-bottom: 0.5rem;">💡 Dica:</strong>
+          <p style="margin: 0; font-size: 0.9rem; color: #666;">
+            As permissões específicas complementam o perfil selecionado. Por padrão, cada perfil já possui um conjunto de permissões predefinidas.
+          </p>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModalUsuario()">
+        Cancelar
+      </button>
+      <button type="submit" form="form-usuario" class="btn btn-primary">
+        Salvar Usuário
+      </button>
+    </div>
+  </div>
+</div>

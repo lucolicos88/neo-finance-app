@@ -1,0 +1,359 @@
+<script>
+// ============================================================================
+// LANCAMENTOS - CRUD Operations
+// ============================================================================
+
+let saveAndNew = false;
+
+// Open modal
+function openNovaContaPagar() {
+  populateFormFiliais();
+  populateFormCentrosCusto();
+  populateFormContas();
+  switchTab('tipo-lancamento', 'pagar');
+  resetForm('form-novo-pagar');
+  setDefaultDates('pagar');
+  ModalManager.open('modal-novo-lancamento');
+}
+
+function openNovaContaReceber() {
+  populateFormFiliais();
+  populateFormCanais();
+  populateFormContas();
+  switchTab('tipo-lancamento', 'receber');
+  resetForm('form-novo-receber');
+  setDefaultDates('receber');
+  ModalManager.open('modal-novo-lancamento');
+}
+
+// Reset form
+function resetForm(formId) {
+  const form = document.getElementById(formId);
+  if (form) {
+    form.reset();
+    // Clear errors
+    form.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
+    form.querySelectorAll('.form-error').forEach(el => el.classList.remove('show'));
+  }
+
+  // Reset valor líquido
+  if (formId.includes('pagar')) {
+    document.getElementById('pagar-valor-liquido').textContent = 'R$ 0,00';
+  } else {
+    document.getElementById('receber-valor-liquido').textContent = 'R$ 0,00';
+  }
+}
+
+// Set default dates
+function setDefaultDates(tipo) {
+  const hoje = new Date().toISOString().split('T')[0];
+  document.getElementById(`${tipo}-data-competencia`).value = hoje;
+  document.getElementById(`${tipo}-data-vencimento`).value = hoje;
+}
+
+// Populate filiais
+function populateFormFiliais() {
+  if (!appData.filiais || appData.filiais.length === 0) return;
+
+  ['pagar-filial', 'receber-filial'].forEach(id => {
+    const select = document.getElementById(id);
+    if (select && select.options.length <= 1) {
+      appData.filiais.forEach(filial => {
+        const option = document.createElement('option');
+        option.value = filial.codigo;
+        option.textContent = filial.nome;
+        select.appendChild(option);
+      });
+    }
+  });
+}
+
+// Populate canais
+function populateFormCanais() {
+  if (!appData.canais || appData.canais.length === 0) {
+    console.warn('Nenhum canal disponível');
+    return;
+  }
+
+  const select = document.getElementById('receber-canal');
+  if (select && select.options.length <= 1) {
+    appData.canais.forEach(canal => {
+      const option = document.createElement('option');
+      option.value = canal.codigo;
+      option.textContent = canal.nome;
+      select.appendChild(option);
+    });
+  }
+}
+
+// Populate centros de custo
+function populateFormCentrosCusto() {
+  if (!appData.centrosCusto || appData.centrosCusto.length === 0) {
+    console.warn('Nenhum centro de custo disponível');
+    return;
+  }
+
+  const select = document.getElementById('pagar-centro-custo');
+  if (select && select.options.length <= 1) {
+    appData.centrosCusto.forEach(cc => {
+      const option = document.createElement('option');
+      option.value = cc.codigo;
+      option.textContent = cc.nome;
+      select.appendChild(option);
+    });
+  }
+}
+
+// Populate contas contábeis
+function populateFormContas() {
+  if (!appData.contas || appData.contas.length === 0) {
+    console.warn('Nenhuma conta contábil disponível');
+    return;
+  }
+
+  ['pagar-conta-contabil', 'receber-conta-contabil'].forEach(id => {
+    const select = document.getElementById(id);
+    if (select && select.options.length <= 1) {
+      appData.contas.forEach(conta => {
+        const option = document.createElement('option');
+        option.value = conta.codigo;
+        option.textContent = `${conta.codigo} - ${conta.nome}`;
+        select.appendChild(option);
+      });
+    }
+  });
+}
+
+// Validation rules
+const validationRulesPagar = {
+  'pagar-data-competencia': { required: true, requiredMessage: 'Data de competência é obrigatória' },
+  'pagar-data-vencimento': { required: true, requiredMessage: 'Data de vencimento é obrigatória' },
+  'pagar-descricao': {
+    required: true,
+    minLength: 5,
+    requiredMessage: 'Descrição é obrigatória',
+    patternMessage: 'Mínimo 5 caracteres'
+  },
+  'pagar-valor': {
+    required: true,
+    min: 0.01,
+    requiredMessage: 'Valor é obrigatório',
+    patternMessage: 'Valor deve ser maior que zero'
+  },
+  'pagar-filial': { required: true, requiredMessage: 'Selecione uma filial' },
+  'pagar-centro-custo': { required: true, requiredMessage: 'Selecione um centro de custo' },
+  'pagar-conta-contabil': { required: true, requiredMessage: 'Selecione uma conta contábil' }
+};
+
+const validationRulesReceber = {
+  'receber-data-competencia': { required: true, requiredMessage: 'Data de competência é obrigatória' },
+  'receber-data-vencimento': { required: true, requiredMessage: 'Data de vencimento é obrigatória' },
+  'receber-descricao': {
+    required: true,
+    minLength: 5,
+    requiredMessage: 'Descrição é obrigatória',
+    patternMessage: 'Mínimo 5 caracteres'
+  },
+  'receber-valor': {
+    required: true,
+    min: 0.01,
+    requiredMessage: 'Valor é obrigatório',
+    patternMessage: 'Valor deve ser maior que zero'
+  },
+  'receber-filial': { required: true, requiredMessage: 'Selecione uma filial' },
+  'receber-canal': { required: true, requiredMessage: 'Selecione um canal' },
+  'receber-conta-contabil': { required: true, requiredMessage: 'Selecione uma conta contábil' }
+};
+
+// Save functions
+function salvarENovoLancamento() {
+  saveAndNew = true;
+  salvarLancamento();
+}
+
+function salvarLancamento() {
+  const activeTab = document.querySelector('[data-tab-group="tipo-lancamento"].active');
+  const tipo = activeTab ? activeTab.getAttribute('data-tab') : 'pagar';
+
+  if (tipo === 'pagar') {
+    salvarContaPagar();
+  } else {
+    salvarContaReceber();
+  }
+}
+
+function salvarContaPagar() {
+  // Validate
+  if (!validateForm('form-novo-pagar', validationRulesPagar)) {
+    showToast('Por favor, corrija os erros no formulário', 'warning');
+    return;
+  }
+
+  // Collect data
+  const valor = parseFloat(document.getElementById('pagar-valor').value);
+  const desconto = parseFloat(document.getElementById('pagar-desconto').value || 0);
+  const juros = parseFloat(document.getElementById('pagar-juros').value || 0);
+  const multa = parseFloat(document.getElementById('pagar-multa').value || 0);
+  const valorLiquido = valor - desconto + juros + multa;
+
+  const lancamento = {
+    id: generateId(),
+    dataCompetencia: document.getElementById('pagar-data-competencia').value,
+    dataVencimento: document.getElementById('pagar-data-vencimento').value,
+    dataPagamento: '',
+    tipo: 'DESPESA',
+    filial: document.getElementById('pagar-filial').value,
+    centroCusto: document.getElementById('pagar-centro-custo').value,
+    contaGerencial: document.getElementById('pagar-centro-custo').options[document.getElementById('pagar-centro-custo').selectedIndex].text,
+    contaContabil: document.getElementById('pagar-conta-contabil').value,
+    grupoReceita: '',
+    canal: '',
+    descricao: document.getElementById('pagar-descricao').value,
+    valorBruto: valor,
+    desconto: desconto,
+    juros: juros,
+    multa: multa,
+    valorLiquido: valorLiquido,
+    status: 'PENDENTE',
+    idExtratoBanco: '',
+    origem: 'WEB_APP',
+    observacoes: document.getElementById('pagar-observacoes').value
+  };
+
+  // Show loading
+  showLoading('Salvando lançamento...');
+
+  // Call backend
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast('Conta a pagar salva com sucesso!', 'success');
+
+        if (saveAndNew) {
+          resetForm('form-novo-pagar');
+          setDefaultDates('pagar');
+          saveAndNew = false;
+        } else {
+          ModalManager.close('modal-novo-lancamento');
+        }
+
+        // Reload current view
+        if (currentView === 'contas-pagar') {
+          loadContasPagarData();
+        } else if (currentView === 'dashboard') {
+          loadDashboardData();
+        }
+      } else {
+        showToast(result.message || 'Erro ao salvar', 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      handleError(error);
+    })
+    .salvarLancamento(lancamento);
+}
+
+function salvarContaReceber() {
+  // Validate
+  if (!validateForm('form-novo-receber', validationRulesReceber)) {
+    showToast('Por favor, corrija os erros no formulário', 'warning');
+    return;
+  }
+
+  // Collect data
+  const valor = parseFloat(document.getElementById('receber-valor').value);
+  const desconto = parseFloat(document.getElementById('receber-desconto').value || 0);
+  const juros = parseFloat(document.getElementById('receber-juros').value || 0);
+  const multa = parseFloat(document.getElementById('receber-multa').value || 0);
+  const valorLiquido = valor - desconto + juros + multa;
+
+  const lancamento = {
+    id: generateId(),
+    dataCompetencia: document.getElementById('receber-data-competencia').value,
+    dataVencimento: document.getElementById('receber-data-vencimento').value,
+    dataPagamento: '',
+    tipo: 'RECEITA',
+    filial: document.getElementById('receber-filial').value,
+    centroCusto: 'COM',
+    contaGerencial: 'Receita',
+    contaContabil: document.getElementById('receber-conta-contabil').value,
+    grupoReceita: 'Serviços',
+    canal: document.getElementById('receber-canal').value,
+    descricao: document.getElementById('receber-descricao').value,
+    valorBruto: valor,
+    desconto: desconto,
+    juros: juros,
+    multa: multa,
+    valorLiquido: valorLiquido,
+    status: 'PENDENTE',
+    idExtratoBanco: '',
+    origem: 'WEB_APP',
+    observacoes: document.getElementById('receber-observacoes').value
+  };
+
+  // Show loading
+  showLoading('Salvando lançamento...');
+
+  // Call backend
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast('Conta a receber salva com sucesso!', 'success');
+
+        if (saveAndNew) {
+          resetForm('form-novo-receber');
+          setDefaultDates('receber');
+          saveAndNew = false;
+        } else {
+          ModalManager.close('modal-novo-lancamento');
+        }
+
+        // Reload current view
+        if (currentView === 'contas-receber') {
+          loadContasReceberData();
+        } else if (currentView === 'dashboard') {
+          loadDashboardData();
+        }
+      } else {
+        showToast(result.message || 'Erro ao salvar', 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      handleError(error);
+    })
+    .salvarLancamento(lancamento);
+}
+
+// Generate unique ID
+function generateId() {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `WEB${timestamp}${random}`;
+}
+
+// Edit functions
+function editContaPagar(id) {
+  showToast('Funcionalidade de edição em desenvolvimento', 'info');
+  // TODO: Implement edit modal
+}
+
+function editContaReceber(id) {
+  showToast('Funcionalidade de edição em desenvolvimento', 'info');
+  // TODO: Implement edit modal
+}
+
+// Export functions
+function exportContasPagar() {
+  showToast('Exportação em desenvolvimento', 'info');
+  // TODO: Implement export
+}
+
+function exportContasReceber() {
+  showToast('Exportação em desenvolvimento', 'info');
+  // TODO: Implement export
+}
+</script>

@@ -1,0 +1,586 @@
+<script>
+// ============================================================================
+// CONFIGURAÇÕES - CRUD Operations
+// ============================================================================
+
+function loadConfiguracoesData() {
+  // Setup tab click handlers
+  setupConfigTabs();
+
+  // Load all data
+  loadCentrosCusto();
+  loadPlanoContas();
+  loadCanais();
+  loadFiliais();
+  loadUsuarios();
+}
+
+// Setup tab navigation
+function setupConfigTabs() {
+  const tabs = document.querySelectorAll('[data-tab-group="config"]');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', function() {
+      const tabName = this.getAttribute('data-tab');
+      switchTab('config', tabName);
+    });
+  });
+}
+
+// ============================================================================
+// CENTROS DE CUSTO
+// ============================================================================
+
+function loadCentrosCusto() {
+  const tbody = document.getElementById('table-centros-custo');
+  if (!tbody) return;
+
+  if (!appData.centrosCusto || appData.centrosCusto.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhum centro de custo cadastrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = appData.centrosCusto.map((cc, index) => `
+    <tr>
+      <td><strong>${cc.codigo}</strong></td>
+      <td>${cc.nome}</td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="editarCentroCusto(${index})" title="Editar">
+          ✏️
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCentroCusto(${index})" title="Excluir">
+          🗑️
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModalNovoCentroCusto() {
+  document.getElementById('titulo-centro-custo').textContent = 'Novo Centro de Custo';
+  document.getElementById('cc-edit-index').value = '';
+  document.getElementById('form-centro-custo').reset();
+  ModalManager.open('modal-centro-custo');
+}
+
+function editarCentroCusto(index) {
+  const cc = appData.centrosCusto[index];
+  document.getElementById('titulo-centro-custo').textContent = 'Editar Centro de Custo';
+  document.getElementById('cc-edit-index').value = index;
+  document.getElementById('cc-codigo').value = cc.codigo;
+  document.getElementById('cc-nome').value = cc.nome;
+  ModalManager.open('modal-centro-custo');
+}
+
+function salvarCentroCusto() {
+  const codigo = document.getElementById('cc-codigo').value.trim().toUpperCase();
+  const nome = document.getElementById('cc-nome').value.trim();
+  const editIndex = document.getElementById('cc-edit-index').value;
+
+  if (!codigo || !nome) {
+    showToast('Preencha todos os campos obrigatórios', 'warning');
+    return;
+  }
+
+  showLoading('Salvando centro de custo...');
+
+  const centroCusto = { codigo, nome };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        ModalManager.close('modal-centro-custo');
+        // Reload reference data
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      hideLoading();
+      handleError(error);
+    })
+    .salvarCentroCusto(centroCusto, editIndex !== '' ? parseInt(editIndex) : -1);
+}
+
+function excluirCentroCusto(index) {
+  if (!confirm('Tem certeza que deseja excluir este centro de custo?')) return;
+
+  showLoading('Excluindo...');
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirCentroCusto(index);
+}
+
+// ============================================================================
+// PLANO DE CONTAS
+// ============================================================================
+
+function loadPlanoContas() {
+  const tbody = document.getElementById('table-plano-contas');
+  if (!tbody) return;
+
+  if (!appData.contas || appData.contas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhuma conta cadastrada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = appData.contas.map((conta, index) => `
+    <tr>
+      <td><strong>${conta.codigo}</strong></td>
+      <td>${conta.nome}</td>
+      <td><span class="badge badge-${conta.tipo === 'RECEITA' ? 'success' : 'danger'}">${conta.tipo || 'N/A'}</span></td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">
+          ✏️
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">
+          🗑️
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModalNovaConta() {
+  document.getElementById('titulo-conta').textContent = 'Nova Conta Contábil';
+  document.getElementById('conta-edit-index').value = '';
+  document.getElementById('form-conta-contabil').reset();
+  ModalManager.open('modal-conta-contabil');
+}
+
+function editarConta(index) {
+  const conta = appData.contas[index];
+  document.getElementById('titulo-conta').textContent = 'Editar Conta Contábil';
+  document.getElementById('conta-edit-index').value = index;
+  document.getElementById('conta-codigo').value = conta.codigo;
+  document.getElementById('conta-nome').value = conta.nome;
+  document.getElementById('conta-tipo').value = conta.tipo || '';
+  ModalManager.open('modal-conta-contabil');
+}
+
+function salvarContaContabil() {
+  const codigo = document.getElementById('conta-codigo').value.trim();
+  const nome = document.getElementById('conta-nome').value.trim();
+  const tipo = document.getElementById('conta-tipo').value;
+  const editIndex = document.getElementById('conta-edit-index').value;
+
+  if (!codigo || !nome || !tipo) {
+    showToast('Preencha todos os campos obrigatórios', 'warning');
+    return;
+  }
+
+  showLoading('Salvando conta...');
+
+  const conta = { codigo, nome, tipo };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        ModalManager.close('modal-conta-contabil');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarContaContabil(conta, editIndex !== '' ? parseInt(editIndex) : -1);
+}
+
+function excluirConta(index) {
+  if (!confirm('Tem certeza que deseja excluir esta conta?')) return;
+
+  showLoading('Excluindo...');
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirConta(index);
+}
+
+// ============================================================================
+// CANAIS
+// ============================================================================
+
+function loadCanais() {
+  const tbody = document.getElementById('table-canais');
+  if (!tbody) return;
+
+  if (!appData.canais || appData.canais.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhum canal cadastrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = appData.canais.map((canal, index) => `
+    <tr>
+      <td><strong>${canal.codigo}</strong></td>
+      <td>${canal.nome}</td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="editarCanal(${index})" title="Editar">
+          ✏️
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCanal(${index})" title="Excluir">
+          🗑️
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModalNovoCanal() {
+  document.getElementById('titulo-canal').textContent = 'Novo Canal de Venda';
+  document.getElementById('canal-edit-index').value = '';
+  document.getElementById('form-canal').reset();
+  ModalManager.open('modal-canal');
+}
+
+function editarCanal(index) {
+  const canal = appData.canais[index];
+  document.getElementById('titulo-canal').textContent = 'Editar Canal de Venda';
+  document.getElementById('canal-edit-index').value = index;
+  document.getElementById('canal-codigo').value = canal.codigo;
+  document.getElementById('canal-nome').value = canal.nome;
+  ModalManager.open('modal-canal');
+}
+
+function salvarCanal() {
+  const codigo = document.getElementById('canal-codigo').value.trim().toUpperCase();
+  const nome = document.getElementById('canal-nome').value.trim();
+  const editIndex = document.getElementById('canal-edit-index').value;
+
+  if (!codigo || !nome) {
+    showToast('Preencha todos os campos obrigatórios', 'warning');
+    return;
+  }
+
+  showLoading('Salvando canal...');
+
+  const canal = { codigo, nome };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        ModalManager.close('modal-canal');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarCanal(canal, editIndex !== '' ? parseInt(editIndex) : -1);
+}
+
+function excluirCanal(index) {
+  if (!confirm('Tem certeza que deseja excluir este canal?')) return;
+
+  showLoading('Excluindo...');
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirCanal(index);
+}
+
+// ============================================================================
+// FILIAIS
+// ============================================================================
+
+function loadFiliais() {
+  const tbody = document.getElementById('table-filiais');
+  if (!tbody) return;
+
+  if (!appData.filiais || appData.filiais.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhuma filial cadastrada</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = appData.filiais.map((filial, index) => `
+    <tr>
+      <td><strong>${filial.codigo}</strong></td>
+      <td>${filial.nome}</td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="editarFilial(${index})" title="Editar">
+          ✏️
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirFilial(${index})" title="Excluir">
+          🗑️
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModalNovaFilial() {
+  document.getElementById('titulo-filial').textContent = 'Nova Filial';
+  document.getElementById('filial-edit-index').value = '';
+  document.getElementById('form-filial').reset();
+  ModalManager.open('modal-filial');
+}
+
+function editarFilial(index) {
+  const filial = appData.filiais[index];
+  document.getElementById('titulo-filial').textContent = 'Editar Filial';
+  document.getElementById('filial-edit-index').value = index;
+  document.getElementById('filial-codigo').value = filial.codigo;
+  document.getElementById('filial-nome').value = filial.nome;
+  ModalManager.open('modal-filial');
+}
+
+function salvarFilial() {
+  const codigo = document.getElementById('filial-codigo').value.trim().toUpperCase();
+  const nome = document.getElementById('filial-nome').value.trim();
+  const editIndex = document.getElementById('filial-edit-index').value;
+
+  if (!codigo || !nome) {
+    showToast('Preencha todos os campos obrigatórios', 'warning');
+    return;
+  }
+
+  showLoading('Salvando filial...');
+
+  const filial = { codigo, nome };
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        ModalManager.close('modal-filial');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarFilial(filial, editIndex !== '' ? parseInt(editIndex) : -1);
+}
+
+function excluirFilial(index) {
+  if (!confirm('Tem certeza que deseja excluir esta filial?')) return;
+
+  showLoading('Excluindo...');
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirFilial(index);
+}
+
+// ============================================================================
+// USUÁRIOS E PERMISSÕES
+// ============================================================================
+
+let usuariosData = [];
+
+function loadUsuarios() {
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function(usuarios) {
+      hideLoading();
+      usuariosData = usuarios;
+      renderUsuarios();
+    })
+    .withFailureHandler(handleError)
+    .getUsuarios();
+}
+
+function renderUsuarios() {
+  const tbody = document.getElementById('table-usuarios');
+  if (!tbody) return;
+
+  if (!usuariosData || usuariosData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum usuário cadastrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = usuariosData.map((user, index) => `
+    <tr>
+      <td>${user.email}</td>
+      <td>${user.nome}</td>
+      <td><span class="badge badge-${getPerfilBadge(user.perfil)}">${getPerfilLabel(user.perfil)}</span></td>
+      <td><span class="badge badge-${user.status === 'ATIVO' ? 'success' : 'secondary'}">${user.status}</span></td>
+      <td>${user.ultimoAcesso ? formatDate(user.ultimoAcesso) : 'Nunca'}</td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="editarUsuario(${index})" title="Editar">
+          ✏️
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirUsuario(${index})" title="Excluir">
+          🗑️
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function getPerfilBadge(perfil) {
+  const badges = {
+    'ADMIN': 'danger',
+    'GESTOR': 'warning',
+    'OPERACIONAL': 'info',
+    'VISUALIZADOR': 'secondary'
+  };
+  return badges[perfil] || 'secondary';
+}
+
+function getPerfilLabel(perfil) {
+  const labels = {
+    'ADMIN': '👑 Administrador',
+    'GESTOR': '👨‍💼 Gestor',
+    'OPERACIONAL': '⚙️ Operacional',
+    'VISUALIZADOR': '👁️ Visualizador'
+  };
+  return labels[perfil] || perfil;
+}
+
+function openModalNovoUsuario() {
+  document.getElementById('modal-usuario-title').textContent = 'Novo Usuário';
+  document.getElementById('form-usuario').reset();
+  document.getElementById('usuario-id').value = '';
+  document.getElementById('usuario-status').value = 'ATIVO';
+
+  // Reset permissões
+  document.getElementById('perm-criar-lancamentos').checked = false;
+  document.getElementById('perm-editar-lancamentos').checked = false;
+  document.getElementById('perm-excluir-lancamentos').checked = false;
+  document.getElementById('perm-aprovar-pagamentos').checked = false;
+  document.getElementById('perm-visualizar-relatorios').checked = false;
+  document.getElementById('perm-gerenciar-config').checked = false;
+
+  document.getElementById('modal-usuario').style.display = 'flex';
+}
+
+function editarUsuario(index) {
+  const user = usuariosData[index];
+
+  document.getElementById('modal-usuario-title').textContent = 'Editar Usuário';
+  document.getElementById('usuario-id').value = user.id || '';
+  document.getElementById('usuario-email').value = user.email;
+  document.getElementById('usuario-nome').value = user.nome;
+  document.getElementById('usuario-perfil').value = user.perfil;
+  document.getElementById('usuario-status').value = user.status;
+
+  // Set permissões
+  if (user.permissoes) {
+    document.getElementById('perm-criar-lancamentos').checked = user.permissoes.criarLancamentos || false;
+    document.getElementById('perm-editar-lancamentos').checked = user.permissoes.editarLancamentos || false;
+    document.getElementById('perm-excluir-lancamentos').checked = user.permissoes.excluirLancamentos || false;
+    document.getElementById('perm-aprovar-pagamentos').checked = user.permissoes.aprovarPagamentos || false;
+    document.getElementById('perm-visualizar-relatorios').checked = user.permissoes.visualizarRelatorios || false;
+    document.getElementById('perm-gerenciar-config').checked = user.permissoes.gerenciarConfig || false;
+  }
+
+  document.getElementById('modal-usuario').style.display = 'flex';
+}
+
+function closeModalUsuario() {
+  document.getElementById('modal-usuario').style.display = 'none';
+}
+
+// Handle form submit
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('form-usuario');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      salvarUsuario();
+    });
+  }
+});
+
+function salvarUsuario() {
+  const userData = {
+    id: document.getElementById('usuario-id').value,
+    email: document.getElementById('usuario-email').value,
+    nome: document.getElementById('usuario-nome').value,
+    perfil: document.getElementById('usuario-perfil').value,
+    status: document.getElementById('usuario-status').value,
+    permissoes: {
+      criarLancamentos: document.getElementById('perm-criar-lancamentos').checked,
+      editarLancamentos: document.getElementById('perm-editar-lancamentos').checked,
+      excluirLancamentos: document.getElementById('perm-excluir-lancamentos').checked,
+      aprovarPagamentos: document.getElementById('perm-aprovar-pagamentos').checked,
+      visualizarRelatorios: document.getElementById('perm-visualizar-relatorios').checked,
+      gerenciarConfig: document.getElementById('perm-gerenciar-config').checked
+    }
+  };
+
+  showLoading();
+  closeModalUsuario();
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadUsuarios();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarUsuario(userData);
+}
+
+function excluirUsuario(index) {
+  const user = usuariosData[index];
+
+  if (!confirm(`Tem certeza que deseja excluir o usuário ${user.nome}?`)) {
+    return;
+  }
+
+  showLoading();
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadUsuarios();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirUsuario(user.id || user.email);
+}
+</script>
