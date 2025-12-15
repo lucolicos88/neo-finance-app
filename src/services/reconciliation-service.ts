@@ -28,13 +28,14 @@ import { getEntryById, updateEntry } from './ledger-service';
 function rowToBankStatement(row: any[]): BankStatement {
   return {
     id: row[TB_EXTRATOS_COLS.ID],
-    dataMovimento: parseDateISO(row[TB_EXTRATOS_COLS.DATA_MOVIMENTO]) || new Date(),
-    contaBancaria: row[TB_EXTRATOS_COLS.CONTA_BANCARIA],
-    historico: row[TB_EXTRATOS_COLS.HISTORICO],
-    documento: row[TB_EXTRATOS_COLS.DOCUMENTO] || null,
+    dataMovimento: parseDateISO(row[TB_EXTRATOS_COLS.DATA]) || new Date(),
+    contaBancaria: row[TB_EXTRATOS_COLS.CONTA],
+    historico: row[TB_EXTRATOS_COLS.DESCRICAO],
+    documento: row[TB_EXTRATOS_COLS.OBSERVACOES] || null,
     valor: parseFloat(row[TB_EXTRATOS_COLS.VALOR]) || 0,
-    saldoApos: row[TB_EXTRATOS_COLS.SALDO_APOS] ? parseFloat(row[TB_EXTRATOS_COLS.SALDO_APOS]) : null,
-    conciliado: row[TB_EXTRATOS_COLS.CONCILIADO] === true || row[TB_EXTRATOS_COLS.CONCILIADO] === 'TRUE',
+    saldoApos: null,
+    conciliado:
+      String(row[TB_EXTRATOS_COLS.STATUS_CONCILIACAO] || '').toUpperCase() === 'CONCILIADO',
     idLancamento: row[TB_EXTRATOS_COLS.ID_LANCAMENTO] || null,
   };
 }
@@ -43,17 +44,19 @@ function rowToBankStatement(row: any[]): BankStatement {
  * Converte BankStatement para linha da planilha
  */
 function bankStatementToRow(statement: BankStatement): any[] {
-  const row = new Array(9).fill('');
+  const row = new Array(11).fill('');
 
   row[TB_EXTRATOS_COLS.ID] = statement.id;
-  row[TB_EXTRATOS_COLS.DATA_MOVIMENTO] = formatDateISO(statement.dataMovimento);
-  row[TB_EXTRATOS_COLS.CONTA_BANCARIA] = statement.contaBancaria;
-  row[TB_EXTRATOS_COLS.HISTORICO] = statement.historico;
-  row[TB_EXTRATOS_COLS.DOCUMENTO] = statement.documento || '';
+  row[TB_EXTRATOS_COLS.DATA] = formatDateISO(statement.dataMovimento);
+  row[TB_EXTRATOS_COLS.DESCRICAO] = statement.historico;
   row[TB_EXTRATOS_COLS.VALOR] = statement.valor;
-  row[TB_EXTRATOS_COLS.SALDO_APOS] = statement.saldoApos || '';
-  row[TB_EXTRATOS_COLS.CONCILIADO] = statement.conciliado;
+  row[TB_EXTRATOS_COLS.TIPO] = statement.valor >= 0 ? 'ENTRADA' : 'SAIDA';
+  row[TB_EXTRATOS_COLS.BANCO] = ''; // NÄo temos distinçÄo de banco aqui
+  row[TB_EXTRATOS_COLS.CONTA] = statement.contaBancaria;
+  row[TB_EXTRATOS_COLS.STATUS_CONCILIACAO] = statement.conciliado ? 'CONCILIADO' : 'PENDENTE';
   row[TB_EXTRATOS_COLS.ID_LANCAMENTO] = statement.idLancamento || '';
+  row[TB_EXTRATOS_COLS.OBSERVACOES] = statement.documento || '';
+  row[TB_EXTRATOS_COLS.IMPORTADO_EM] = formatDateISO(new Date());
 
   return row;
 }

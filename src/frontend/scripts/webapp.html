@@ -218,6 +218,10 @@ function populateFilters() {
 function loadDashboardData() {
   google.script.run
     .withSuccessHandler(function(data) {
+      if (!data) {
+        handleError({ message: 'getDashboardData retornou vazio' });
+        return;
+      }
       // Update stats
       updateElement('stat-pagar-vencidas', formatCurrency(data.pagarVencidas.valor));
       updateElement('stat-pagar-vencidas-qtd', `${data.pagarVencidas.quantidade} contas`);
@@ -291,6 +295,10 @@ function loadContasPagarData() {
   google.script.run
     .withSuccessHandler(function(data) {
       hideLoading();
+      if (!data) {
+        handleError({ message: 'getContasPagar retornou vazio' });
+        return;
+      }
       appData.contasPagar = data.contas || [];
 
       // Update stats
@@ -433,6 +441,10 @@ function loadContasReceberData() {
   google.script.run
     .withSuccessHandler(function(data) {
       hideLoading();
+      if (!data) {
+        handleError({ message: 'getContasReceber retornou vazio' });
+        return;
+      }
       appData.contasReceber = data.contas || [];
 
       // Update stats
@@ -580,6 +592,10 @@ function loadConciliacaoData() {
   google.script.run
     .withSuccessHandler(function(data) {
       hideLoading();
+      if (!data) {
+        handleError({ message: 'getConciliacaoData retornou vazio' });
+        return;
+      }
       appData.extratos = data.extratos || [];
       appData.lancamentos = data.lancamentos || [];
 
@@ -969,6 +985,9 @@ function carregarFluxoCaixa() {
   const mes = parseInt(document.getElementById('fc-mes').value);
   const ano = parseInt(document.getElementById('fc-ano').value);
   const filial = document.getElementById('fc-filial').value;
+  const saldoInput = document.getElementById('fc-saldo-inicial-input');
+  const saldoInicial =
+    saldoInput && saldoInput.value !== '' ? parseFloat(saldoInput.value) : undefined;
 
   showLoading('Calculando Fluxo de Caixa...');
 
@@ -978,7 +997,7 @@ function carregarFluxoCaixa() {
       renderFluxoCaixa(fc);
     })
     .withFailureHandler(handleError)
-    .getFluxoCaixaMensal(mes, ano, filial || undefined);
+    .getFluxoCaixaMensal(mes, ano, filial || undefined, saldoInicial);
 }
 
 function renderFluxoCaixa(fc) {
@@ -1321,11 +1340,24 @@ function showLoading(message = 'Carregando...') {
     const text = overlay.querySelector('p');
     if (text) text.textContent = message;
   }
+  // Evita cliques repetidos enquanto há operação em andamento
+  document.body.classList.add('app-busy');
+  document.querySelectorAll('button, a').forEach(el => {
+    el.dataset.prevDisabled = el.disabled ? 'true' : 'false';
+    el.disabled = true;
+  });
 }
 
 function hideLoading() {
   const overlay = document.getElementById('loading-overlay');
   if (overlay) overlay.style.display = 'none';
+  document.body.classList.remove('app-busy');
+  document.querySelectorAll('button, a').forEach(el => {
+    if (el.dataset.prevDisabled === 'false' || el.dataset.prevDisabled === undefined) {
+      el.disabled = false;
+    }
+    delete el.dataset.prevDisabled;
+  });
 }
 
 function showToast(message, type = 'info') {

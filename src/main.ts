@@ -54,6 +54,35 @@ import {
  * Serve a aplicação web standalone (não modal do Sheets)
  */
 function doGet(e: any): GoogleAppsScript.HTML.HtmlOutput {
+  // Debug endpoint: retorna JSON para facilitar diagnósticos via URL
+  // Ex.: /exec?api=dashboard
+  try {
+    const api = e?.parameter?.api;
+    if (api) {
+      const respond = (payload: unknown) =>
+        ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
+          ContentService.MimeType.JSON
+        );
+
+      switch (String(api)) {
+        case 'dashboard':
+          return respond(getDashboardData()) as any;
+        case 'contas-pagar':
+          return respond(getContasPagar()) as any;
+        case 'contas-receber':
+          return respond(getContasReceber()) as any;
+        case 'conciliacao':
+          return respond(getConciliacaoData()) as any;
+        default:
+          return respond({ error: `api desconhecida: ${api}` }) as any;
+      }
+    }
+  } catch (err: any) {
+    return ContentService.createTextOutput(
+      JSON.stringify({ error: err?.message || String(err) })
+    ).setMimeType(ContentService.MimeType.JSON) as any;
+  }
+
   const template = HtmlService.createTemplateFromFile('frontend/views/app');
   return template.evaluate()
     .setTitle('Neoformula Finance')

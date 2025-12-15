@@ -5,7 +5,7 @@
  * Fornece dados para o frontend via google.script.run
  */
 
-import { getSheetValues } from '../shared/sheets-client';
+import { getSheetValues, createSheetIfNotExists, appendRows } from '../shared/sheets-client';
 import {
   SHEET_TB_LANCAMENTOS,
   SHEET_TB_EXTRATOS,
@@ -440,8 +440,10 @@ export function getDashboardData() {
   // Contas a pagar vencidas
   const pagarVencidas = lancamentos.filter(l =>
     l.tipo === 'DESPESA' &&
-    l.status === 'VENCIDA' &&
-    new Date(l.dataVencimento) < hoje
+    (
+      String(l.status || '').toUpperCase() === 'VENCIDA' ||
+      (String(l.status || '').toUpperCase() === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
+    )
   );
 
   // Contas a pagar próximos 7 dias
@@ -537,9 +539,11 @@ export function getContasPagar() {
 
   const contasPagar = lancamentos.filter(l => l.tipo === 'DESPESA');
 
-  const vencidas = contasPagar.filter(l =>
-    l.status === 'VENCIDA' || (l.status === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
-  );
+    const isPago = (s: string) => ['PAGO', 'PAGA', 'RECEBIDO', 'RECEBIDA'].includes((s || '').toUpperCase());
+    const vencidas = contasPagar.filter(l =>
+      (l.status === 'VENCIDA') ||
+      (l.status === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
+    );
 
   const proximos7Dias = new Date();
   proximos7Dias.setDate(proximos7Dias.getDate() + 7);
@@ -557,10 +561,10 @@ export function getContasPagar() {
     new Date(l.dataVencimento) > proximos7Dias
   );
 
-  const pagas = contasPagar.filter(l =>
-    l.status === 'PAGA' &&
-    new Date(l.dataPagamento || l.dataCompetencia) >= inicioMes
-  );
+    const pagas = contasPagar.filter(l =>
+      isPago(l.status) &&
+      new Date(l.dataPagamento || l.dataCompetencia) >= inicioMes
+    );
 
   return {
     stats: {
@@ -587,11 +591,11 @@ export function pagarConta(id: string): { success: boolean; message: string } {
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
     if (!sheet) throw new Error('Aba de lançamentos não encontrada');
 
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idCol = headers.indexOf('ID');
-    const statusCol = headers.indexOf('Status');
-    const dataPagCol = headers.indexOf('Data Pagamento');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const idCol = headers.indexOf('ID');
+  const statusCol = headers.indexOf('Status');
+  const dataPagCol = headers.indexOf('Data Pagamento');
 
     for (let i = 1; i < data.length; i++) {
       if (data[i][idCol] === id) {
@@ -629,7 +633,8 @@ export function getContasReceber() {
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
-  const contasReceber = lancamentos.filter(l => l.tipo === 'RECEITA');
+    const isRecebido = (s: string) => ['RECEBIDO', 'RECEBIDA', 'PAGO', 'PAGA'].includes((s || '').toUpperCase());
+    const contasReceber = lancamentos.filter(l => l.tipo === 'RECEITA');
 
   const vencidas = contasReceber.filter(l =>
     l.status === 'VENCIDA' || (l.status === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
@@ -651,10 +656,10 @@ export function getContasReceber() {
     new Date(l.dataVencimento) > proximos7Dias
   );
 
-  const recebidas = contasReceber.filter(l =>
-    l.status === 'RECEBIDA' &&
-    new Date(l.dataPagamento || l.dataCompetencia) >= inicioMes
-  );
+    const recebidas = contasReceber.filter(l =>
+      isRecebido(l.status) &&
+      new Date(l.dataPagamento || l.dataCompetencia) >= inicioMes
+    );
 
   return {
     stats: {
@@ -762,16 +767,16 @@ export function getConciliacaoData() {
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
 
-  const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
-  const lancamentosPendentes = lancamentos.filter(l => !l.idExtratoBanco);
+    const extratosPendentes = extratos.filter(e => (e.statusConciliacao || 'PENDENTE').toUpperCase() === 'PENDENTE');
+    const lancamentosPendentes = lancamentos.filter(l => !l.idExtratoBanco);
 
   const conciliadosHoje = extratos.filter(e =>
-    e.statusConciliacao === 'CONCILIADO' &&
+    (e.statusConciliacao || '').toUpperCase() === 'CONCILIADO' &&
     new Date(e.importadoEm).toDateString() === hoje.toDateString()
   );
 
-  const totalExtratos = extratos.length;
-  const totalConciliados = extratos.filter(e => e.statusConciliacao === 'CONCILIADO').length;
+    const totalExtratos = extratos.length;
+    const totalConciliados = extratos.filter(e => (e.statusConciliacao || '').toUpperCase() === 'CONCILIADO').length;
   const taxaConciliacao = totalExtratos > 0 ? Math.round((totalConciliados / totalExtratos) * 100) : 0;
 
   // Histórico (últimas 50 conciliações)
@@ -890,51 +895,153 @@ export function conciliarAutomatico(): { success: boolean; conciliados: number; 
 // HELPER FUNCTIONS
 // ============================================================================
 
-function getLancamentosFromSheet(): any[] {
-  const data = getSheetValues(SHEET_TB_LANCAMENTOS).slice(1); // Skip header
-  if (data.length === 0) return [];
+function normalizeDateCell(value: any): string {
+  if (!value) return '';
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  const s = String(value).trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (m) return m[1];
+  return s;
+}
 
-  return data.map((row: any) => ({
-    id: row[0],
-    dataCompetencia: row[1],
-    dataVencimento: row[2],
-    dataPagamento: row[3],
-    tipo: row[4],
-    filial: row[5],
-    centroCusto: row[6],
-    contaGerencial: row[7],
-    contaContabil: row[8],
-    grupoReceita: row[9],
-    canal: row[10],
-    descricao: row[11],
+function getLancamentosFromSheet(): any[] {
+  // garante aba com cabeçalhos
+  createSheetIfNotExists(SHEET_TB_LANCAMENTOS, [
+    'ID',
+    'Data Competência',
+    'Data Vencimento',
+    'Data Pagamento',
+    'Tipo',
+    'Filial',
+    'Centro Custo',
+    'Conta Gerencial',
+    'Conta Contábil',
+    'Grupo Receita',
+    'Canal',
+    'Descrição',
+    'Valor Bruto',
+    'Desconto',
+    'Juros',
+    'Multa',
+    'Valor Líquido',
+    'Status',
+    'ID Extrato Banco',
+    'Origem',
+    'Observações'
+  ]);
+
+  const data = getSheetValues(SHEET_TB_LANCAMENTOS);
+  if (!data || data.length <= 1) {
+    // seed fictício para teste rápido
+    const seed = [
+      ['CP-1001','2025-01-02','2025-01-12','2025-01-11','DESPESA','MATRIZ','OPS','Compra MP','10201','','ONLINE','Compra matéria-prima lote A',1500,0,0,0,1500,'PAGO','EXT-5002','Fornecedor X','Lote inicial'],
+      ['CP-1002','2025-01-05','2025-01-20','','DESPESA','MATRIZ','OPS','Frete Compras','10205','','ONLINE','Frete compras fornecedores',400,0,0,0,400,'PENDENTE','','Fornecedor Y','À espera de pagamento'],
+      ['CP-1003','2025-01-03','2025-01-30','','DESPESA','MATRIZ','ADM','Honorários','10402','','ONLINE','Honorários contábeis mês jan',900,0,0,0,900,'PENDENTE','','Escritório Z','Contrato mensal'],
+      ['CR-2001','2025-01-02','2025-01-02','2025-01-02','RECEITA','MATRIZ','COM','Receita Fórmulas','20101','Receita Varejo','ONLINE','Venda balcão fórmulas',3200,0,0,0,3200,'RECEBIDA','EXT-5001','Venda Direta','Balcão janeiro'],
+      ['CR-2002','2025-01-04','2025-01-14','','RECEITA','MATRIZ','COM','Receita Varejo','20102','Receita Varejo','ONLINE','Venda varejo online',2800,0,0,0,2800,'PENDENTE','','E-commerce','Pedido #234'],
+      ['CR-2003','2025-01-06','2025-01-21','','RECEITA','FILIAL_RJ','COM','Receita Convênio','20108','Receita Convênio','PARCEIRO','Convenio Varejo',2100,0,0,0,2100,'PENDENTE','','Convênio Varejo','Ref. janeiro'],
+    ];
+    appendRows(SHEET_TB_LANCAMENTOS, seed);
+    return seed.map(r => ({
+      id: String(r[0]),
+      dataCompetencia: normalizeDateCell(r[1]),
+      dataVencimento: normalizeDateCell(r[2]),
+      dataPagamento: normalizeDateCell(r[3]),
+      tipo: String(r[4]),
+      filial: String(r[5]),
+      centroCusto: String(r[6]),
+      contaGerencial: String(r[7]),
+      contaContabil: String(r[8] ?? ''),
+      grupoReceita: String(r[9] ?? ''),
+      canal: String(r[10] ?? ''),
+      descricao: String(r[11] ?? ''),
+      valorBruto: parseFloat(String(r[12] || 0)),
+      desconto: parseFloat(String(r[13] || 0)),
+      juros: parseFloat(String(r[14] || 0)),
+      multa: parseFloat(String(r[15] || 0)),
+      valorLiquido: parseFloat(String(r[16] || 0)),
+      status: String(r[17] || 'PENDENTE'),
+      idExtratoBanco: String(r[18] || ''),
+      origem: String(r[19] || ''),
+      observacoes: String(r[20] || ''),
+    }));
+  }
+
+  return data.slice(1).map((row: any) => ({
+    id: String(row[0]),
+    dataCompetencia: normalizeDateCell(row[1]),
+    dataVencimento: normalizeDateCell(row[2]),
+    dataPagamento: normalizeDateCell(row[3]),
+    tipo: String(row[4] || ''),
+    filial: String(row[5] || ''),
+    centroCusto: String(row[6] || ''),
+    contaGerencial: String(row[7] || ''),
+    contaContabil: String(row[8] ?? ''),
+    grupoReceita: String(row[9] ?? ''),
+    canal: String(row[10] ?? ''),
+    descricao: String(row[11] ?? ''),
     valorBruto: parseFloat(String(row[12] || 0)),
     desconto: parseFloat(String(row[13] || 0)),
     juros: parseFloat(String(row[14] || 0)),
     multa: parseFloat(String(row[15] || 0)),
-    valorLiquido: parseFloat(String(row[16] || 0)),
-    status: row[17],
-    idExtratoBanco: row[18],
-    origem: row[19],
-    observacoes: row[20],
-  }));
+    valorLiquido: parseFloat(String(row[16] || (parseFloat(String(row[12] || 0)) - parseFloat(String(row[13] || 0)) + parseFloat(String(row[14] || 0)) + parseFloat(String(row[15] || 0))))),
+    status: String(row[17] || 'PENDENTE'),
+    idExtratoBanco: String(row[18] || ''),
+    origem: String(row[19] || ''),
+    observacoes: String(row[20] || ''),
+  })).map(l => {
+    const tipoNorm = String(l.tipo || '').toUpperCase();
+    if (tipoNorm === 'AP') l.tipo = 'DESPESA';
+    else if (tipoNorm === 'AR') l.tipo = 'RECEITA';
+    return l;
+  });
 }
 
 function getExtratosFromSheet(): any[] {
-  const data = getSheetValues(SHEET_TB_EXTRATOS).slice(1); // Skip header
-  if (data.length === 0) return [];
+  // Garante que a aba existe com cabeçalhos esperados
+  createSheetIfNotExists(SHEET_TB_EXTRATOS, [
+    'ID',
+    'Data',
+    'Descrição',
+    'Valor',
+    'Tipo',
+    'Banco',
+    'Conta',
+    'Status Conciliação',
+    'ID Lançamento',
+    'Observações',
+    'Importado Em',
+  ]);
 
-  return data.map((row: any) => ({
+  const data = getSheetValues(SHEET_TB_EXTRATOS);
+  if (!data || data.length <= 1) {
+    const seed = [
+      ['EXT-5001','2025-01-02','Recebimento cartão venda balcão',3200,'ENTRADA','BANCO_A','CC_MATRIZ','CONCILIADO','CR-2001','Pedido balcão','2025-01-03'],
+      ['EXT-5002','2025-01-11','Pagamento fornecedor matéria-prima',-1500,'SAIDA','BANCO_A','CC_MATRIZ','CONCILIADO','CP-1001','Pagto lote A','2025-01-11'],
+      ['EXT-5003','2025-01-15','Taxa bancária jan',-25,'SAIDA','BANCO_A','CC_MATRIZ','PENDENTE','','Tarifa débito','2025-01-15'],
+      ['EXT-5004','2025-01-16','Recebimento boleto convênio',2100,'ENTRADA','BANCO_A','CC_MATRIZ','PENDENTE','CR-2003','Convênio varejo','2025-01-16'],
+    ];
+    appendRows(SHEET_TB_EXTRATOS, seed);
+    return seed.map(r => ({
+      id: r[0], data: r[1], descricao: r[2], valor: r[3], tipo: r[4], banco: r[5], conta: r[6],
+      statusConciliacao: r[7], idLancamento: r[8], observacoes: r[9], importadoEm: r[10],
+    }));
+  }
+
+  return data.slice(1).map((row: any) => ({
     id: row[0],
-    data: row[1],
+    data: normalizeDateCell(row[1]),
     descricao: row[2],
     valor: parseFloat(String(row[3] || 0)),
     tipo: row[4],
     banco: row[5],
     conta: row[6],
-    statusConciliacao: row[7],
+    statusConciliacao: row[7] || 'PENDENTE',
     idLancamento: row[8],
     observacoes: row[9],
-    importadoEm: row[10],
+    importadoEm: normalizeDateCell(row[10]),
   }));
 }
 
@@ -950,9 +1057,42 @@ function formatCurrency(value: number): string {
 // DRE (Demonstração do Resultado do Exercício)
 // ============================================================================
 
+function getPlanoContasMap(): Record<string, any> {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
+    if (!sheet) return {};
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return {};
+
+    const lastCol = Math.max(8, sheet.getLastColumn());
+    const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
+    const map: Record<string, any> = {};
+
+    for (const r of rows) {
+      const codigo = String(r[0] || '').trim();
+      if (!codigo) continue;
+      map[codigo] = {
+        tipo: String(r[2] || '').trim(),
+        grupoDRE: String(r[3] || '').trim(),
+        subgrupoDRE: String(r[4] || '').trim(),
+        grupoDFC: String(r[5] || '').trim(),
+        variavelFixa: String(r[6] || '').trim(),
+        cmaCmv: String(r[7] || '').trim(),
+      };
+    }
+
+    return map;
+  } catch (_e) {
+    return {};
+  }
+}
+
 export function getDREMensal(mes: number, ano: number, filial?: string): any {
   try {
     const lancamentos = getLancamentosFromSheet();
+    const planoMap = getPlanoContasMap();
 
     // Filtrar por período e filial
     const lancamentosMes = lancamentos.filter(l => {
@@ -976,15 +1116,31 @@ export function getDREMensal(mes: number, ano: number, filial?: string): any {
     const receitaLiquida = receitaBruta - deducoes;
 
     // Separar custos e despesas operacionais (baseado na conta contábil)
-    const custos = despesas.filter(d =>
-      d.contaContabil && (d.contaContabil.startsWith('2.01') || d.contaContabil.startsWith('2.02'))
-    );
-    const despesasOp = despesas.filter(d =>
-      d.contaContabil && d.contaContabil.startsWith('3.')
-    );
-    const despesasFinanceiras = despesas.filter(d =>
-      d.contaContabil && d.contaContabil.startsWith('4.')
-    );
+    const isCusto = (d: any) => {
+      const codigo = String(d.contaContabil || '').trim();
+      const meta = codigo ? planoMap[codigo] : null;
+      const cmaCmv = String(meta?.cmaCmv || '').toUpperCase();
+      const tipo = String(meta?.tipo || '').toUpperCase();
+      const grupoDRE = String(meta?.grupoDRE || '').toUpperCase();
+      return (
+        cmaCmv === 'CMA' ||
+        cmaCmv === 'CMV' ||
+        tipo === 'CUSTO' ||
+        grupoDRE.includes('CMV') ||
+        grupoDRE.includes('CUSTO')
+      );
+    };
+
+    const isFinanceiro = (d: any) => {
+      const codigo = String(d.contaContabil || '').trim();
+      const meta = codigo ? planoMap[codigo] : null;
+      const grupoDRE = String(meta?.grupoDRE || '').toUpperCase();
+      return grupoDRE.includes('FINANCEIRO') || grupoDRE.includes('RESULTADO FINANCEIRO');
+    };
+
+    const custos = despesas.filter((d) => isCusto(d));
+    const despesasFinanceiras = despesas.filter((d) => !isCusto(d) && isFinanceiro(d));
+    const despesasOp = despesas.filter((d) => !isCusto(d) && !isFinanceiro(d));
 
     const totalCustos = sumValues(custos);
     const margemBruta = receitaLiquida - totalCustos;
@@ -1000,8 +1156,14 @@ export function getDREMensal(mes: number, ano: number, filial?: string): any {
     const percEbitda = receitaLiquida > 0 ? (ebitda / receitaLiquida) * 100 : 0;
 
     // Resultado Financeiro
-    const receitasFinanceiras = receitas.filter(r => r.contaContabil && r.contaContabil.startsWith('4.02'));
-    const totalResultadoFinanceiro = sumValues(receitasFinanceiras) - sumValues(despesasFinanceiras);
+    const receitasFinanceiras = receitas.filter((r) => {
+      const codigo = String(r.contaContabil || '').trim();
+      const meta = codigo ? planoMap[codigo] : null;
+      const grupoDRE = String(meta?.grupoDRE || '').toUpperCase();
+      return grupoDRE.includes('FINANCEIRO') || grupoDRE.includes('RESULTADO FINANCEIRO');
+    });
+    const totalResultadoFinanceiro =
+      sumValues(receitasFinanceiras) - sumValues(despesasFinanceiras);
 
     const lucroLiquido = ebitda + totalResultadoFinanceiro;
     const percLucroLiquido = receitaLiquida > 0 ? (lucroLiquido / receitaLiquida) * 100 : 0;
@@ -1139,7 +1301,7 @@ function calcularEvolucao(valores: number[]): any {
 // FLUXO DE CAIXA (DFC)
 // ============================================================================
 
-export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string): any {
+export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, saldoInicial?: number): any {
   try {
     const lancamentos = getLancamentosFromSheet();
 
@@ -1156,21 +1318,26 @@ export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string): 
     });
 
     // Separar por tipo e status
-    const entradas = lancamentosMes.filter(l =>
-      l.tipo === 'RECEITA' && (l.status === 'PAGO' || l.status === 'RECEBIDO')
-    );
-    const saidas = lancamentosMes.filter(l =>
-      l.tipo === 'DESPESA' && l.status === 'PAGO'
-    );
+      const isPago = (s: string) => ['PAGO', 'PAGA', 'RECEBIDO', 'RECEBIDA'].includes((s || '').toUpperCase());
+      const entradas = lancamentosMes.filter(l =>
+        l.tipo === 'RECEITA' && isPago(l.status)
+      );
+      const saidas = lancamentosMes.filter(l =>
+        l.tipo === 'DESPESA' && isPago(l.status)
+      );
 
     // Calcular totais
     const totalEntradas = sumValues(entradas);
     const totalSaidas = sumValues(saidas);
 
-    // Saldo inicial (simplificado - pode ser melhorado para buscar do mês anterior)
-    const saldoInicial = 0; // TODO: Buscar saldo final do mês anterior
-    const saldoFinal = saldoInicial + totalEntradas - totalSaidas;
-    const variacao = saldoInicial !== 0 ? ((saldoFinal - saldoInicial) / Math.abs(saldoInicial)) * 100 : 0;
+    // Saldo inicial: input manual (quando informado) ou 0
+    const saldoInicialNum =
+      typeof saldoInicial === 'number' && !isNaN(saldoInicial) ? saldoInicial : 0;
+    const saldoFinal = saldoInicialNum + totalEntradas - totalSaidas;
+    const variacao =
+      saldoInicialNum !== 0
+        ? ((saldoFinal - saldoInicialNum) / Math.abs(saldoInicialNum)) * 100
+        : 0;
 
     // Agrupar entradas por categoria (conta contábil)
     const entradasPorCategoria = agruparPorCategoria(entradas);
@@ -1184,7 +1351,7 @@ export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string): 
         filial: filial || 'Consolidado'
       },
       valores: {
-        saldoInicial,
+        saldoInicial: saldoInicialNum,
         totalEntradas,
         totalSaidas,
         saldoFinal,
