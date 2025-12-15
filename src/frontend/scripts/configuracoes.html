@@ -176,7 +176,7 @@ function loadPlanoContas() {
   if (!tbody) return;
 
   if (!appData.contas || appData.contas.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhuma conta cadastrada</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhuma conta cadastrada</td></tr>';
     return;
   }
 
@@ -185,13 +185,14 @@ function loadPlanoContas() {
       <td><strong>${conta.codigo}</strong></td>
       <td>${conta.nome}</td>
       <td><span class="badge badge-${conta.tipo === 'RECEITA' ? 'success' : 'danger'}">${conta.tipo || 'N/A'}</span></td>
+      <td>${conta.grupoDRE || '-'}</td>
+      <td>${conta.subgrupoDRE || '-'}</td>
+      <td>${conta.grupoDFC || '-'}</td>
+      <td>${conta.variavelFixa || '-'}</td>
+      <td>${conta.cmaCmv || '-'}</td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">
-          ✏️
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">
-          🗑️
-        </button>
+        <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">🗑️</button>
       </td>
     </tr>
   `).join('');
@@ -201,6 +202,11 @@ function openModalNovaConta() {
   document.getElementById('titulo-conta').textContent = 'Nova Conta Contábil';
   document.getElementById('conta-edit-index').value = '';
   document.getElementById('form-conta-contabil').reset();
+  document.getElementById('conta-grupo-dre').value = '';
+  document.getElementById('conta-subgrupo-dre').value = '';
+  document.getElementById('conta-grupo-dfc').value = '';
+  document.getElementById('conta-variavel-fixa').value = '';
+  document.getElementById('conta-cma-cmv').value = '';
   ModalManager.open('modal-conta-contabil');
 }
 
@@ -211,6 +217,11 @@ function editarConta(index) {
   document.getElementById('conta-codigo').value = conta.codigo;
   document.getElementById('conta-nome').value = conta.nome;
   document.getElementById('conta-tipo').value = conta.tipo || '';
+  document.getElementById('conta-grupo-dre').value = conta.grupoDRE || '';
+  document.getElementById('conta-subgrupo-dre').value = conta.subgrupoDRE || '';
+  document.getElementById('conta-grupo-dfc').value = conta.grupoDFC || '';
+  document.getElementById('conta-variavel-fixa').value = conta.variavelFixa || '';
+  document.getElementById('conta-cma-cmv').value = conta.cmaCmv || '';
   ModalManager.open('modal-conta-contabil');
 }
 
@@ -218,6 +229,11 @@ function salvarContaContabil() {
   const codigo = document.getElementById('conta-codigo').value.trim();
   const nome = document.getElementById('conta-nome').value.trim();
   const tipo = document.getElementById('conta-tipo').value;
+  const grupoDRE = document.getElementById('conta-grupo-dre').value.trim();
+  const subgrupoDRE = document.getElementById('conta-subgrupo-dre').value.trim();
+  const grupoDFC = document.getElementById('conta-grupo-dfc').value.trim();
+  const variavelFixa = document.getElementById('conta-variavel-fixa').value;
+  const cmaCmv = document.getElementById('conta-cma-cmv').value;
   const editIndex = document.getElementById('conta-edit-index').value;
 
   if (!codigo || !nome || !tipo) {
@@ -227,7 +243,7 @@ function salvarContaContabil() {
 
   showLoading('Salvando conta...');
 
-  const conta = { codigo, nome, tipo };
+  const conta = { codigo, nome, tipo, grupoDRE, subgrupoDRE, grupoDFC, variavelFixa, cmaCmv };
 
   google.script.run
     .withSuccessHandler(function(result) {

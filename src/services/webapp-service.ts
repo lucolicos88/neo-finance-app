@@ -41,7 +41,7 @@ export function getViewHtml(viewName: string): string {
 export function getReferenceData(): {
   filiais: Array<{ codigo: string; nome: string }>;
   canais: Array<{ codigo: string; nome: string }>;
-  contas: Array<{ codigo: string; nome: string; tipo?: string }>;
+  contas: Array<{ codigo: string; nome: string; tipo?: string; grupoDRE?: string; subgrupoDRE?: string; grupoDFC?: string; variavelFixa?: string; cmaCmv?: string }>;
   centrosCusto: Array<{ codigo: string; nome: string; ativo?: boolean }>;
 } {
   try {
@@ -80,24 +80,30 @@ export function getReferenceData(): {
     const sheetContas = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
     let contas: any[];
     if (sheetContas && sheetContas.getLastRow() > 1) {
-      const contasData = sheetContas.getRange(2, 1, sheetContas.getLastRow() - 1, Math.max(3, sheetContas.getLastColumn())).getDisplayValues();
+      const lastRow = sheetContas.getLastRow();
+      const lastCol = Math.max(8, sheetContas.getLastColumn());
+      const contasData = sheetContas.getRange(2, 1, lastRow - 1, lastCol).getDisplayValues();
       contas = contasData
         .filter((c: any) => c[0])
         .map((c: any) => ({
           codigo: String(c[0]).trim(),
           nome: String(c[1] || '').trim(),
           tipo: String(c[2] || '').trim(),
+          grupoDRE: String(c[3] || '').trim(),
+          subgrupoDRE: String(c[4] || '').trim(),
+          grupoDFC: String(c[5] || '').trim(),
+          variavelFixa: String(c[6] || '').trim(),
+          cmaCmv: String(c[7] || '').trim(),
         }));
     } else {
       // Fallback hardcoded
       contas = [
-        { codigo: '1.01.001', nome: 'Receita de Serviços', tipo: 'RECEITA' },
-        { codigo: '1.01.002', nome: 'Receita de Produtos', tipo: 'RECEITA' },
-        { codigo: '2.01.001', nome: 'Fornecedores', tipo: 'DESPESA' },
-        { codigo: '2.01.002', nome: 'Salários', tipo: 'DESPESA' },
-        { codigo: '2.01.003', nome: 'Impostos', tipo: 'DESPESA' },
-        { codigo: '2.01.004', nome: 'Aluguel', tipo: 'DESPESA' },
-        { codigo: '2.01.005', nome: 'Utilities', tipo: 'DESPESA' },
+        { codigo: '1.01.001', nome: 'Receita de Serviços', tipo: 'RECEITA', grupoDRE: '', subgrupoDRE: '', grupoDFC: '', variavelFixa: '', cmaCmv: '' },
+        { codigo: '1.01.002', nome: 'Receita de Produtos', tipo: 'RECEITA', grupoDRE: '', subgrupoDRE: '', grupoDFC: '', variavelFixa: '', cmaCmv: '' },
+        { codigo: '2.01.001', nome: 'Fornecedores', tipo: 'DESPESA', grupoDRE: '', subgrupoDRE: '', grupoDFC: '', variavelFixa: '', cmaCmv: '' },
+        { codigo: '2.01.002', nome: 'Salários', tipo: 'DESPESA', grupoDRE: '', subgrupoDRE: '', grupoDFC: '', variavelFixa: '', cmaCmv: '' },
+        { codigo: '2.01.003', nome: 'Impostos', tipo: 'DESPESA', grupoDRE: '', subgrupoDRE: '', grupoDFC: '', variavelFixa: '', cmaCmv: '' },
+        { codigo: '2.01.004', nome: 'Aluguel', tipo: 'DESPESA', grupoDRE: '', subgrupoDRE: '', grupoDFC: '', variavelFixa: '', cmaCmv: '' },
       ];
     }
 
@@ -193,7 +199,7 @@ export function toggleCentroCusto(index: number, ativo: boolean): { success: boo
 }
 
 // Plano de Contas
-export function salvarContaContabil(conta: { codigo: string; nome: string; tipo: string }, editIndex: number): { success: boolean; message: string } {
+export function salvarContaContabil(conta: { codigo: string; nome: string; tipo: string; grupoDRE?: string; subgrupoDRE?: string; grupoDFC?: string; variavelFixa?: string; cmaCmv?: string }, editIndex: number): { success: boolean; message: string } {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
@@ -201,8 +207,8 @@ export function salvarContaContabil(conta: { codigo: string; nome: string; tipo:
     // Criar aba se não existir
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_REF_PLANO_CONTAS);
-      sheet.getRange('A1:C1').setValues([['Código', 'Nome', 'Tipo']]);
-      sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
+      sheet.getRange('A1:H1').setValues([['Código', 'Nome', 'Tipo', 'Grupo DRE', 'Subgrupo DRE', 'Grupo DFC', 'Variável/Fixa', 'CMA/CMV']]);
+      sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
     }
 
     // Verificar código duplicado
@@ -214,12 +220,23 @@ export function salvarContaContabil(conta: { codigo: string; nome: string; tipo:
       }
     }
 
+    const rowData = [
+      conta.codigo,
+      conta.nome,
+      conta.tipo,
+      conta.grupoDRE || '',
+      conta.subgrupoDRE || '',
+      conta.grupoDFC || '',
+      conta.variavelFixa || '',
+      conta.cmaCmv || '',
+    ];
+
     if (editIndex >= 0) {
       // Editar (linha = editIndex + 2)
-      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[conta.codigo, conta.nome, conta.tipo]]);
+      sheet.getRange(editIndex + 2, 1, 1, 8).setValues([rowData]);
     } else {
       // Novo
-      sheet.appendRow([conta.codigo, conta.nome, conta.tipo]);
+      sheet.appendRow(rowData);
     }
 
     return { success: true, message: 'Conta contábil salva com sucesso' };

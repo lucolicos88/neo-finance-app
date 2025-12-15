@@ -69,8 +69,44 @@
             <option value="DESPESA">Despesa</option>
             <option value="ATIVO">Ativo</option>
             <option value="PASSIVO">Passivo</option>
+            <option value="CUSTO">Custo</option>
           </select>
           <span class="form-error"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="conta-grupo-dre">Grupo DRE</label>
+            <input type="text" id="conta-grupo-dre" class="form-control" placeholder="Ex: Despesas Operacionais">
+          </div>
+          <div class="form-group">
+            <label for="conta-subgrupo-dre">Subgrupo DRE</label>
+            <input type="text" id="conta-subgrupo-dre" class="form-control" placeholder="Ex: Despesas Administrativas">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="conta-grupo-dfc">Grupo DFC</label>
+            <input type="text" id="conta-grupo-dfc" class="form-control" placeholder="Ex: Operacional / Investimento">
+          </div>
+          <div class="form-group">
+            <label for="conta-variavel-fixa">Variável/Fixa</label>
+            <select id="conta-variavel-fixa" class="form-control">
+              <option value="">Selecione...</option>
+              <option value="VARIAVEL">Variável</option>
+              <option value="FIXA">Fixa</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="conta-cma-cmv">CMA/CMV</label>
+          <select id="conta-cma-cmv" class="form-control">
+            <option value="">Selecione...</option>
+            <option value="CMA">CMA</option>
+            <option value="CMV">CMV</option>
+          </select>
         </div>
       </form>
     </div>
