@@ -30,8 +30,10 @@ import {
   excluirConta,
   salvarCanal,
   excluirCanal,
+  toggleCanal,
   salvarFilial,
   excluirFilial,
+  toggleFilial,
   getDREMensal,
   getDREComparativo,
   getDREPorFilial,
@@ -273,8 +275,10 @@ global.salvarContaContabil = salvarContaContabil;
 global.excluirConta = excluirConta;
 global.salvarCanal = salvarCanal;
 global.excluirCanal = excluirCanal;
+global.toggleCanal = toggleCanal;
 global.salvarFilial = salvarFilial;
 global.excluirFilial = excluirFilial;
+global.toggleFilial = toggleFilial;
 
 // DRE Functions
 global.getDREMensal = getDREMensal;

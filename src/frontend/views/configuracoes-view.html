@@ -1,29 +1,24 @@
 <div class="page-header">
-  <h1 class="page-title">⚙️ Configurações</h1>
+  <h1 class="page-title">Configurações</h1>
   <p class="page-subtitle">Gerencie os dados de referência do sistema</p>
 </div>
 
-<!-- Tabs para diferentes configurações -->
 <div class="tabs-container">
   <div class="tabs">
-    <button class="tab active" data-tab-group="config" data-tab="centros-custo">📊 Centros de Custo</button>
-    <button class="tab" data-tab-group="config" data-tab="plano-contas">💰 Plano de Contas</button>
-    <button class="tab" data-tab-group="config" data-tab="canais">📢 Canais de Venda</button>
+    <button class="tab active" data-tab-group="config" data-tab="centros-custo">🏷 Centros de Custo</button>
+    <button class="tab" data-tab-group="config" data-tab="plano-contas">📒 Plano de Contas</button>
+    <button class="tab" data-tab-group="config" data-tab="canais">🛍 Canais de Venda</button>
     <button class="tab" data-tab-group="config" data-tab="filiais">🏢 Filiais</button>
     <button class="tab" data-tab-group="config" data-tab="usuarios">👥 Usuários</button>
   </div>
 </div>
 
-<!-- ============================================================================ -->
-<!-- TAB: CENTROS DE CUSTO -->
-<!-- ============================================================================ -->
+<!-- Centros de Custo -->
 <div class="tab-content active" data-tab-content="config" data-content="centros-custo">
   <div class="card">
     <div class="card-header">
       <h3>Centros de Custo</h3>
-      <button class="btn btn-primary" onclick="openModalNovoCentroCusto()">
-        + Novo Centro de Custo
-      </button>
+      <button class="btn btn-primary" onclick="openModalNovoCentroCusto()">+ Novo Centro de Custo</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
@@ -37,9 +32,7 @@
             </tr>
           </thead>
           <tbody id="table-centros-custo">
-            <tr>
-              <td colspan="4" class="text-center text-muted">Carregando...</td>
-            </tr>
+            <tr><td colspan="4" class="text-center text-muted">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -47,16 +40,12 @@
   </div>
 </div>
 
-<!-- ============================================================================ -->
-<!-- TAB: PLANO DE CONTAS -->
-<!-- ============================================================================ -->
+<!-- Plano de Contas -->
 <div class="tab-content" data-tab-content="config" data-content="plano-contas">
   <div class="card">
     <div class="card-header">
       <h3>Plano de Contas Contábil</h3>
-      <button class="btn btn-primary" onclick="openModalNovaConta()">
-        + Nova Conta Contábil
-      </button>
+      <button class="btn btn-primary" onclick="openModalNovaConta()">+ Nova Conta Contábil</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
@@ -75,9 +64,7 @@
             </tr>
           </thead>
           <tbody id="table-plano-contas">
-            <tr>
-              <td colspan="9" class="text-center text-muted">Carregando...</td>
-            </tr>
+            <tr><td colspan="9" class="text-center text-muted">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -85,16 +72,12 @@
   </div>
 </div>
 
-<!-- ============================================================================ -->
-<!-- TAB: CANAIS DE VENDA -->
-<!-- ============================================================================ -->
+<!-- Canais de Venda -->
 <div class="tab-content" data-tab-content="config" data-content="canais">
   <div class="card">
     <div class="card-header">
       <h3>Canais de Venda</h3>
-      <button class="btn btn-primary" onclick="openModalNovoCanal()">
-        + Novo Canal
-      </button>
+      <button class="btn btn-primary" onclick="openModalNovoCanal()">+ Novo Canal</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
@@ -103,13 +86,12 @@
             <tr>
               <th>Código</th>
               <th>Nome</th>
+              <th>Status</th>
               <th class="text-right">Ações</th>
             </tr>
           </thead>
           <tbody id="table-canais">
-            <tr>
-              <td colspan="3" class="text-center text-muted">Carregando...</td>
-            </tr>
+            <tr><td colspan="4" class="text-center text-muted">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -117,16 +99,12 @@
   </div>
 </div>
 
-<!-- ============================================================================ -->
-<!-- TAB: FILIAIS -->
-<!-- ============================================================================ -->
+<!-- Filiais -->
 <div class="tab-content" data-tab-content="config" data-content="filiais">
   <div class="card">
     <div class="card-header">
       <h3>Filiais</h3>
-      <button class="btn btn-primary" onclick="openModalNovaFilial()">
-        + Nova Filial
-      </button>
+      <button class="btn btn-primary" onclick="openModalNovaFilial()">+ Nova Filial</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
@@ -135,13 +113,12 @@
             <tr>
               <th>Código</th>
               <th>Nome</th>
+              <th>Status</th>
               <th class="text-right">Ações</th>
             </tr>
           </thead>
           <tbody id="table-filiais">
-            <tr>
-              <td colspan="3" class="text-center text-muted">Carregando...</td>
-            </tr>
+            <tr><td colspan="4" class="text-center text-muted">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -149,16 +126,12 @@
   </div>
 </div>
 
-<!-- ============================================================================ -->
-<!-- TAB: USUÁRIOS E PERMISSÕES -->
-<!-- ============================================================================ -->
+<!-- Usuários -->
 <div class="tab-content" data-tab-content="config" data-content="usuarios">
   <div class="card">
     <div class="card-header">
       <h3>Usuários e Permissões</h3>
-      <button class="btn btn-primary" onclick="openModalNovoUsuario()">
-        + Novo Usuário
-      </button>
+      <button class="btn btn-primary" onclick="openModalNovoUsuario()">+ Novo Usuário</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
@@ -174,39 +147,31 @@
             </tr>
           </thead>
           <tbody id="table-usuarios">
-            <tr>
-              <td colspan="6" class="text-center text-muted">Carregando...</td>
-            </tr>
+            <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- Card de Informações sobre Perfis -->
   <div class="card" style="margin-top: 1.5rem;">
-    <div class="card-header">
-      <h3>Perfis de Acesso</h3>
-    </div>
+    <div class="card-header"><h3>Perfis de Acesso</h3></div>
     <div class="card-body">
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h4 style="margin-bottom: 0.5rem; color: #D72C0D;">👑 Administrador</h4>
           <p style="font-size: 0.9rem; color: #666;">Acesso total ao sistema. Pode gerenciar usuários, configurações e todas as funcionalidades.</p>
         </div>
-
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #FF6B35;">👨‍💼 Gestor Financeiro</h4>
+          <h4 style="margin-bottom: 0.5rem; color: #FF6B35;">🧭 Gestor Financeiro</h4>
           <p style="font-size: 0.9rem; color: #666;">Pode visualizar e editar lançamentos, aprovar contas, gerar relatórios.</p>
         </div>
-
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #4ECDC4;">⚙️ Operacional</h4>
+          <h4 style="margin-bottom: 0.5rem; color: #4ECDC4;">🔧 Operacional</h4>
           <p style="font-size: 0.9rem; color: #666;">Pode criar e editar lançamentos, mas não aprovar ou excluir.</p>
         </div>
-
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #95E1D3;">👁️ Visualizador</h4>
+          <h4 style="margin-bottom: 0.5rem; color: #95E1D3;">👁 Visualizador</h4>
           <p style="font-size: 0.9rem; color: #666;">Apenas leitura. Pode visualizar relatórios e dashboards.</p>
         </div>
       </div>

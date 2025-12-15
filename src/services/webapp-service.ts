@@ -39,8 +39,8 @@ export function getViewHtml(viewName: string): string {
 // ============================================================================
 
 export function getReferenceData(): {
-  filiais: Array<{ codigo: string; nome: string }>;
-  canais: Array<{ codigo: string; nome: string }>;
+  filiais: Array<{ codigo: string; nome: string; ativo?: boolean }>;
+  canais: Array<{ codigo: string; nome: string; ativo?: boolean }>;
   contas: Array<{ codigo: string; nome: string; tipo?: string; grupoDRE?: string; subgrupoDRE?: string; grupoDFC?: string; variavelFixa?: string; cmaCmv?: string }>;
   centrosCusto: Array<{ codigo: string; nome: string; ativo?: boolean }>;
 } {
@@ -108,8 +108,16 @@ export function getReferenceData(): {
     }
 
     return {
-      filiais: filiais.filter((f: any) => f[0]).map((f: any) => ({ codigo: String(f[0]), nome: String(f[1]) })),
-      canais: canais.filter((c: any) => c[0]).map((c: any) => ({ codigo: String(c[0]), nome: String(c[1]) })),
+      filiais: filiais.filter((f: any) => f[0]).map((f: any) => ({
+        codigo: String(f[0]),
+        nome: String(f[1]),
+        ativo: f[2] !== false && String(f[2] ?? 'TRUE').toUpperCase() !== 'FALSE',
+      })),
+      canais: canais.filter((c: any) => c[0]).map((c: any) => ({
+        codigo: String(c[0]),
+        nome: String(c[1]),
+        ativo: c[2] !== false && String(c[2] ?? 'TRUE').toUpperCase() !== 'FALSE',
+      })),
       contas: contas,
       centrosCusto: centrosCusto,
     };
@@ -264,13 +272,15 @@ export function excluirConta(index: number): { success: boolean; message: string
 }
 
 // Canais
-export function salvarCanal(canal: { codigo: string; nome: string }, editIndex: number): { success: boolean; message: string } {
+export function salvarCanal(canal: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_REF_CANAIS);
+    let sheet = ss.getSheetByName(SHEET_REF_CANAIS);
 
     if (!sheet) {
-      throw new Error('Aba de canais não encontrada');
+      sheet = ss.insertSheet(SHEET_REF_CANAIS);
+      sheet.getRange('A1:C1').setValues([['Código', 'Nome', 'Ativo']]);
+      sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
     }
 
     // Verificar código duplicado
@@ -282,12 +292,14 @@ export function salvarCanal(canal: { codigo: string; nome: string }, editIndex: 
       }
     }
 
+    const ativo = canal.ativo !== false && String(canal.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
+
     if (editIndex >= 0) {
       // Editar (linha = editIndex + 2)
-      sheet.getRange(editIndex + 2, 1, 1, 2).setValues([[canal.codigo, canal.nome]]);
+      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[canal.codigo, canal.nome, ativo]]);
     } else {
       // Novo
-      sheet.appendRow([canal.codigo, canal.nome]);
+      sheet.appendRow([canal.codigo, canal.nome, ativo]);
     }
 
     return { success: true, message: 'Canal salvo com sucesso' };
@@ -314,14 +326,29 @@ export function excluirCanal(index: number): { success: boolean; message: string
   }
 }
 
-// Filiais
-export function salvarFilial(filial: { codigo: string; nome: string }, editIndex: number): { success: boolean; message: string } {
+export function toggleCanal(index: number, ativo: boolean): { success: boolean; message: string } {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
+    const sheet = ss.getSheetByName(SHEET_REF_CANAIS);
+    if (!sheet) throw new Error('Aba de canais não encontrada');
+    if (index < 0 || index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
+    sheet.getRange(index + 2, 3).setValue(ativo);
+    return { success: true, message: `Canal ${ativo ? 'ativado' : 'inativado'}` };
+  } catch (error: any) {
+    return { success: false, message: `Erro: ${error.message}` };
+  }
+}
+
+// Filiais
+export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
 
     if (!sheet) {
-      throw new Error('Aba de filiais não encontrada');
+      sheet = ss.insertSheet(SHEET_REF_FILIAIS);
+      sheet.getRange('A1:C1').setValues([['Código', 'Nome', 'Ativo']]);
+      sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
     }
 
     // Verificar código duplicado
@@ -333,10 +360,12 @@ export function salvarFilial(filial: { codigo: string; nome: string }, editIndex
       }
     }
 
+    const ativo = filial.ativo !== false && String(filial.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
+
     if (editIndex >= 0) {
-      sheet.getRange(editIndex + 2, 1, 1, 2).setValues([[filial.codigo, filial.nome]]);
+      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[filial.codigo, filial.nome, ativo]]);
     } else {
-      sheet.appendRow([filial.codigo, filial.nome]);
+      sheet.appendRow([filial.codigo, filial.nome, ativo]);
     }
 
     return { success: true, message: 'Filial salva com sucesso' };
@@ -357,6 +386,19 @@ export function excluirFilial(index: number): { success: boolean; message: strin
     sheet.deleteRow(index + 2);
 
     return { success: true, message: 'Filial excluída' };
+  } catch (error: any) {
+    return { success: false, message: `Erro: ${error.message}` };
+  }
+}
+
+export function toggleFilial(index: number, ativo: boolean): { success: boolean; message: string } {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
+    if (!sheet) throw new Error('Aba de filiais não encontrada');
+    if (index < 0 || index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
+    sheet.getRange(index + 2, 3).setValue(ativo);
+    return { success: true, message: `Filial ${ativo ? 'ativada' : 'inativada'}` };
   } catch (error: any) {
     return { success: false, message: `Erro: ${error.message}` };
   }

@@ -1,13 +1,9 @@
 <script>
-// ============================================================================
-// CONFIGURAÇÕES - CRUD Operations
-// ============================================================================
+// Dados globais
+let usuariosData = [];
 
 function loadConfiguracoesData() {
-  // Setup tab click handlers
   setupConfigTabs();
-
-  // Load all data
   loadCentrosCusto();
   loadPlanoContas();
   loadCanais();
@@ -15,7 +11,6 @@ function loadConfiguracoesData() {
   loadUsuarios();
 }
 
-// Setup tab navigation
 function setupConfigTabs() {
   const tabs = document.querySelectorAll('[data-tab-group="config"]');
   tabs.forEach(tab => {
@@ -27,10 +22,9 @@ function setupConfigTabs() {
   });
 }
 
-// ============================================================================
-// CENTROS DE CUSTO
-// ============================================================================
-
+// ---------------------------------------------------------------------------
+// Centros de Custo
+// ---------------------------------------------------------------------------
 function loadCentrosCusto() {
   const tbody = document.getElementById('table-centros-custo');
   if (!tbody) return;
@@ -50,15 +44,11 @@ function loadCentrosCusto() {
         </span>
       </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarCentroCusto(${index})" title="Editar">
-          ✏️
-        </button>
+        <button class="btn btn-sm btn-secondary" onclick="editarCentroCusto(${index})" title="Editar">✎</button>
         <button class="btn btn-sm ${cc.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCentroCusto(${index}, ${cc.ativo === false})" title="${cc.ativo === false ? 'Ativar' : 'Inativar'}">
           ${cc.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirCentroCusto(${index})" title="Excluir">
-          🗑️
-        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCentroCusto(${index})" title="Excluir">🗑</button>
       </td>
     </tr>
   `).join('');
@@ -96,25 +86,20 @@ function salvarCentroCusto() {
   }
 
   showLoading('Salvando centro de custo...');
-
   const centroCusto = { codigo, nome, ativo };
 
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
         ModalManager.close('modal-centro-custo');
-        // Reload reference data
         loadReferenceData();
       } else {
         showToast(result.message, 'error');
       }
     })
-    .withFailureHandler(function(error) {
-      hideLoading();
-      handleError(error);
-    })
+    .withFailureHandler(handleError)
     .salvarCentroCusto(centroCusto, editIndex !== '' ? parseInt(editIndex) : -1);
 }
 
@@ -125,7 +110,7 @@ function excluirCentroCusto(index) {
 function alternarCentroCusto(index, ativar) {
   showLoading(ativar ? 'Ativando centro de custo...' : 'Inativando centro de custo...');
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -138,7 +123,7 @@ function alternarCentroCusto(index, ativar) {
     .toggleCentroCusto(index, ativar);
 }
 
-// Confirmação customizada para excluir centro de custo
+// Confirm center cost
 let ccIndexParaExcluir = null;
 function openConfirmCentroCusto(msg, index) {
   ccIndexParaExcluir = index;
@@ -154,7 +139,7 @@ function confirmExcluirCentroCusto() {
   ModalManager.close('modal-confirm-cc');
   showLoading('Excluindo...');
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -167,10 +152,9 @@ function confirmExcluirCentroCusto() {
     .excluirCentroCusto(index);
 }
 
-// ============================================================================
-// PLANO DE CONTAS
-// ============================================================================
-
+// ---------------------------------------------------------------------------
+// Plano de Contas
+// ---------------------------------------------------------------------------
 function loadPlanoContas() {
   const tbody = document.getElementById('table-plano-contas');
   if (!tbody) return;
@@ -184,15 +168,15 @@ function loadPlanoContas() {
     <tr>
       <td><strong>${conta.codigo}</strong></td>
       <td>${conta.nome}</td>
-      <td><span class="badge badge-${conta.tipo === 'RECEITA' ? 'success' : 'danger'}">${conta.tipo || 'N/A'}</span></td>
+      <td><span class="badge badge-${conta.tipo === 'RECEITA' ? 'success' : (conta.tipo === 'ATIVO' ? 'info' : 'danger')}">${conta.tipo || 'N/A'}</span></td>
       <td>${conta.grupoDRE || '-'}</td>
       <td>${conta.subgrupoDRE || '-'}</td>
       <td>${conta.grupoDFC || '-'}</td>
       <td>${conta.variavelFixa || '-'}</td>
       <td>${conta.cmaCmv || '-'}</td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">✏️</button>
-        <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">🗑️</button>
+        <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">🗑</button>
       </td>
     </tr>
   `).join('');
@@ -246,7 +230,7 @@ function salvarContaContabil() {
   const conta = { codigo, nome, tipo, grupoDRE, subgrupoDRE, grupoDFC, variavelFixa, cmaCmv };
 
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -264,7 +248,6 @@ function excluirConta(index) {
   openConfirmConta('Tem certeza que deseja excluir esta conta?', index);
 }
 
-// Confirmação customizada para plano de contas
 let contaIndexParaExcluir = null;
 function openConfirmConta(msg, index) {
   contaIndexParaExcluir = index;
@@ -280,7 +263,7 @@ function confirmExcluirConta() {
   ModalManager.close('modal-confirm-conta');
   showLoading('Excluindo...');
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -293,104 +276,17 @@ function confirmExcluirConta() {
     .excluirConta(index);
 }
 
-// Confirmação customizada para canais
+// ---------------------------------------------------------------------------
+// Canais
+// ---------------------------------------------------------------------------
 let canalIndexParaExcluir = null;
-function openConfirmCanal(msg, index) {
-  canalIndexParaExcluir = index;
-  const msgEl = document.getElementById('confirm-canal-message');
-  if (msgEl) msgEl.textContent = msg;
-  ModalManager.open('modal-confirm-canal');
-}
-
-function confirmExcluirCanal() {
-  if (canalIndexParaExcluir === null) return;
-  const index = canalIndexParaExcluir;
-  canalIndexParaExcluir = null;
-  ModalManager.close('modal-confirm-canal');
-  showLoading('Excluindo...');
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadReferenceData();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirCanal(index);
-}
-
-// Confirmação customizada para filiais
-let filialIndexParaExcluir = null;
-function openConfirmFilial(msg, index) {
-  filialIndexParaExcluir = index;
-  const msgEl = document.getElementById('confirm-filial-message');
-  if (msgEl) msgEl.textContent = msg;
-  ModalManager.open('modal-confirm-filial');
-}
-
-function confirmExcluirFilial() {
-  if (filialIndexParaExcluir === null) return;
-  const index = filialIndexParaExcluir;
-  filialIndexParaExcluir = null;
-  ModalManager.close('modal-confirm-filial');
-  showLoading('Excluindo...');
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadReferenceData();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirFilial(index);
-}
-
-// Confirmação customizada para usuários
-let usuarioIndexParaExcluir = null;
-function openConfirmUsuario(msg, index) {
-  usuarioIndexParaExcluir = index;
-  const msgEl = document.getElementById('confirm-usuario-message');
-  if (msgEl) msgEl.textContent = msg;
-  ModalManager.open('modal-confirm-usuario');
-}
-
-function confirmExcluirUsuario() {
-  if (usuarioIndexParaExcluir === null) return;
-  const index = usuarioIndexParaExcluir;
-  const user = usuariosData[index];
-  usuarioIndexParaExcluir = null;
-  ModalManager.close('modal-confirm-usuario');
-  showLoading('Excluindo...');
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadUsuarios();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirUsuario(user.id || user.email);
-}
-
-// ============================================================================
-// CANAIS
-// ============================================================================
 
 function loadCanais() {
   const tbody = document.getElementById('table-canais');
   if (!tbody) return;
 
   if (!appData.canais || appData.canais.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhum canal cadastrado</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhum canal cadastrado</td></tr>';
     return;
   }
 
@@ -398,13 +294,17 @@ function loadCanais() {
     <tr>
       <td><strong>${canal.codigo}</strong></td>
       <td>${canal.nome}</td>
+      <td>
+        <span class="badge badge-${canal.ativo === false ? 'secondary' : 'success'}">
+          ${canal.ativo === false ? 'Inativo' : 'Ativo'}
+        </span>
+      </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarCanal(${index})" title="Editar">
-          ✏️
+        <button class="btn btn-sm btn-secondary" onclick="editarCanal(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm ${canal.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCanal(${index}, ${canal.ativo === false})" title="${canal.ativo === false ? 'Ativar' : 'Inativar'}">
+          ${canal.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirCanal(${index})" title="Excluir">
-          🗑️
-        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCanal(${index})" title="Excluir">🗑</button>
       </td>
     </tr>
   `).join('');
@@ -414,6 +314,8 @@ function openModalNovoCanal() {
   document.getElementById('titulo-canal').textContent = 'Novo Canal de Venda';
   document.getElementById('canal-edit-index').value = '';
   document.getElementById('form-canal').reset();
+  const ativo = document.getElementById('canal-ativo');
+  if (ativo) ativo.checked = true;
   ModalManager.open('modal-canal');
 }
 
@@ -423,12 +325,15 @@ function editarCanal(index) {
   document.getElementById('canal-edit-index').value = index;
   document.getElementById('canal-codigo').value = canal.codigo;
   document.getElementById('canal-nome').value = canal.nome;
+  const ativo = document.getElementById('canal-ativo');
+  if (ativo) ativo.checked = canal.ativo !== false;
   ModalManager.open('modal-canal');
 }
 
 function salvarCanal() {
   const codigo = document.getElementById('canal-codigo').value.trim().toUpperCase();
   const nome = document.getElementById('canal-nome').value.trim();
+  const ativo = document.getElementById('canal-ativo').checked;
   const editIndex = document.getElementById('canal-edit-index').value;
 
   if (!codigo || !nome) {
@@ -437,11 +342,10 @@ function salvarCanal() {
   }
 
   showLoading('Salvando canal...');
-
-  const canal = { codigo, nome };
+  const canal = { codigo, nome, ativo };
 
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -459,16 +363,60 @@ function excluirCanal(index) {
   openConfirmCanal('Tem certeza que deseja excluir este canal?', index);
 }
 
-// ============================================================================
-// FILIAIS
-// ============================================================================
+function alternarCanal(index, ativar) {
+  showLoading(ativar ? 'Ativando canal...' : 'Inativando canal...');
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .toggleCanal(index, ativar);
+}
+
+function openConfirmCanal(msg, index) {
+  canalIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-canal-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-canal');
+}
+
+function confirmExcluirCanal() {
+  if (canalIndexParaExcluir === null) return;
+  const index = canalIndexParaExcluir;
+  canalIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-canal');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirCanal(index);
+}
+
+// ---------------------------------------------------------------------------
+// Filiais
+// ---------------------------------------------------------------------------
+let filialIndexParaExcluir = null;
 
 function loadFiliais() {
   const tbody = document.getElementById('table-filiais');
   if (!tbody) return;
 
   if (!appData.filiais || appData.filiais.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhuma filial cadastrada</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhuma filial cadastrada</td></tr>';
     return;
   }
 
@@ -476,13 +424,17 @@ function loadFiliais() {
     <tr>
       <td><strong>${filial.codigo}</strong></td>
       <td>${filial.nome}</td>
+      <td>
+        <span class="badge badge-${filial.ativo === false ? 'secondary' : 'success'}">
+          ${filial.ativo === false ? 'Inativo' : 'Ativo'}
+        </span>
+      </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarFilial(${index})" title="Editar">
-          ✏️
+        <button class="btn btn-sm btn-secondary" onclick="editarFilial(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm ${filial.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarFilial(${index}, ${filial.ativo === false})" title="${filial.ativo === false ? 'Ativar' : 'Inativar'}">
+          ${filial.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirFilial(${index})" title="Excluir">
-          🗑️
-        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirFilial(${index})" title="Excluir">🗑</button>
       </td>
     </tr>
   `).join('');
@@ -492,6 +444,8 @@ function openModalNovaFilial() {
   document.getElementById('titulo-filial').textContent = 'Nova Filial';
   document.getElementById('filial-edit-index').value = '';
   document.getElementById('form-filial').reset();
+  const ativo = document.getElementById('filial-ativo');
+  if (ativo) ativo.checked = true;
   ModalManager.open('modal-filial');
 }
 
@@ -501,12 +455,15 @@ function editarFilial(index) {
   document.getElementById('filial-edit-index').value = index;
   document.getElementById('filial-codigo').value = filial.codigo;
   document.getElementById('filial-nome').value = filial.nome;
+  const ativo = document.getElementById('filial-ativo');
+  if (ativo) ativo.checked = filial.ativo !== false;
   ModalManager.open('modal-filial');
 }
 
 function salvarFilial() {
   const codigo = document.getElementById('filial-codigo').value.trim().toUpperCase();
   const nome = document.getElementById('filial-nome').value.trim();
+  const ativo = document.getElementById('filial-ativo').checked;
   const editIndex = document.getElementById('filial-edit-index').value;
 
   if (!codigo || !nome) {
@@ -515,11 +472,10 @@ function salvarFilial() {
   }
 
   showLoading('Salvando filial...');
-
-  const filial = { codigo, nome };
+  const filial = { codigo, nome, ativo };
 
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -537,19 +493,60 @@ function excluirFilial(index) {
   openConfirmFilial('Tem certeza que deseja excluir esta filial?', index);
 }
 
-// ============================================================================
-// USUÁRIOS E PERMISSÕES
-// ============================================================================
+function alternarFilial(index, ativar) {
+  showLoading(ativar ? 'Ativando filial...' : 'Inativando filial...');
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .toggleFilial(index, ativar);
+}
 
-let usuariosData = [];
+function openConfirmFilial(msg, index) {
+  filialIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-filial-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-filial');
+}
+
+function confirmExcluirFilial() {
+  if (filialIndexParaExcluir === null) return;
+  const index = filialIndexParaExcluir;
+  filialIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-filial');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirFilial(index);
+}
+
+// ---------------------------------------------------------------------------
+// Usuários
+// ---------------------------------------------------------------------------
+let usuarioIndexParaExcluir = null;
 
 function loadUsuarios() {
   showLoading();
-
   google.script.run
-    .withSuccessHandler(function(usuarios) {
+    .withSuccessHandler(usuarios => {
       hideLoading();
-      usuariosData = usuarios;
+      usuariosData = usuarios || [];
       renderUsuarios();
     })
     .withFailureHandler(handleError)
@@ -573,33 +570,24 @@ function renderUsuarios() {
       <td><span class="badge badge-${user.status === 'ATIVO' ? 'success' : 'secondary'}">${user.status}</span></td>
       <td>${user.ultimoAcesso ? formatDate(user.ultimoAcesso) : 'Nunca'}</td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarUsuario(${index})" title="Editar">
-          ✏️
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirUsuario(${index})" title="Excluir">
-          🗑️
-        </button>
+        <button class="btn btn-sm btn-secondary" onclick="editarUsuario(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirUsuario(${index})" title="Excluir">🗑</button>
       </td>
     </tr>
   `).join('');
 }
 
 function getPerfilBadge(perfil) {
-  const badges = {
-    'ADMIN': 'danger',
-    'GESTOR': 'warning',
-    'OPERACIONAL': 'info',
-    'VISUALIZADOR': 'secondary'
-  };
+  const badges = { 'ADMIN': 'danger', 'GESTOR': 'warning', 'OPERACIONAL': 'info', 'VISUALIZADOR': 'secondary' };
   return badges[perfil] || 'secondary';
 }
 
 function getPerfilLabel(perfil) {
   const labels = {
-    'ADMIN': '👑 Administrador',
-    'GESTOR': '👨‍💼 Gestor',
-    'OPERACIONAL': '⚙️ Operacional',
-    'VISUALIZADOR': '👁️ Visualizador'
+    'ADMIN': 'Administrador',
+    'GESTOR': 'Gestor',
+    'OPERACIONAL': 'Operacional',
+    'VISUALIZADOR': 'Visualizador'
   };
   return labels[perfil] || perfil;
 }
@@ -609,21 +597,11 @@ function openModalNovoUsuario() {
   document.getElementById('form-usuario').reset();
   document.getElementById('usuario-id').value = '';
   document.getElementById('usuario-status').value = 'ATIVO';
-
-  // Reset permissões
-  document.getElementById('perm-criar-lancamentos').checked = false;
-  document.getElementById('perm-editar-lancamentos').checked = false;
-  document.getElementById('perm-excluir-lancamentos').checked = false;
-  document.getElementById('perm-aprovar-pagamentos').checked = false;
-  document.getElementById('perm-visualizar-relatorios').checked = false;
-  document.getElementById('perm-gerenciar-config').checked = false;
-
   document.getElementById('modal-usuario').style.display = 'flex';
 }
 
 function editarUsuario(index) {
   const user = usuariosData[index];
-
   document.getElementById('modal-usuario-title').textContent = 'Editar Usuário';
   document.getElementById('usuario-id').value = user.id || '';
   document.getElementById('usuario-email').value = user.email;
@@ -631,15 +609,14 @@ function editarUsuario(index) {
   document.getElementById('usuario-perfil').value = user.perfil;
   document.getElementById('usuario-status').value = user.status;
 
-  // Set permissões
-  if (user.permissoes) {
-    document.getElementById('perm-criar-lancamentos').checked = user.permissoes.criarLancamentos || false;
-    document.getElementById('perm-editar-lancamentos').checked = user.permissoes.editarLancamentos || false;
-    document.getElementById('perm-excluir-lancamentos').checked = user.permissoes.excluirLancamentos || false;
-    document.getElementById('perm-aprovar-pagamentos').checked = user.permissoes.aprovarPagamentos || false;
-    document.getElementById('perm-visualizar-relatorios').checked = user.permissoes.visualizarRelatorios || false;
-    document.getElementById('perm-gerenciar-config').checked = user.permissoes.gerenciarConfig || false;
-  }
+  // Permissões
+  const perms = user.permissoes || {};
+  document.getElementById('perm-criar-lancamentos').checked = !!perms.criarLancamentos;
+  document.getElementById('perm-editar-lancamentos').checked = !!perms.editarLancamentos;
+  document.getElementById('perm-excluir-lancamentos').checked = !!perms.excluirLancamentos;
+  document.getElementById('perm-aprovar-pagamentos').checked = !!perms.aprovarPagamentos;
+  document.getElementById('perm-visualizar-relatorios').checked = !!perms.visualizarRelatorios;
+  document.getElementById('perm-gerenciar-config').checked = !!perms.gerenciarConfig;
 
   document.getElementById('modal-usuario').style.display = 'flex';
 }
@@ -647,25 +624,6 @@ function editarUsuario(index) {
 function closeModalUsuario() {
   document.getElementById('modal-usuario').style.display = 'none';
 }
-
-// Handle form submit
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.getElementById('form-usuario');
-  if (form) {
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      salvarUsuario();
-    });
-  }
-
-  // Fechar modais se o usuÇ­rio sair da aba configuraÇõÇœes
-  document.addEventListener('click', function(e) {
-    const target = e.target;
-    if (target && target.classList && target.classList.contains('modal-overlay')) {
-      ModalManager.closeAll();
-    }
-  });
-});
 
 function salvarUsuario() {
   const userData = {
@@ -688,7 +646,7 @@ function salvarUsuario() {
   closeModalUsuario();
 
   google.script.run
-    .withSuccessHandler(function(result) {
+    .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
         showToast(result.message, 'success');
@@ -705,4 +663,49 @@ function excluirUsuario(index) {
   const user = usuariosData[index];
   openConfirmUsuario(`Tem certeza que deseja excluir o usuário ${user.nome}?`, index);
 }
+
+function openConfirmUsuario(msg, index) {
+  usuarioIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-usuario-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-usuario');
+}
+
+function confirmExcluirUsuario() {
+  if (usuarioIndexParaExcluir === null) return;
+  const index = usuarioIndexParaExcluir;
+  const user = usuariosData[index];
+  usuarioIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-usuario');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadUsuarios();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirUsuario(user.id || user.email);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('form-usuario');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      salvarUsuario();
+    });
+  }
+
+  document.addEventListener('click', function(e) {
+    const target = e.target;
+    if (target && target.classList && target.classList.contains('modal-overlay')) {
+      ModalManager.closeAll();
+    }
+  });
+});
 </script>
