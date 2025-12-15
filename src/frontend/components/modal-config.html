@@ -118,6 +118,27 @@
 </div>
 
 <!-- ============================================================================ -->
+<!-- MODAL: CONFIRMAÇÃO PLANO DE CONTAS -->
+<!-- ============================================================================ -->
+<div id="modal-confirm-conta" class="modal-overlay" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2>Confirmar exclusão</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-confirm-conta')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-conta-message" style="font-size: 1rem; color: #333;">
+        Tem certeza que deseja excluir esta conta?
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="ModalManager.close('modal-confirm-conta')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmExcluirConta()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
 <!-- MODAL: CANAL DE VENDA -->
 <!-- ============================================================================ -->
 <div id="modal-canal" class="modal-overlay" style="display: none;">

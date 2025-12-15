@@ -261,10 +261,24 @@ function salvarContaContabil() {
 }
 
 function excluirConta(index) {
-  if (!confirm('Tem certeza que deseja excluir esta conta?')) return;
+  openConfirmConta('Tem certeza que deseja excluir esta conta?', index);
+}
 
+// Confirmação customizada para plano de contas
+let contaIndexParaExcluir = null;
+function openConfirmConta(msg, index) {
+  contaIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-conta-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-conta');
+}
+
+function confirmExcluirConta() {
+  if (contaIndexParaExcluir === null) return;
+  const index = contaIndexParaExcluir;
+  contaIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-conta');
   showLoading('Excluindo...');
-
   google.script.run
     .withSuccessHandler(function(result) {
       hideLoading();
