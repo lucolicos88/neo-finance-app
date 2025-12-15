@@ -108,11 +108,14 @@ export function getReferenceData(): {
     }
 
     return {
-      filiais: filiais.filter((f: any) => f[0]).map((f: any) => ({
-        codigo: String(f[0]),
-        nome: String(f[1]),
-        ativo: f[2] !== false && String(f[2] ?? 'TRUE').toUpperCase() !== 'FALSE',
-      })),
+      filiais: filiais.filter((f: any) => f[0]).map((f: any) => {
+        const ativoIdx = f.length >= 4 ? 3 : 2;
+        return {
+          codigo: String(f[0]),
+          nome: String(f[1]),
+          ativo: f[ativoIdx] !== false && String(f[ativoIdx] ?? 'TRUE').toUpperCase() !== 'FALSE',
+        };
+      }),
       canais: canais.filter((c: any) => c[0]).map((c: any) => ({
         codigo: String(c[0]),
         nome: String(c[1]),
@@ -347,8 +350,8 @@ export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boo
 
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_REF_FILIAIS);
-      sheet.getRange('A1:C1').setValues([['Código', 'Nome', 'Ativo']]);
-      sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
+      sheet.getRange('A1:D1').setValues([['Código', 'Nome', 'CNPJ', 'Ativo']]);
+      sheet.getRange('A1:D1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
     }
 
     // Verificar código duplicado
@@ -362,10 +365,29 @@ export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boo
 
     const ativo = filial.ativo !== false && String(filial.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
 
-    if (editIndex >= 0) {
-      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[filial.codigo, filial.nome, ativo]]);
+    const lastCol = Math.max(4, sheet.getLastColumn());
+    const cnpjColIdx = lastCol >= 4 ? 3 : 2; // zero-based for getRange values assembly
+    const ativoColIdx = lastCol >= 4 ? 4 : 3; // 1-based positions for getRange
+
+    // Preserve CNPJ existente se houver
+    let cnpj = '';
+    if (editIndex >= 0 && sheet.getLastRow() >= editIndex + 2) {
+      const existing = sheet.getRange(editIndex + 2, 1, 1, lastCol).getValues()[0];
+      cnpj = existing[cnpjColIdx - 1] || '';
+    }
+
+    const rowData: any[] = [filial.codigo, filial.nome];
+    if (ativoColIdx === 4) {
+      rowData.push(cnpj || '');
+      rowData.push(ativo);
     } else {
-      sheet.appendRow([filial.codigo, filial.nome, ativo]);
+      rowData.push(ativo);
+    }
+
+    if (editIndex >= 0) {
+      sheet.getRange(editIndex + 2, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
     }
 
     return { success: true, message: 'Filial salva com sucesso' };
@@ -397,7 +419,9 @@ export function toggleFilial(index: number, ativo: boolean): { success: boolean;
     const sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
     if (!sheet) throw new Error('Aba de filiais não encontrada');
     if (index < 0 || index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
-    sheet.getRange(index + 2, 3).setValue(ativo);
+    const lastCol = sheet.getLastColumn();
+    const colAtivo = lastCol >= 4 ? 4 : 3;
+    sheet.getRange(index + 2, colAtivo).setValue(ativo);
     return { success: true, message: `Filial ${ativo ? 'ativada' : 'inativada'}` };
   } catch (error: any) {
     return { success: false, message: `Erro: ${error.message}` };
