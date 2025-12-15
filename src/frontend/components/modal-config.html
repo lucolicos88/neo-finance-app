@@ -139,6 +139,69 @@
 </div>
 
 <!-- ============================================================================ -->
+<!-- MODAL: CONFIRMAÇÃO CANAL -->
+<!-- ============================================================================ -->
+<div id="modal-confirm-canal" class="modal-overlay" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2>Confirmar exclusão</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-confirm-canal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-canal-message" style="font-size: 1rem; color: #333;">
+        Tem certeza que deseja excluir este canal?
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="ModalManager.close('modal-confirm-canal')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmExcluirCanal()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- MODAL: CONFIRMAÇÃO FILIAL -->
+<!-- ============================================================================ -->
+<div id="modal-confirm-filial" class="modal-overlay" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2>Confirmar exclusão</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-confirm-filial')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-filial-message" style="font-size: 1rem; color: #333;">
+        Tem certeza que deseja excluir esta filial?
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="ModalManager.close('modal-confirm-filial')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmExcluirFilial()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
+<!-- MODAL: CONFIRMAÇÃO USUÁRIO -->
+<!-- ============================================================================ -->
+<div id="modal-confirm-usuario" class="modal-overlay" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2>Confirmar exclusão</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-confirm-usuario')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-usuario-message" style="font-size: 1rem; color: #333;">
+        Tem certeza que deseja excluir este usuário?
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="ModalManager.close('modal-confirm-usuario')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmExcluirUsuario()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
 <!-- MODAL: CANAL DE VENDA -->
 <!-- ============================================================================ -->
 <div id="modal-canal" class="modal-overlay" style="display: none;">

@@ -293,6 +293,94 @@ function confirmExcluirConta() {
     .excluirConta(index);
 }
 
+// Confirmação customizada para canais
+let canalIndexParaExcluir = null;
+function openConfirmCanal(msg, index) {
+  canalIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-canal-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-canal');
+}
+
+function confirmExcluirCanal() {
+  if (canalIndexParaExcluir === null) return;
+  const index = canalIndexParaExcluir;
+  canalIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-canal');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirCanal(index);
+}
+
+// Confirmação customizada para filiais
+let filialIndexParaExcluir = null;
+function openConfirmFilial(msg, index) {
+  filialIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-filial-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-filial');
+}
+
+function confirmExcluirFilial() {
+  if (filialIndexParaExcluir === null) return;
+  const index = filialIndexParaExcluir;
+  filialIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-filial');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirFilial(index);
+}
+
+// Confirmação customizada para usuários
+let usuarioIndexParaExcluir = null;
+function openConfirmUsuario(msg, index) {
+  usuarioIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-usuario-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-usuario');
+}
+
+function confirmExcluirUsuario() {
+  if (usuarioIndexParaExcluir === null) return;
+  const index = usuarioIndexParaExcluir;
+  const user = usuariosData[index];
+  usuarioIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-usuario');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadUsuarios();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirUsuario(user.id || user.email);
+}
+
 // ============================================================================
 // CANAIS
 // ============================================================================
@@ -368,22 +456,7 @@ function salvarCanal() {
 }
 
 function excluirCanal(index) {
-  if (!confirm('Tem certeza que deseja excluir este canal?')) return;
-
-  showLoading('Excluindo...');
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadReferenceData();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirCanal(index);
+  openConfirmCanal('Tem certeza que deseja excluir este canal?', index);
 }
 
 // ============================================================================
@@ -461,22 +534,7 @@ function salvarFilial() {
 }
 
 function excluirFilial(index) {
-  if (!confirm('Tem certeza que deseja excluir esta filial?')) return;
-
-  showLoading('Excluindo...');
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadReferenceData();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirFilial(index);
+  openConfirmFilial('Tem certeza que deseja excluir esta filial?', index);
 }
 
 // ============================================================================
@@ -645,24 +703,6 @@ function salvarUsuario() {
 
 function excluirUsuario(index) {
   const user = usuariosData[index];
-
-  if (!confirm(`Tem certeza que deseja excluir o usuário ${user.nome}?`)) {
-    return;
-  }
-
-  showLoading();
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadUsuarios();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirUsuario(user.id || user.email);
+  openConfirmUsuario(`Tem certeza que deseja excluir o usuário ${user.nome}?`, index);
 }
 </script>
