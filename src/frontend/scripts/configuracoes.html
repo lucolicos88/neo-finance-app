@@ -119,22 +119,7 @@ function salvarCentroCusto() {
 }
 
 function excluirCentroCusto(index) {
-  if (!confirm('Tem certeza que deseja excluir este centro de custo?')) return;
-
-  showLoading('Excluindo...');
-
-  google.script.run
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result.success) {
-        showToast(result.message, 'success');
-        loadReferenceData();
-      } else {
-        showToast(result.message, 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .excluirCentroCusto(index);
+  openConfirmCentroCusto('Tem certeza que deseja excluir este centro de custo?', index);
 }
 
 function alternarCentroCusto(index, ativar) {
@@ -151,6 +136,35 @@ function alternarCentroCusto(index, ativar) {
     })
     .withFailureHandler(handleError)
     .toggleCentroCusto(index, ativar);
+}
+
+// Confirmação customizada para excluir centro de custo
+let ccIndexParaExcluir = null;
+function openConfirmCentroCusto(msg, index) {
+  ccIndexParaExcluir = index;
+  const msgEl = document.getElementById('confirm-cc-message');
+  if (msgEl) msgEl.textContent = msg;
+  ModalManager.open('modal-confirm-cc');
+}
+
+function confirmExcluirCentroCusto() {
+  if (ccIndexParaExcluir === null) return;
+  const index = ccIndexParaExcluir;
+  ccIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-cc');
+  showLoading('Excluindo...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirCentroCusto(index);
 }
 
 // ============================================================================
