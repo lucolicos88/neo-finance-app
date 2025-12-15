@@ -22,6 +22,7 @@ import {
   getConciliacaoData,
   conciliarItens,
   conciliarAutomatico,
+  toggleCentroCusto,
   seedPlanoContasFromList,
   salvarCentroCusto,
   excluirCentroCusto,
@@ -262,6 +263,7 @@ global.salvarLancamento = salvarLancamento;
 global.getConciliacaoData = getConciliacaoData;
 global.conciliarItens = conciliarItens;
 global.conciliarAutomatico = conciliarAutomatico;
+global.toggleCentroCusto = toggleCentroCusto;
 global.seedPlanoContasFromList = seedPlanoContasFromList;
 
 // Configurações CRUD

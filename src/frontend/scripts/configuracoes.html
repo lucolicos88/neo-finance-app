@@ -36,7 +36,7 @@ function loadCentrosCusto() {
   if (!tbody) return;
 
   if (!appData.centrosCusto || appData.centrosCusto.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhum centro de custo cadastrado</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhum centro de custo cadastrado</td></tr>';
     return;
   }
 
@@ -44,9 +44,17 @@ function loadCentrosCusto() {
     <tr>
       <td><strong>${cc.codigo}</strong></td>
       <td>${cc.nome}</td>
+      <td>
+        <span class="badge badge-${cc.ativo === false ? 'secondary' : 'success'}">
+          ${cc.ativo === false ? 'Inativo' : 'Ativo'}
+        </span>
+      </td>
       <td class="text-right">
         <button class="btn btn-sm btn-secondary" onclick="editarCentroCusto(${index})" title="Editar">
           ✏️
+        </button>
+        <button class="btn btn-sm ${cc.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCentroCusto(${index}, ${cc.ativo === false})" title="${cc.ativo === false ? 'Ativar' : 'Inativar'}">
+          ${cc.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
         <button class="btn btn-sm btn-danger" onclick="excluirCentroCusto(${index})" title="Excluir">
           🗑️
@@ -60,6 +68,8 @@ function openModalNovoCentroCusto() {
   document.getElementById('titulo-centro-custo').textContent = 'Novo Centro de Custo';
   document.getElementById('cc-edit-index').value = '';
   document.getElementById('form-centro-custo').reset();
+  const ativo = document.getElementById('cc-ativo');
+  if (ativo) ativo.checked = true;
   ModalManager.open('modal-centro-custo');
 }
 
@@ -69,12 +79,15 @@ function editarCentroCusto(index) {
   document.getElementById('cc-edit-index').value = index;
   document.getElementById('cc-codigo').value = cc.codigo;
   document.getElementById('cc-nome').value = cc.nome;
+  const ativo = document.getElementById('cc-ativo');
+  if (ativo) ativo.checked = cc.ativo !== false;
   ModalManager.open('modal-centro-custo');
 }
 
 function salvarCentroCusto() {
   const codigo = document.getElementById('cc-codigo').value.trim().toUpperCase();
   const nome = document.getElementById('cc-nome').value.trim();
+  const ativo = document.getElementById('cc-ativo').checked;
   const editIndex = document.getElementById('cc-edit-index').value;
 
   if (!codigo || !nome) {
@@ -84,7 +97,7 @@ function salvarCentroCusto() {
 
   showLoading('Salvando centro de custo...');
 
-  const centroCusto = { codigo, nome };
+  const centroCusto = { codigo, nome, ativo };
 
   google.script.run
     .withSuccessHandler(function(result) {
@@ -122,6 +135,22 @@ function excluirCentroCusto(index) {
     })
     .withFailureHandler(handleError)
     .excluirCentroCusto(index);
+}
+
+function alternarCentroCusto(index, ativar) {
+  showLoading(ativar ? 'Ativando centro de custo...' : 'Inativando centro de custo...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .toggleCentroCusto(index, ativar);
 }
 
 // ============================================================================

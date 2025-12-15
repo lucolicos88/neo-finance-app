@@ -42,7 +42,7 @@ export function getReferenceData(): {
   filiais: Array<{ codigo: string; nome: string }>;
   canais: Array<{ codigo: string; nome: string }>;
   contas: Array<{ codigo: string; nome: string; tipo?: string }>;
-  centrosCusto: Array<{ codigo: string; nome: string }>;
+  centrosCusto: Array<{ codigo: string; nome: string; ativo?: boolean }>;
 } {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -62,16 +62,17 @@ export function getReferenceData(): {
       const ccData = sheetCCusto.getDataRange().getValues().slice(1);
       centrosCusto = ccData.filter((cc: any) => cc[0]).map((cc: any) => ({
         codigo: String(cc[0]),
-        nome: String(cc[1])
+        nome: String(cc[1]),
+        ativo: cc[2] !== false && String(cc[2]).toUpperCase() !== 'FALSE'
       }));
     } else {
       // Fallback hardcoded
       centrosCusto = [
-        { codigo: 'ADM', nome: 'Administrativo' },
-        { codigo: 'COM', nome: 'Comercial' },
-        { codigo: 'OPS', nome: 'Operacional' },
-        { codigo: 'FIN', nome: 'Financeiro' },
-        { codigo: 'TI', nome: 'Tecnologia' },
+        { codigo: 'ADM', nome: 'Administrativo', ativo: true },
+        { codigo: 'COM', nome: 'Comercial', ativo: true },
+        { codigo: 'OPS', nome: 'Operacional', ativo: true },
+        { codigo: 'FIN', nome: 'Financeiro', ativo: true },
+        { codigo: 'TI', nome: 'Tecnologia', ativo: true },
       ];
     }
 
@@ -123,7 +124,7 @@ export function getReferenceData(): {
 // ============================================================================
 
 // Centros de Custo
-export function salvarCentroCusto(centroCusto: { codigo: string; nome: string }, editIndex: number): { success: boolean; message: string } {
+export function salvarCentroCusto(centroCusto: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_REF_CCUSTO);
@@ -131,8 +132,8 @@ export function salvarCentroCusto(centroCusto: { codigo: string; nome: string },
     // Criar aba se não existir
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_REF_CCUSTO);
-      sheet.getRange('A1:B1').setValues([['Código', 'Nome']]);
-      sheet.getRange('A1:B1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
+      sheet.getRange('A1:C1').setValues([['Código', 'Nome', 'Ativo']]);
+      sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
     }
 
     // Verificar código duplicado
@@ -144,12 +145,14 @@ export function salvarCentroCusto(centroCusto: { codigo: string; nome: string },
       }
     }
 
+    const ativo = centroCusto.ativo !== false && String(centroCusto.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
+
     if (editIndex >= 0) {
       // Editar (linha = editIndex + 2)
-      sheet.getRange(editIndex + 2, 1, 1, 2).setValues([[centroCusto.codigo, centroCusto.nome]]);
+      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[centroCusto.codigo, centroCusto.nome, ativo]]);
     } else {
       // Novo
-      sheet.appendRow([centroCusto.codigo, centroCusto.nome]);
+      sheet.appendRow([centroCusto.codigo, centroCusto.nome, ativo]);
     }
 
     return { success: true, message: 'Centro de custo salvo com sucesso' };
@@ -171,6 +174,19 @@ export function excluirCentroCusto(index: number): { success: boolean; message: 
     sheet.deleteRow(index + 2);
 
     return { success: true, message: 'Centro de custo excluído' };
+  } catch (error: any) {
+    return { success: false, message: `Erro: ${error.message}` };
+  }
+}
+
+export function toggleCentroCusto(index: number, ativo: boolean): { success: boolean; message: string } {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_REF_CCUSTO);
+    if (!sheet) throw new Error('Aba de centros de custo não encontrada');
+    if (index < 0 || index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
+    sheet.getRange(index + 2, 3).setValue(ativo);
+    return { success: true, message: `Centro de custo ${ativo ? 'ativado' : 'inativado'}` };
   } catch (error: any) {
     return { success: false, message: `Erro: ${error.message}` };
   }

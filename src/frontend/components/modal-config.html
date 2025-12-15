@@ -7,23 +7,28 @@
       <h2 id="titulo-centro-custo">Novo Centro de Custo</h2>
       <button class="modal-close" onclick="ModalManager.close('modal-centro-custo')">&times;</button>
     </div>
-    <div class="modal-body">
-      <form id="form-centro-custo">
-        <input type="hidden" id="cc-edit-index" value="">
+  <div class="modal-body">
+    <form id="form-centro-custo">
+      <input type="hidden" id="cc-edit-index" value="">
 
-        <div class="form-group">
-          <label for="cc-codigo">Código *</label>
-          <input type="text" id="cc-codigo" class="form-control" placeholder="Ex: ADM, COM, FIN" required maxlength="10">
-          <span class="form-error"></span>
-        </div>
+      <div class="form-group">
+        <label for="cc-codigo">Código *</label>
+        <input type="text" id="cc-codigo" class="form-control" placeholder="Ex: ADM, COM, FIN" required maxlength="10">
+        <span class="form-error"></span>
+      </div>
 
-        <div class="form-group">
-          <label for="cc-nome">Nome *</label>
-          <input type="text" id="cc-nome" class="form-control" placeholder="Ex: Administrativo, Comercial" required>
-          <span class="form-error"></span>
-        </div>
-      </form>
-    </div>
+      <div class="form-group">
+        <label for="cc-nome">Nome *</label>
+        <input type="text" id="cc-nome" class="form-control" placeholder="Ex: Administrativo, Comercial" required>
+        <span class="form-error"></span>
+      </div>
+
+      <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+        <input type="checkbox" id="cc-ativo" checked>
+        <label for="cc-ativo" style="margin: 0;">Ativo</label>
+      </div>
+    </form>
+  </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="ModalManager.close('modal-centro-custo')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarCentroCusto()">Salvar</button>
