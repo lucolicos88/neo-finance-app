@@ -1724,11 +1724,36 @@ export function salvarLancamento(lancamento: any): { success: boolean; message: 
       return { success: false, message: 'Valores numéricos inválidos' };
     }
 
+    const dataCompetencia = String(lancamento.dataCompetencia || '').trim();
+    const dataVencimento = String(lancamento.dataVencimento || '').trim();
+    const dataPagamento = String(lancamento.dataPagamento || '').trim();
+    const status = String(lancamento.status || '').trim().toUpperCase();
+
+    const isValidDate = (value: string) => Number.isFinite(Date.parse(value));
+    if (!isValidDate(dataCompetencia)) {
+      return { success: false, message: 'Data competência inválida' };
+    }
+    if (!isValidDate(dataVencimento)) {
+      return { success: false, message: 'Data vencimento inválida' };
+    }
+    if (dataPagamento && !isValidDate(dataPagamento)) {
+      return { success: false, message: 'Data pagamento inválida' };
+    }
+    if (new Date(dataCompetencia).getTime() > new Date(dataVencimento).getTime()) {
+      return { success: false, message: 'Data competência não pode ser maior que data vencimento' };
+    }
+    if ((status === 'PAGA' || status === 'RECEBIDA') && !dataPagamento) {
+      return { success: false, message: 'Informe data pagamento para status pago/recebido' };
+    }
+    if (dataPagamento && (status === 'PENDENTE' || status === 'VENCIDA' || status === 'CANCELADA')) {
+      return { success: false, message: 'Data pagamento não é permitida para status pendente/vencida/cancelada' };
+    }
+
     const row = [
       sanitizeSheetString(lancamento.id),                        // ID
-      sanitizeSheetString(lancamento.dataCompetencia),           // Data Competência
-      sanitizeSheetString(lancamento.dataVencimento),            // Data Vencimento
-      sanitizeSheetString(lancamento.dataPagamento || ''),       // Data Pagamento
+      sanitizeSheetString(dataCompetencia),                      // Data Competência
+      sanitizeSheetString(dataVencimento),                       // Data Vencimento
+      sanitizeSheetString(dataPagamento),                        // Data Pagamento
       sanitizeSheetString(lancamento.tipo),                      // Tipo (RECEITA/DESPESA)
       sanitizeSheetString(lancamento.filial),                    // Filial
       sanitizeSheetString(lancamento.centroCusto || ''),         // Centro de Custo
