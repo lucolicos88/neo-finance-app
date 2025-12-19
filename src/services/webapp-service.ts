@@ -7,6 +7,15 @@
 
 import { getSheetValues, createSheetIfNotExists, appendRows } from '../shared/sheets-client';
 import {
+  cacheGet,
+  cacheSet,
+  cacheRemoveNamespace,
+  cacheGetOrLoad,
+  CacheNamespace,
+  CacheScope,
+} from '../shared/cache';
+import { combineValidations, validateEnum, validateRequired } from '../shared/validation';
+import {
   SHEET_TB_LANCAMENTOS,
   SHEET_TB_EXTRATOS,
   SHEET_REF_FILIAIS,
@@ -19,19 +28,645 @@ import {
 // VIEW RENDERING
 // ============================================================================
 
+const SHEET_USUARIOS = 'TB_Usuarios';
+
+const WEBAPP_VIEW_ALLOWLIST = new Set([
+  'dashboard',
+  'contas-pagar',
+  'contas-receber',
+  'conciliacao',
+  'relatorios',
+  'dre',
+  'fluxo-caixa',
+  'kpis',
+  'configuracoes',
+]);
+
+function clearReportsCache(): void {
+  cacheRemoveNamespace(CacheNamespace.DRE, CacheScope.SCRIPT);
+  cacheRemoveNamespace(CacheNamespace.DFC, CacheScope.SCRIPT);
+  cacheRemoveNamespace(CacheNamespace.KPI, CacheScope.SCRIPT);
+}
+
+function getHeaderIndexMap(sheet: GoogleAppsScript.Spreadsheet.Sheet): Record<string, number> {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return {};
+  const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  const map: Record<string, number> = {};
+  headers.forEach((h, idx) => {
+    const key = String(h || '').trim();
+    if (!key) return;
+    map[key] = idx;
+  });
+  return map;
+}
+
+function findRowByExactValueInColumn(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  columnIndex0: number,
+  value: unknown,
+  startRow: number = 2
+): number | null {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return null;
+  const col = columnIndex0 + 1;
+  const range = sheet.getRange(startRow, col, lastRow - startRow + 1, 1);
+  const found = range.createTextFinder(String(value ?? '')).matchEntireCell(true).findNext();
+  return found ? found.getRow() : null;
+}
+
+function columnToLetter(col: number): string {
+  let temp = col;
+  let letter = '';
+  while (temp > 0) {
+    const modulo = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + modulo) + letter;
+    temp = Math.floor((temp - modulo) / 26);
+  }
+  return letter;
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isSeedDataEnabled(): boolean {
+  return PropertiesService.getScriptProperties().getProperty('ENABLE_SEED_DATA') === 'true';
+}
+
+function getRequestingUserEmail(): string {
+  return Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
+}
+
+function sanitizeSheetString(value: unknown): string {
+  const MAX_SHEET_CELL_CHARS = 45000;
+  let s = String(value ?? '').replace(/\u0000/g, '').trim();
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
+  if (s.length > MAX_SHEET_CELL_CHARS) s = s.slice(0, MAX_SHEET_CELL_CHARS - 1) + '…';
+  return s;
+}
+
+type RequestContext = { __ctx?: boolean; correlationId?: string; view?: string; url?: string } | null;
+let activeRequestContext: RequestContext = null;
+
+export function setRequestContext(ctx: RequestContext): void {
+  activeRequestContext = ctx && typeof ctx === 'object' ? ctx : null;
+}
+
+export function clearRequestContext(): void {
+  activeRequestContext = null;
+}
+
+function ensureUsuariosSheet(): GoogleAppsScript.Spreadsheet.Sheet {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_USUARIOS);
+  if (sheet) return sheet;
+
+  sheet = ss.insertSheet(SHEET_USUARIOS);
+  sheet.getRange('A1:H1').setValues([[
+    'ID', 'Email', 'Nome', 'Perfil', 'Status', 'Último Acesso', 'Permissões', 'Data Criação'
+  ]]);
+  sheet.getRange('A1:H1').setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  const email = getRequestingUserEmail();
+  if (email) {
+    const id = Utilities.getUuid();
+    const now = new Date().toISOString();
+    sheet.appendRow([
+      id,
+      email,
+      'Administrador',
+      'ADMIN',
+      'ATIVO',
+      now,
+      JSON.stringify(getPermissoesPadrao('ADMIN')),
+      now,
+    ]);
+  }
+
+  return sheet;
+}
+
+function getUsuarioByEmail(email: string): Usuario | null {
+  if (!email) return null;
+  const sheet = ensureUsuariosSheet();
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+    if (String(row[1]).toLowerCase() !== email.toLowerCase()) continue;
+
+    return {
+      id: String(row[0]),
+      email: String(row[1]),
+      nome: String(row[2]),
+      perfil: String(row[3]) as any,
+      status: String(row[4]) as any,
+      ultimoAcesso: row[5] ? String(row[5]) : undefined,
+      permissoes: row[6] ? JSON.parse(String(row[6])) : getPermissoesPadrao(String(row[3])),
+    };
+  }
+
+  return null;
+}
+
+type PermissionKey = keyof NonNullable<Usuario['permissoes']>;
+
+function requirePermission<T extends { success: boolean; message: string }>(
+  permission: PermissionKey,
+  action: string
+): T | null {
+  const email = getRequestingUserEmail();
+  const user = getUsuarioByEmail(email);
+
+  if (!user) {
+    appendAuditLog('permissionDenied', { permission, action }, false, `Usuário não cadastrado: ${action}`);
+    return { success: false, message: `Usuário não cadastrado: ${action}` } as T;
+  }
+  if (user.status !== 'ATIVO') {
+    appendAuditLog('permissionDenied', { permission, action, status: user.status }, false, `Usuário inativo: ${action}`);
+    return { success: false, message: `Usuário inativo: ${action}` } as T;
+  }
+  if (!user.permissoes?.[permission]) {
+    appendAuditLog('permissionDenied', { permission, action, perfil: user.perfil }, false, `Sem permissão: ${action}`);
+    return { success: false, message: `Sem permissão: ${action}` } as T;
+  }
+
+  return null;
+}
+
+function enforcePermission(permission: PermissionKey, action: string): void {
+  const denied = requirePermission<{ success: boolean; message: string }>(permission, action);
+  if (denied) throw new Error(denied.message);
+}
+
+const SHEET_AUDIT_LOG = 'TB_AUDIT_LOG';
+const MAX_AUDIT_LOG_ROWS = 5000; // exclui header
+const AUDIT_LOG_TRIM_BUFFER = 200; // só limpa quando passar do limite + buffer
+
+function appendRowFast(sheet: GoogleAppsScript.Spreadsheet.Sheet, row: unknown[]): void {
+  const last = sheet.getLastRow();
+  const targetRow = last + 1;
+  sheet.getRange(targetRow, 1, 1, row.length).setValues([row as any[]]);
+}
+
+function withCorrelationId(payload: unknown): unknown {
+  const correlationId = activeRequestContext?.correlationId
+    ? String(activeRequestContext.correlationId)
+    : '';
+
+  if (!correlationId) return payload ?? null;
+
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const p: any = payload as any;
+    if (p.correlationId) return payload;
+    return { correlationId, ...p };
+  }
+
+  return { correlationId, value: payload ?? null };
+}
+
+function appendAuditLog(action: string, payload: unknown, success: boolean, message?: string): void {
+  const lock = LockService.getDocumentLock();
+  try {
+    lock.waitLock(5000);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(SHEET_AUDIT_LOG);
+
+    if (!sheet) {
+      sheet = ss.insertSheet(SHEET_AUDIT_LOG);
+      sheet.getRange('A1:F1').setValues([[
+        'Timestamp', 'Email', 'Action', 'Success', 'Message', 'Payload'
+      ]]);
+      sheet.getRange('A1:F1').setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+
+    const email = getRequestingUserEmail();
+    const row = [
+      new Date().toISOString(),
+      sanitizeSheetString(email),
+      sanitizeSheetString(action),
+      success ? 'TRUE' : 'FALSE',
+      sanitizeSheetString(message || ''),
+      sanitizeSheetString(JSON.stringify(withCorrelationId(payload))),
+    ];
+
+    appendRowFast(sheet, row);
+
+    const lastRow = sheet.getLastRow();
+    const maxWithHeader = MAX_AUDIT_LOG_ROWS + 1;
+    if (lastRow > maxWithHeader + AUDIT_LOG_TRIM_BUFFER) {
+      const toDelete = lastRow - maxWithHeader;
+      sheet.deleteRows(2, toDelete);
+    }
+  } catch (err) {
+    Logger.log(`Erro ao gravar audit log: ${String((err as any)?.message || err)}`);
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (_) {}
+  }
+}
+
+export function logClientError(event: {
+  message: string;
+  stack?: string;
+  view?: string;
+  url?: string;
+  userAgent?: string;
+  correlationId?: string;
+}): { success: boolean } {
+  try {
+    const user = getUsuarioByEmail(getRequestingUserEmail());
+    if (!user || user.status !== 'ATIVO') {
+      return { success: false };
+    }
+
+    const cache = CacheService.getUserCache();
+    const minuteKey = `lograte:${new Date().toISOString().slice(0, 16)}`; // YYYY-MM-DDTHH:MM
+    const raw = cache.get(minuteKey);
+    const next = (raw ? Number(raw) : 0) + 1;
+    cache.put(minuteKey, String(next), 120);
+
+    if (next > 20) {
+      return { success: true }; // drop silently
+    }
+
+    appendAuditLog(
+      'clientError',
+      {
+        message: event?.message,
+        stack: event?.stack,
+        view: event?.view,
+        url: event?.url,
+        userAgent: event?.userAgent,
+        correlationId: event?.correlationId,
+      },
+      false,
+      event?.message
+    );
+
+    return { success: true };
+  } catch (error: any) {
+    Logger.log(`Erro ao registrar clientError: ${error?.message || String(error)}`);
+    return { success: false };
+  }
+}
+
+export function logServerException(
+  endpoint: string,
+  context: { correlationId?: string; view?: string; url?: string } | null | undefined,
+  error: unknown
+): void {
+  try {
+    const message =
+      (error as any)?.message ? String((error as any).message) : String(error);
+    const stack = (error as any)?.stack ? String((error as any).stack) : '';
+    appendAuditLog(
+      'serverException',
+      {
+        endpoint: String(endpoint || ''),
+        correlationId: context?.correlationId ? String(context.correlationId) : '',
+        view: context?.view ? String(context.view) : '',
+        url: context?.url ? String(context.url) : '',
+        message,
+        stack,
+      },
+      false,
+      message
+    );
+  } catch (e: any) {
+    Logger.log(`Erro ao registrar serverException: ${e?.message || String(e)}`);
+  }
+}
+
+export function logEndpointTiming(endpoint: string, durationMs: number): void {
+  try {
+    const ms = Math.max(0, Number(durationMs) || 0);
+    appendAuditLog('slowEndpoint', { endpoint: String(endpoint || ''), durationMs: ms }, true, `${ms}ms`);
+  } catch (e: any) {
+    Logger.log(`Erro ao registrar slowEndpoint: ${e?.message || String(e)}`);
+  }
+}
+
+export function runSmokeTests(): {
+  ok: boolean;
+  ranAt: string;
+  steps: Array<{ name: string; ok: boolean; durationMs: number; error?: string }>;
+} {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return { ok: false, ranAt: new Date().toISOString(), steps: [{ name: 'auth', ok: false, durationMs: 0, error: 'ADMIN only' }] };
+  }
+
+  const steps: Array<{ name: string; ok: boolean; durationMs: number; error?: string }> = [];
+  const run = (name: string, fn: () => void) => {
+    const startedAt = Date.now();
+    try {
+      fn();
+      steps.push({ name, ok: true, durationMs: Date.now() - startedAt });
+    } catch (e: any) {
+      steps.push({ name, ok: false, durationMs: Date.now() - startedAt, error: String(e?.message || e) });
+    }
+  };
+
+  run('getCurrentUserInfo', () => {
+    const info = getCurrentUserInfo() as any;
+    if (!info || !info.email) throw new Error('missing email');
+  });
+
+  run('getReferenceData', () => {
+    const data = getReferenceData() as any;
+    if (!data) throw new Error('empty');
+    if (!Array.isArray(data.filiais)) throw new Error('filiais not array');
+  });
+
+  run('views:getViewHtml', () => {
+    const views = ['dashboard', 'contas-pagar', 'contas-receber', 'conciliacao', 'dre', 'fluxo-caixa', 'kpis', 'configuracoes'];
+    for (const v of views) {
+      const html = getViewHtml(v);
+      if (!html || typeof html !== 'string') throw new Error(`view ${v} empty`);
+      if (html.includes('View inválida')) throw new Error(`view ${v} invalid`);
+    }
+  });
+
+  run('getDashboardData', () => {
+    const d = getDashboardData() as any;
+    if (!d) throw new Error('empty');
+  });
+
+  run('getContasPagar', () => {
+    const d = getContasPagar() as any;
+    if (!d) throw new Error('empty');
+  });
+
+  run('getContasReceber', () => {
+    const d = getContasReceber() as any;
+    if (!d) throw new Error('empty');
+  });
+
+  run('getConciliacaoData', () => {
+    const d = getConciliacaoData() as any;
+    if (!d) throw new Error('empty');
+  });
+
+  run('reports:DRE/DFC/KPI', () => {
+    const now = new Date();
+    const mes = now.getMonth() + 1;
+    const ano = now.getFullYear();
+    getDREMensal(mes, ano);
+    getFluxoCaixaMensal(mes, ano);
+    getKPIsMensal(mes, ano);
+  });
+
+  const ok = steps.every((s) => s.ok);
+  const result = { ok, ranAt: new Date().toISOString(), steps };
+  appendAuditLog('runSmokeTests', { ok, steps }, ok, ok ? 'OK' : 'FAIL');
+  return result;
+}
+
+export function getAuditLogEntries(limit: number = 200): Array<{
+  timestamp: string;
+  email: string;
+  action: string;
+  success: boolean;
+  message: string;
+  payload: string;
+}> {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return [];
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_AUDIT_LOG);
+  if (!sheet) return [];
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+
+  const safeLimit = Math.min(Math.max(1, Number(limit) || 200), 1000);
+  const startRow = Math.max(2, lastRow - safeLimit + 1);
+  const numRows = lastRow - startRow + 1;
+  const values = sheet.getRange(startRow, 1, numRows, 6).getDisplayValues();
+
+  return values
+    .map((r) => ({
+      timestamp: String(r[0] || ''),
+      email: String(r[1] || ''),
+      action: String(r[2] || ''),
+      success: String(r[3] || '').toUpperCase() === 'TRUE',
+      message: String(r[4] || ''),
+      payload: String(r[5] || ''),
+    }))
+    .reverse();
+}
+
+export function getAuditLogEntriesFiltered(filters: {
+  limit?: number;
+  action?: string;
+  email?: string;
+  success?: boolean | null;
+  correlationId?: string;
+  query?: string;
+}): Array<{
+  timestamp: string;
+  email: string;
+  action: string;
+  success: boolean;
+  message: string;
+  payload: string;
+}> {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return [];
+  }
+
+  const safeLimit = Math.min(Math.max(1, Number(filters?.limit) || 200), 1000);
+  const actionFilter = String(filters?.action || '').trim().toLowerCase();
+  const emailFilter = String(filters?.email || '').trim().toLowerCase();
+  const correlationId = String(filters?.correlationId || '').trim();
+  const query = String(filters?.query || '').trim().toLowerCase();
+  const successFilter =
+    typeof filters?.success === 'boolean' ? filters.success : null;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_AUDIT_LOG);
+  if (!sheet) return [];
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return [];
+
+  // Lê uma janela maior para permitir filtros sem perder resultados
+  const scanWindow = Math.min(2000, Math.max(500, safeLimit * 10));
+  const startRow = Math.max(2, lastRow - scanWindow + 1);
+  const numRows = lastRow - startRow + 1;
+  const values = sheet.getRange(startRow, 1, numRows, 6).getDisplayValues();
+
+  const results: Array<{
+    timestamp: string;
+    email: string;
+    action: string;
+    success: boolean;
+    message: string;
+    payload: string;
+  }> = [];
+
+  for (let i = values.length - 1; i >= 0; i--) {
+    const r = values[i] || [];
+    const timestamp = String(r[0] || '');
+    const email = String(r[1] || '');
+    const action = String(r[2] || '');
+    const success = String(r[3] || '').toUpperCase() === 'TRUE';
+    const message = String(r[4] || '');
+    const payload = String(r[5] || '');
+
+    if (successFilter !== null && success !== successFilter) continue;
+    if (actionFilter && action.toLowerCase().indexOf(actionFilter) === -1) continue;
+    if (emailFilter && email.toLowerCase().indexOf(emailFilter) === -1) continue;
+    if (correlationId && payload.indexOf(correlationId) === -1) continue;
+
+    if (query) {
+      const hay = `${timestamp} ${email} ${action} ${message} ${payload}`.toLowerCase();
+      if (hay.indexOf(query) === -1) continue;
+    }
+
+    results.push({ timestamp, email, action, success, message, payload });
+    if (results.length >= safeLimit) break;
+  }
+
+  return results;
+}
+
+export function getAdminDiagnostics(): {
+  ok: boolean;
+  now: string;
+  timezone: string;
+  scriptId: string;
+  webAppUrl: string;
+  flags: Record<string, string>;
+} {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return {
+      ok: false,
+      now: new Date().toISOString(),
+      timezone: Session.getScriptTimeZone(),
+      scriptId: '',
+      webAppUrl: '',
+      flags: {},
+    };
+  }
+
+  const props = PropertiesService.getScriptProperties();
+  const flagKeys = ['ENABLE_DEBUG_API', 'ENABLE_SEED_DATA'] as const;
+  const flags: Record<string, string> = {};
+  flagKeys.forEach((k) => {
+    const v = props.getProperty(k);
+    flags[k] = v === null ? '' : String(v);
+  });
+
+  return {
+    ok: true,
+    now: new Date().toISOString(),
+    timezone: Session.getScriptTimeZone(),
+    scriptId: ScriptApp.getScriptId(),
+    webAppUrl: ScriptApp.getService().getUrl(),
+    flags,
+  };
+}
+
+export function setAdminFlag(key: string, value: boolean): { success: boolean; message: string } {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return { success: false, message: 'Sem permissão' };
+  }
+
+  const k = String(key || '').trim();
+  const allow = new Set(['ENABLE_DEBUG_API', 'ENABLE_SEED_DATA']);
+  if (!allow.has(k)) return { success: false, message: `Flag inválida: ${k}` };
+
+  PropertiesService.getScriptProperties().setProperty(k, value ? 'true' : 'false');
+  appendAuditLog('setAdminFlag', { key: k, value }, true);
+  return { success: true, message: `Atualizado: ${k}=${value ? 'true' : 'false'}` };
+}
+
+export function clearCaches(): { success: boolean; message: string } {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return { success: false, message: 'Sem permissão' };
+  }
+  try {
+    cacheRemoveNamespace(CacheNamespace.REFERENCE, CacheScope.SCRIPT);
+    cacheRemoveNamespace(CacheNamespace.DRE, CacheScope.SCRIPT);
+    cacheRemoveNamespace(CacheNamespace.DFC, CacheScope.SCRIPT);
+    cacheRemoveNamespace(CacheNamespace.KPI, CacheScope.SCRIPT);
+    appendAuditLog('clearCaches', {}, true);
+    return { success: true, message: 'Caches limpos' };
+  } catch (e: any) {
+    appendAuditLog('clearCaches', {}, false, e?.message);
+    return { success: false, message: e?.message || String(e) };
+  }
+}
+
 /**
  * Retorna o HTML de uma view específica
  */
 export function getViewHtml(viewName: string): string {
   try {
-    return HtmlService.createHtmlOutputFromFile(`frontend/views/${viewName}-view`).getContent();
+    const normalized = String(viewName || '').trim();
+    if (!WEBAPP_VIEW_ALLOWLIST.has(normalized)) {
+      throw new Error('View inv\u00e1lida');
+    }
+    if (normalized === 'configuracoes') {
+      const denied = requirePermission('gerenciarConfig', 'acessar configurações');
+      if (denied) {
+        return `<div class="empty-state"><div class="empty-state-message">${escapeHtml(denied.message)}</div></div>`;
+      }
+    }
+
+    if (['dre', 'fluxo-caixa', 'kpis', 'relatorios'].includes(normalized)) {
+      const denied = requirePermission('visualizarRelatorios', `acessar ${normalized}`);
+      if (denied) {
+        return `<div class="empty-state"><div class="empty-state-message">${escapeHtml(denied.message)}</div></div>`;
+      }
+    }
+
+    return HtmlService.createHtmlOutputFromFile(`frontend/views/${normalized}-view`).getContent();
   } catch (error) {
     return `<div class="empty-state">
       <div class="empty-state-icon">⚠️</div>
       <div class="empty-state-message">Erro ao carregar view</div>
-      <div class="empty-state-hint">${error}</div>
+      <div class="empty-state-hint">${escapeHtml(error)}</div>
     </div>`;
   }
+}
+
+export function getCurrentUserInfo(): {
+  email: string;
+  nome: string;
+  perfil: string;
+  permissoes: NonNullable<Usuario['permissoes']>;
+} {
+  const email =
+    Session.getActiveUser().getEmail() ||
+    Session.getEffectiveUser().getEmail() ||
+    'usuario@empresa.com';
+
+  const fallbackNome = email.split('@')[0] || email;
+  const user = getUsuarioByEmail(email);
+  const perfil = user?.perfil || 'USUARIO';
+  const permissoes = user?.permissoes || getPermissoesPadrao(perfil);
+  return { email, nome: user?.nome || fallbackNome, perfil, permissoes };
 }
 
 // ============================================================================
@@ -44,6 +679,16 @@ export function getReferenceData(): {
   contas: Array<{ codigo: string; nome: string; tipo?: string; grupoDRE?: string; subgrupoDRE?: string; grupoDFC?: string; variavelFixa?: string; cmaCmv?: string }>;
   centrosCusto: Array<{ codigo: string; nome: string; ativo?: boolean }>;
 } {
+  const user = getUsuarioByEmail(getRequestingUserEmail());
+  if (!user || user.status !== 'ATIVO') {
+    return { filiais: [], canais: [], contas: [], centrosCusto: [] };
+  }
+
+  const cached = cacheGet<any>(CacheNamespace.REFERENCE, 'all');
+  if (cached) {
+    return cached;
+  }
+
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -107,7 +752,7 @@ export function getReferenceData(): {
       ];
     }
 
-    return {
+    const result = {
       filiais: filiais.filter((f: any) => f[0]).map((f: any) => {
         const ativoIdx = f.length >= 4 ? 3 : 2;
         return {
@@ -124,6 +769,9 @@ export function getReferenceData(): {
       contas: contas,
       centrosCusto: centrosCusto,
     };
+
+    cacheSet(CacheNamespace.REFERENCE, 'all', result, 600);
+    return result;
   } catch (error: any) {
     Logger.log(`Erro ao carregar dados de referência: ${error.message}`);
     // Retornar dados vazios em caso de erro
@@ -143,6 +791,15 @@ export function getReferenceData(): {
 // Centros de Custo
 export function salvarCentroCusto(centroCusto: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'salvar centro de custo');
+    if (denied) return denied;
+
+    const validation = combineValidations(
+      validateRequired(centroCusto?.codigo, 'Código'),
+      validateRequired(centroCusto?.nome, 'Nome')
+    );
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_REF_CCUSTO);
 
@@ -163,23 +820,33 @@ export function salvarCentroCusto(centroCusto: { codigo: string; nome: string; a
     }
 
     const ativo = centroCusto.ativo !== false && String(centroCusto.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
+    const codigo = sanitizeSheetString(centroCusto.codigo).toUpperCase();
+    const nome = sanitizeSheetString(centroCusto.nome);
 
     if (editIndex >= 0) {
       // Editar (linha = editIndex + 2)
-      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[centroCusto.codigo, centroCusto.nome, ativo]]);
+      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[codigo, nome, ativo]]);
     } else {
       // Novo
-      sheet.appendRow([centroCusto.codigo, centroCusto.nome, ativo]);
+      sheet.appendRow([codigo, nome, ativo]);
     }
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('salvarCentroCusto', { centroCusto: { codigo, nome, ativo }, editIndex }, true);
     return { success: true, message: 'Centro de custo salvo com sucesso' };
   } catch (error: any) {
+    appendAuditLog('salvarCentroCusto', { centroCusto, editIndex }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function excluirCentroCusto(index: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'excluir centro de custo');
+    if (denied) return denied;
+    if (!Number.isFinite(index) || index < 0) return { success: false, message: 'Índice inválido' };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_CCUSTO);
 
@@ -188,23 +855,34 @@ export function excluirCentroCusto(index: number): { success: boolean; message: 
     }
 
     // Deletar linha (index + 2)
+    if (index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
     sheet.deleteRow(index + 2);
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('excluirCentroCusto', { index }, true);
     return { success: true, message: 'Centro de custo excluído' };
   } catch (error: any) {
+    appendAuditLog('excluirCentroCusto', { index }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function toggleCentroCusto(index: number, ativo: boolean): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'alterar centro de custo');
+    if (denied) return denied;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_CCUSTO);
     if (!sheet) throw new Error('Aba de centros de custo não encontrada');
     if (index < 0 || index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
     sheet.getRange(index + 2, 3).setValue(ativo);
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('toggleCentroCusto', { index, ativo }, true);
     return { success: true, message: `Centro de custo ${ativo ? 'ativado' : 'inativado'}` };
   } catch (error: any) {
+    appendAuditLog('toggleCentroCusto', { index, ativo }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
@@ -212,6 +890,16 @@ export function toggleCentroCusto(index: number, ativo: boolean): { success: boo
 // Plano de Contas
 export function salvarContaContabil(conta: { codigo: string; nome: string; tipo: string; grupoDRE?: string; subgrupoDRE?: string; grupoDFC?: string; variavelFixa?: string; cmaCmv?: string }, editIndex: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'salvar conta contábil');
+    if (denied) return denied;
+
+    const validation = combineValidations(
+      validateRequired(conta?.codigo, 'Código'),
+      validateRequired(conta?.nome, 'Nome'),
+      validateEnum(String(conta?.tipo || ''), ['RECEITA', 'DESPESA'], 'Tipo')
+    );
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
 
@@ -232,14 +920,14 @@ export function salvarContaContabil(conta: { codigo: string; nome: string; tipo:
     }
 
     const rowData = [
-      conta.codigo,
-      conta.nome,
-      conta.tipo,
-      conta.grupoDRE || '',
-      conta.subgrupoDRE || '',
-      conta.grupoDFC || '',
-      conta.variavelFixa || '',
-      conta.cmaCmv || '',
+      sanitizeSheetString(conta.codigo),
+      sanitizeSheetString(conta.nome),
+      sanitizeSheetString(conta.tipo),
+      sanitizeSheetString(conta.grupoDRE || ''),
+      sanitizeSheetString(conta.subgrupoDRE || ''),
+      sanitizeSheetString(conta.grupoDFC || ''),
+      sanitizeSheetString(conta.variavelFixa || ''),
+      sanitizeSheetString(conta.cmaCmv || ''),
     ];
 
     if (editIndex >= 0) {
@@ -250,14 +938,22 @@ export function salvarContaContabil(conta: { codigo: string; nome: string; tipo:
       sheet.appendRow(rowData);
     }
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('salvarContaContabil', { editIndex, conta: rowData }, true);
     return { success: true, message: 'Conta contábil salva com sucesso' };
   } catch (error: any) {
+    appendAuditLog('salvarContaContabil', { editIndex, conta }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function excluirConta(index: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'excluir conta contábil');
+    if (denied) return denied;
+    if (!Number.isFinite(index) || index < 0) return { success: false, message: 'Índice inválido' };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
 
@@ -265,11 +961,15 @@ export function excluirConta(index: number): { success: boolean; message: string
       throw new Error('Aba de plano de contas não encontrada');
     }
 
-    // Deletar linha (index + 2)
+    if (index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
     sheet.deleteRow(index + 2);
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('excluirContaContabil', { index }, true);
     return { success: true, message: 'Conta excluída' };
   } catch (error: any) {
+    appendAuditLog('excluirContaContabil', { index }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
@@ -277,6 +977,15 @@ export function excluirConta(index: number): { success: boolean; message: string
 // Canais
 export function salvarCanal(canal: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'salvar canal');
+    if (denied) return denied;
+
+    const validation = combineValidations(
+      validateRequired(canal?.codigo, 'Código'),
+      validateRequired(canal?.nome, 'Nome')
+    );
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_REF_CANAIS);
 
@@ -296,23 +1005,33 @@ export function salvarCanal(canal: { codigo: string; nome: string; ativo?: boole
     }
 
     const ativo = canal.ativo !== false && String(canal.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
+    const codigo = sanitizeSheetString(canal.codigo).toUpperCase();
+    const nome = sanitizeSheetString(canal.nome);
 
     if (editIndex >= 0) {
       // Editar (linha = editIndex + 2)
-      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[canal.codigo, canal.nome, ativo]]);
+      sheet.getRange(editIndex + 2, 1, 1, 3).setValues([[codigo, nome, ativo]]);
     } else {
       // Novo
-      sheet.appendRow([canal.codigo, canal.nome, ativo]);
+      sheet.appendRow([codigo, nome, ativo]);
     }
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('salvarCanal', { canal: { codigo, nome, ativo }, editIndex }, true);
     return { success: true, message: 'Canal salvo com sucesso' };
   } catch (error: any) {
+    appendAuditLog('salvarCanal', { canal, editIndex }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function excluirCanal(index: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'excluir canal');
+    if (denied) return denied;
+    if (!Number.isFinite(index) || index < 0) return { success: false, message: 'Índice inválido' };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_CANAIS);
 
@@ -320,24 +1039,34 @@ export function excluirCanal(index: number): { success: boolean; message: string
       throw new Error('Aba de canais não encontrada');
     }
 
-    // Deletar linha (index + 2 pois +1 header + 1 base-0)
+    if (index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
     sheet.deleteRow(index + 2);
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('excluirCanal', { index }, true);
     return { success: true, message: 'Canal excluído' };
   } catch (error: any) {
+    appendAuditLog('excluirCanal', { index }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function toggleCanal(index: number, ativo: boolean): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'alterar canal');
+    if (denied) return denied;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_CANAIS);
     if (!sheet) throw new Error('Aba de canais não encontrada');
     if (index < 0 || index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
     sheet.getRange(index + 2, 3).setValue(ativo);
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('toggleCanal', { index, ativo }, true);
     return { success: true, message: `Canal ${ativo ? 'ativado' : 'inativado'}` };
   } catch (error: any) {
+    appendAuditLog('toggleCanal', { index, ativo }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
@@ -345,6 +1074,15 @@ export function toggleCanal(index: number, ativo: boolean): { success: boolean; 
 // Filiais
 export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'salvar filial');
+    if (denied) return denied;
+
+    const validation = combineValidations(
+      validateRequired(filial?.codigo, 'Código'),
+      validateRequired(filial?.nome, 'Nome')
+    );
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
 
@@ -364,6 +1102,8 @@ export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boo
     }
 
     const ativo = filial.ativo !== false && String(filial.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
+    const codigo = sanitizeSheetString(filial.codigo).toUpperCase();
+    const nome = sanitizeSheetString(filial.nome);
 
     const lastCol = Math.max(4, sheet.getLastColumn());
     const cnpjColIdx = lastCol >= 4 ? 3 : 2; // zero-based for getRange values assembly
@@ -376,7 +1116,7 @@ export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boo
       cnpj = existing[cnpjColIdx - 1] || '';
     }
 
-    const rowData: any[] = [filial.codigo, filial.nome];
+    const rowData: any[] = [codigo, nome];
     if (ativoColIdx === 4) {
       rowData.push(cnpj || '');
       rowData.push(ativo);
@@ -390,14 +1130,22 @@ export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boo
       sheet.appendRow(rowData);
     }
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('salvarFilial', { filial: rowData, editIndex }, true);
     return { success: true, message: 'Filial salva com sucesso' };
   } catch (error: any) {
+    appendAuditLog('salvarFilial', { filial, editIndex }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function excluirFilial(index: number): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'excluir filial');
+    if (denied) return denied;
+    if (!Number.isFinite(index) || index < 0) return { success: false, message: 'Índice inválido' };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
 
@@ -405,16 +1153,23 @@ export function excluirFilial(index: number): { success: boolean; message: strin
       throw new Error('Aba de filiais não encontrada');
     }
 
+    if (index + 2 > sheet.getLastRow()) throw new Error('Índice inválido');
     sheet.deleteRow(index + 2);
 
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('excluirFilial', { index }, true);
     return { success: true, message: 'Filial excluída' };
   } catch (error: any) {
+    appendAuditLog('excluirFilial', { index }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
 
 export function toggleFilial(index: number, ativo: boolean): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('gerenciarConfig', 'alterar filial');
+    if (denied) return denied;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_REF_FILIAIS);
     if (!sheet) throw new Error('Aba de filiais não encontrada');
@@ -422,8 +1177,12 @@ export function toggleFilial(index: number, ativo: boolean): { success: boolean;
     const lastCol = sheet.getLastColumn();
     const colAtivo = lastCol >= 4 ? 4 : 3;
     sheet.getRange(index + 2, colAtivo).setValue(ativo);
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('toggleFilial', { index, ativo }, true);
     return { success: true, message: `Filial ${ativo ? 'ativada' : 'inativada'}` };
   } catch (error: any) {
+    appendAuditLog('toggleFilial', { index, ativo }, false, error?.message);
     return { success: false, message: `Erro: ${error.message}` };
   }
 }
@@ -433,6 +1192,7 @@ export function toggleFilial(index: number, ativo: boolean): { success: boolean;
 // ============================================================================
 
 export function getDashboardData() {
+  enforcePermission('visualizarRelatorios', 'carregar dashboard');
   const lancamentos = getLancamentosFromSheet();
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -533,6 +1293,7 @@ export function getDashboardData() {
 // ============================================================================
 
 export function getContasPagar() {
+  enforcePermission('visualizarRelatorios', 'listar contas a pagar');
   const lancamentos = getLancamentosFromSheet();
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -587,39 +1348,131 @@ export function getContasPagar() {
 
 export function pagarConta(id: string): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('aprovarPagamentos', 'pagar conta');
+    if (denied) return denied;
+    const validation = validateRequired(id, 'ID');
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
     if (!sheet) throw new Error('Aba de lançamentos não encontrada');
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idCol = headers.indexOf('ID');
-  const statusCol = headers.indexOf('Status');
-  const dataPagCol = headers.indexOf('Data Pagamento');
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const dataPagCol = headers['Data Pagamento'];
 
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idCol] === id) {
-        sheet.getRange(i + 1, statusCol + 1).setValue('PAGA');
-        sheet.getRange(i + 1, dataPagCol + 1).setValue(new Date());
-        return { success: true, message: 'Conta paga com sucesso' };
+      if (idCol === undefined || statusCol === undefined || dataPagCol === undefined) {
+        throw new Error('Cabeçalhos obrigatórios não encontrados (ID, Status, Data Pagamento)');
       }
-    }
 
-    throw new Error('Conta não encontrada');
+      const row = findRowByExactValueInColumn(sheet, idCol, id);
+      if (!row) throw new Error('Conta não encontrada');
+
+      const currentStatus = String(sheet.getRange(row, statusCol + 1).getDisplayValue() || '').toUpperCase();
+      if (currentStatus !== 'PENDENTE') {
+        return { success: false, message: `Conta não está pendente (status: ${currentStatus})` };
+      }
+
+      sheet.getRange(row, statusCol + 1).setValue('PAGA');
+      sheet.getRange(row, dataPagCol + 1).setValue(new Date());
+      appendAuditLog('pagarConta', { id }, true);
+      clearReportsCache();
+      return { success: true, message: 'Conta paga com sucesso' };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
   } catch (error: any) {
+    appendAuditLog('pagarConta', { id }, false, error?.message);
     return { success: false, message: error.message };
   }
 }
 
 export function pagarContasEmLote(ids: string[]): { success: boolean; message: string } {
   try {
-    let count = 0;
-    for (const id of ids) {
-      const result = pagarConta(id);
-      if (result.success) count++;
+    const denied = requirePermission('aprovarPagamentos', 'pagar contas em lote');
+    if (denied) return denied;
+    if (!Array.isArray(ids) || ids.length === 0) return { success: false, message: 'IDs inválidos' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheet) throw new Error('Aba de lançamentos não encontrada');
+
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const dataPagCol = headers['Data Pagamento'];
+      if (idCol === undefined || statusCol === undefined || dataPagCol === undefined) {
+        throw new Error('Cabeçalhos obrigatórios não encontrados (ID, Status, Data Pagamento)');
+      }
+
+      const lastRow = sheet.getLastRow();
+      const idsColumnValues =
+        lastRow > 1
+          ? sheet.getRange(2, idCol + 1, lastRow - 1, 1).getDisplayValues()
+          : [];
+
+      const idToRow = new Map<string, number>();
+      idsColumnValues.forEach((r, idx) => {
+        const cell = String(r[0] || '').trim();
+        if (!cell) return;
+        idToRow.set(cell, idx + 2);
+      });
+
+      let count = 0;
+      const errors: string[] = [];
+      const statusRanges: string[] = [];
+      const dateRanges: string[] = [];
+      const now = new Date();
+
+      for (const rawId of ids) {
+        const wanted = String(rawId || '').trim();
+        if (!wanted) continue;
+        const row = idToRow.get(wanted);
+        if (!row) {
+          errors.push(`${wanted}: não encontrada`);
+          continue;
+        }
+
+        const currentStatus = String(sheet.getRange(row, statusCol + 1).getDisplayValue() || '').toUpperCase();
+        if (currentStatus !== 'PENDENTE') {
+          errors.push(`${wanted}: status ${currentStatus}`);
+          continue;
+        }
+
+        statusRanges.push(`${columnToLetter(statusCol + 1)}${row}`);
+        dateRanges.push(`${columnToLetter(dataPagCol + 1)}${row}`);
+        appendAuditLog('pagarConta', { id: wanted }, true);
+        count++;
+      }
+
+      if (statusRanges.length > 0) {
+        sheet.getRangeList(statusRanges).setValue('PAGA');
+        sheet.getRangeList(dateRanges).setValue(now);
+        clearReportsCache();
+      }
+
+      if (errors.length > 0) {
+        appendAuditLog('pagarContasEmLote', { ids, count, errorsCount: errors.length }, true, 'Parcial');
+        return { success: true, message: `${count} contas pagas; ${errors.length} falharam` };
+      }
+      appendAuditLog('pagarContasEmLote', { ids, count }, true);
+      return { success: true, message: `${count} contas pagas com sucesso` };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
     }
-    return { success: true, message: `${count} contas pagas com sucesso` };
   } catch (error: any) {
+    appendAuditLog('pagarContasEmLote', { ids }, false, error?.message);
     return { success: false, message: error.message };
   }
 }
@@ -629,6 +1482,7 @@ export function pagarContasEmLote(ids: string[]): { success: boolean; message: s
 // ============================================================================
 
 export function getContasReceber() {
+  enforcePermission('visualizarRelatorios', 'listar contas a receber');
   const lancamentos = getLancamentosFromSheet();
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -682,26 +1536,137 @@ export function getContasReceber() {
 
 export function receberConta(id: string): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('aprovarPagamentos', 'receber conta');
+    if (denied) return denied;
+    const validation = validateRequired(id, 'ID');
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
     if (!sheet) throw new Error('Aba de lançamentos não encontrada');
 
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idCol = headers.indexOf('ID');
-    const statusCol = headers.indexOf('Status');
-    const dataPagCol = headers.indexOf('Data Pagamento');
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const dataPagCol = headers['Data Pagamento'];
 
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][idCol] === id) {
-        sheet.getRange(i + 1, statusCol + 1).setValue('RECEBIDA');
-        sheet.getRange(i + 1, dataPagCol + 1).setValue(new Date());
-        return { success: true, message: 'Conta recebida com sucesso' };
+      if (idCol === undefined || statusCol === undefined || dataPagCol === undefined) {
+        throw new Error('Cabeçalhos obrigatórios não encontrados (ID, Status, Data Pagamento)');
       }
-    }
 
-    throw new Error('Conta não encontrada');
+      const row = findRowByExactValueInColumn(sheet, idCol, id);
+      if (!row) throw new Error('Conta não encontrada');
+
+      const currentStatus = String(sheet.getRange(row, statusCol + 1).getDisplayValue() || '').toUpperCase();
+      if (currentStatus !== 'PENDENTE') {
+        return { success: false, message: `Conta não está pendente (status: ${currentStatus})` };
+      }
+
+      sheet.getRange(row, statusCol + 1).setValue('RECEBIDA');
+      sheet.getRange(row, dataPagCol + 1).setValue(new Date());
+      appendAuditLog('receberConta', { id }, true);
+      clearReportsCache();
+      return { success: true, message: 'Conta recebida com sucesso' };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
   } catch (error: any) {
+    appendAuditLog('receberConta', { id }, false, error?.message);
+    return { success: false, message: error.message };
+  }
+}
+
+export function receberContasEmLote(ids: string[]): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('aprovarPagamentos', 'receber contas em lote');
+    if (denied) return denied;
+    if (!Array.isArray(ids) || ids.length === 0) return { success: false, message: 'IDs inválidos' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheet) throw new Error('Aba de lançamentos não encontrada');
+
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const dataPagCol = headers['Data Pagamento'];
+      if (idCol === undefined || statusCol === undefined || dataPagCol === undefined) {
+        throw new Error('Cabeçalhos obrigatórios não encontrados (ID, Status, Data Pagamento)');
+      }
+
+      const lastRow = sheet.getLastRow();
+      const idsColumnValues =
+        lastRow > 1
+          ? sheet.getRange(2, idCol + 1, lastRow - 1, 1).getDisplayValues()
+          : [];
+
+      const idToRow = new Map<string, number>();
+      idsColumnValues.forEach((r, idx) => {
+        const cell = String(r[0] || '').trim();
+        if (!cell) return;
+        idToRow.set(cell, idx + 2);
+      });
+
+      let count = 0;
+      const errors: string[] = [];
+      const statusRanges: string[] = [];
+      const dateRanges: string[] = [];
+      const now = new Date();
+
+      for (const rawId of ids) {
+        const wanted = String(rawId || '').trim();
+        if (!wanted) continue;
+        const row = idToRow.get(wanted);
+        if (!row) {
+          errors.push(`${wanted}: não encontrada`);
+          continue;
+        }
+
+        const currentStatus = String(sheet.getRange(row, statusCol + 1).getDisplayValue() || '').toUpperCase();
+        if (currentStatus !== 'PENDENTE') {
+          errors.push(`${wanted}: status ${currentStatus}`);
+          continue;
+        }
+
+        statusRanges.push(`${columnToLetter(statusCol + 1)}${row}`);
+        dateRanges.push(`${columnToLetter(dataPagCol + 1)}${row}`);
+        appendAuditLog('receberConta', { id: wanted }, true);
+        count++;
+      }
+
+      if (statusRanges.length > 0) {
+        sheet.getRangeList(statusRanges).setValue('RECEBIDA');
+        sheet.getRangeList(dateRanges).setValue(now);
+        clearReportsCache();
+      }
+
+      if (count === 0) {
+        appendAuditLog('receberContasEmLote', { ids, count, errorsCount: errors.length }, false, 'Nenhuma recebida');
+        return { success: false, message: errors.length ? errors[0] : 'Nenhuma conta recebida' };
+      }
+
+      if (errors.length > 0) {
+        appendAuditLog('receberContasEmLote', { ids, count, errorsCount: errors.length }, true, 'Parcial');
+        return { success: true, message: `${count} contas recebidas; ${errors.length} falharam` };
+      }
+
+      appendAuditLog('receberContasEmLote', { ids, count }, true);
+      return { success: true, message: `${count} contas recebidas com sucesso` };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
+  } catch (error: any) {
+    appendAuditLog('receberContasEmLote', { ids }, false, error?.message);
     return { success: false, message: error.message };
   }
 }
@@ -712,44 +1677,95 @@ export function receberConta(id: string): { success: boolean; message: string } 
 
 export function salvarLancamento(lancamento: any): { success: boolean; message: string; id?: string } {
   try {
+    const denied = requirePermission('criarLancamentos', 'salvar lançamento');
+    if (denied) return denied;
+
+    const v = combineValidations(
+      validateRequired(lancamento?.id, 'ID'),
+      validateRequired(lancamento?.dataCompetencia, 'Data competência'),
+      validateRequired(lancamento?.dataVencimento, 'Data vencimento'),
+      validateEnum(String(lancamento?.tipo || ''), ['RECEITA', 'DESPESA'], 'Tipo'),
+      validateRequired(lancamento?.filial, 'Filial'),
+      validateRequired(lancamento?.contaContabil, 'Conta contábil'),
+      validateRequired(lancamento?.descricao, 'Descrição'),
+      validateRequired(lancamento?.status, 'Status'),
+      validateEnum(String(lancamento?.status || ''), ['PENDENTE', 'PAGA', 'RECEBIDA', 'VENCIDA', 'CANCELADA'], 'Status')
+    );
+    if (!v.valid) {
+      return { success: false, message: v.errors.join('; ') };
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
     if (!sheet) throw new Error('Aba de lançamentos não encontrada');
 
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      if (idCol === undefined) throw new Error('Cabeçalho obrigatório não encontrado (ID)');
+      const existingRow = findRowByExactValueInColumn(sheet, idCol, lancamento.id);
+      if (existingRow) {
+        return { success: false, message: `ID já existe: ${lancamento.id}` };
+      }
+
     // Converter objeto lancamento para array de valores (seguindo a ordem das colunas)
+    const valorBruto = Number(lancamento.valorBruto);
+    const desconto = Number(lancamento.desconto || 0);
+    const juros = Number(lancamento.juros || 0);
+    const multa = Number(lancamento.multa || 0);
+    const valorLiquido = valorBruto - desconto + juros + multa;
+
+    if (!Number.isFinite(valorBruto) || valorBruto <= 0) {
+      return { success: false, message: 'Valor bruto inválido' };
+    }
+    if (![desconto, juros, multa, valorLiquido].every(Number.isFinite)) {
+      return { success: false, message: 'Valores numéricos inválidos' };
+    }
+
     const row = [
-      lancamento.id,                    // ID
-      lancamento.dataCompetencia,       // Data Competência
-      lancamento.dataVencimento,        // Data Vencimento
-      lancamento.dataPagamento || '',   // Data Pagamento
-      lancamento.tipo,                  // Tipo (RECEITA/DESPESA)
-      lancamento.filial,                // Filial
-      lancamento.centroCusto,           // Centro de Custo
-      lancamento.contaGerencial,        // Conta Gerencial
-      lancamento.contaContabil,         // Conta Contábil
-      lancamento.grupoReceita || '',    // Grupo Receita
-      lancamento.canal || '',           // Canal
-      lancamento.descricao,             // Descrição
-      lancamento.valorBruto,            // Valor Bruto
-      lancamento.desconto || 0,         // Desconto
-      lancamento.juros || 0,            // Juros
-      lancamento.multa || 0,            // Multa
-      lancamento.valorLiquido,          // Valor Líquido
-      lancamento.status,                // Status
-      lancamento.idExtratoBanco || '',  // ID Extrato Banco
-      lancamento.origem || 'MANUAL',    // Origem
-      lancamento.observacoes || '',     // Observações
+      sanitizeSheetString(lancamento.id),                        // ID
+      sanitizeSheetString(lancamento.dataCompetencia),           // Data Competência
+      sanitizeSheetString(lancamento.dataVencimento),            // Data Vencimento
+      sanitizeSheetString(lancamento.dataPagamento || ''),       // Data Pagamento
+      sanitizeSheetString(lancamento.tipo),                      // Tipo (RECEITA/DESPESA)
+      sanitizeSheetString(lancamento.filial),                    // Filial
+      sanitizeSheetString(lancamento.centroCusto || ''),         // Centro de Custo
+      sanitizeSheetString(lancamento.contaGerencial || ''),      // Conta Gerencial
+      sanitizeSheetString(lancamento.contaContabil),             // Conta Contábil
+      sanitizeSheetString(lancamento.grupoReceita || ''),        // Grupo Receita
+      sanitizeSheetString(lancamento.canal || ''),               // Canal
+      sanitizeSheetString(lancamento.descricao),                 // Descrição
+      valorBruto,                                                // Valor Bruto
+      desconto,                                                  // Desconto
+      juros,                                                     // Juros
+      multa,                                                     // Multa
+      valorLiquido,                                              // Valor Líquido (recalculado)
+      sanitizeSheetString(lancamento.status),                    // Status
+      sanitizeSheetString(lancamento.idExtratoBanco || ''),      // ID Extrato Banco
+      sanitizeSheetString(lancamento.origem || 'MANUAL'),        // Origem
+      sanitizeSheetString(lancamento.observacoes || ''),         // Observações
     ];
 
-    // Adicionar linha à planilha
-    sheet.appendRow(row);
+      // Adicionar linha à planilha (mais rápido que appendRow)
+      const targetRow = sheet.getLastRow() + 1;
+      sheet.getRange(targetRow, 1, 1, row.length).setValues([row]);
 
+    appendAuditLog('salvarLancamento', { id: row[0], tipo: row[4], status: row[17] }, true);
+    clearReportsCache();
     return {
       success: true,
       message: lancamento.tipo === 'RECEITA' ? 'Conta a receber salva com sucesso' : 'Conta a pagar salva com sucesso',
       id: lancamento.id,
     };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
   } catch (error: any) {
+    appendAuditLog('salvarLancamento', { lancamento }, false, error?.message);
     return {
       success: false,
       message: `Erro ao salvar lançamento: ${error.message}`,
@@ -762,6 +1778,7 @@ export function salvarLancamento(lancamento: any): { success: boolean; message: 
 // ============================================================================
 
 export function getConciliacaoData() {
+  enforcePermission('visualizarRelatorios', 'carregar conciliação');
   const extratos = getExtratosFromSheet();
   const lancamentos = getLancamentosFromSheet();
   const hoje = new Date();
@@ -823,70 +1840,206 @@ export function getConciliacaoData() {
 
 export function conciliarItens(extratoId: string, lancamentoId: string): { success: boolean; message: string } {
   try {
+    const denied = requirePermission('editarLancamentos', 'conciliar itens');
+    if (denied) return denied;
+
+    const v = combineValidations(
+      validateRequired(extratoId, 'Extrato ID'),
+      validateRequired(lancamentoId, 'Lançamento ID')
+    );
+    if (!v.valid) return { success: false, message: v.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
 
     // Atualizar extrato
     const sheetExtratos = ss.getSheetByName(SHEET_TB_EXTRATOS);
-    if (sheetExtratos) {
-      const dataExtratos = sheetExtratos.getDataRange().getValues();
-      const headersExtratos = dataExtratos[0];
-      const idColE = headersExtratos.indexOf('ID');
-      const statusColE = headersExtratos.indexOf('Status Conciliação');
-      const lancColE = headersExtratos.indexOf('ID Lançamento');
-
-      for (let i = 1; i < dataExtratos.length; i++) {
-        if (dataExtratos[i][idColE] === extratoId) {
-          sheetExtratos.getRange(i + 1, statusColE + 1).setValue('CONCILIADO');
-          sheetExtratos.getRange(i + 1, lancColE + 1).setValue(lancamentoId);
-          break;
-        }
-      }
+    if (!sheetExtratos) throw new Error('Aba de extratos não encontrada');
+    const extrHeaders = getHeaderIndexMap(sheetExtratos);
+    const extrIdCol = extrHeaders['ID'];
+    const extrStatusCol = extrHeaders['Status Conciliação'];
+    const extrLancCol = extrHeaders['ID Lançamento'];
+    if (extrIdCol === undefined || extrStatusCol === undefined || extrLancCol === undefined) {
+      throw new Error('Cabeçalhos obrigatórios não encontrados em extratos (ID, Status Conciliação, ID Lançamento)');
     }
+
+    const extratoRow = findRowByExactValueInColumn(sheetExtratos, extrIdCol, extratoId);
+    if (!extratoRow) throw new Error('Extrato não encontrado');
+    sheetExtratos.getRange(extratoRow, extrStatusCol + 1).setValue('CONCILIADO');
+    sheetExtratos.getRange(extratoRow, extrLancCol + 1).setValue(lancamentoId);
 
     // Atualizar lançamento
     const sheetLanc = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
-    if (sheetLanc) {
-      const dataLanc = sheetLanc.getDataRange().getValues();
-      const headersLanc = dataLanc[0];
-      const idColL = headersLanc.indexOf('ID');
-      const extratoColL = headersLanc.indexOf('ID Extrato Banco');
-
-      for (let i = 1; i < dataLanc.length; i++) {
-        if (dataLanc[i][idColL] === lancamentoId) {
-          sheetLanc.getRange(i + 1, extratoColL + 1).setValue(extratoId);
-          break;
-        }
-      }
+    if (!sheetLanc) throw new Error('Aba de lançamentos não encontrada');
+    const lancHeaders = getHeaderIndexMap(sheetLanc);
+    const lancIdCol = lancHeaders['ID'];
+    const lancExtratoCol = lancHeaders['ID Extrato Banco'];
+    if (lancIdCol === undefined || lancExtratoCol === undefined) {
+      throw new Error('Cabeçalhos obrigatórios não encontrados em lançamentos (ID, ID Extrato Banco)');
     }
+    const lancRow = findRowByExactValueInColumn(sheetLanc, lancIdCol, lancamentoId);
+    if (!lancRow) throw new Error('Lançamento não encontrado');
+    sheetLanc.getRange(lancRow, lancExtratoCol + 1).setValue(extratoId);
 
+    appendAuditLog('conciliarItens', { extratoId, lancamentoId }, true);
+    clearReportsCache();
     return { success: true, message: 'Conciliação realizada com sucesso' };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
   } catch (error: any) {
+    appendAuditLog('conciliarItens', { extratoId, lancamentoId }, false, error?.message);
     return { success: false, message: error.message };
   }
 }
 
 export function conciliarAutomatico(): { success: boolean; conciliados: number; message: string } {
   try {
-    const extratos = getExtratosFromSheet().filter(e => e.statusConciliacao === 'PENDENTE');
-    const lancamentos = getLancamentosFromSheet().filter(l => !l.idExtratoBanco);
+    const denied = requirePermission('editarLancamentos', 'conciliar automaticamente');
+    if (denied) return { success: false, conciliados: 0, message: denied.message };
 
-    let conciliados = 0;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheetExtratos = ss.getSheetByName(SHEET_TB_EXTRATOS);
+    const sheetLanc = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheetExtratos) throw new Error('Aba de extratos não encontrada');
+    if (!sheetLanc) throw new Error('Aba de lançamentos não encontrada');
 
-    for (const extrato of extratos) {
-      // Tentar encontrar lançamento com valor e data próximos
-      const match = lancamentos.find(l =>
-        Math.abs(parseFloat(String(l.valorLiquido)) - parseFloat(String(extrato.valor))) < 0.01 &&
-        Math.abs(new Date(l.dataCompetencia).getTime() - new Date(extrato.data).getTime()) < 7 * 24 * 60 * 60 * 1000
-      );
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const extrHeaders = getHeaderIndexMap(sheetExtratos);
+      const extrIdCol = extrHeaders['ID'];
+      const extrDateCol = extrHeaders['Data'];
+      const extrValueCol = extrHeaders['Valor'];
+      const extrStatusCol = extrHeaders['Status Conciliação'];
+      const extrLancCol = extrHeaders['ID Lançamento'];
+      if (
+        extrIdCol === undefined ||
+        extrDateCol === undefined ||
+        extrValueCol === undefined ||
+        extrStatusCol === undefined ||
+        extrLancCol === undefined
+      ) {
+        throw new Error('Cabeçalhos obrigatórios não encontrados em extratos');
+      }
 
-      if (match) {
-        conciliarItens(extrato.id, match.id);
+      const lancHeaders = getHeaderIndexMap(sheetLanc);
+      const lancIdCol = lancHeaders['ID'];
+      const lancDateCol = lancHeaders['Data Competência'];
+      const lancValueCol = lancHeaders['Valor Líquido'];
+      const lancExtratoCol = lancHeaders['ID Extrato Banco'];
+      if (
+        lancIdCol === undefined ||
+        lancDateCol === undefined ||
+        lancValueCol === undefined ||
+        lancExtratoCol === undefined
+      ) {
+        throw new Error('Cabeçalhos obrigatórios não encontrados em lançamentos');
+      }
+
+      const extrLastRow = sheetExtratos.getLastRow();
+      const lancLastRow = sheetLanc.getLastRow();
+      if (extrLastRow <= 1 || lancLastRow <= 1) {
+        return { success: true, conciliados: 0, message: '0 itens conciliados' };
+      }
+
+      const extrValues = sheetExtratos
+        .getRange(2, 1, extrLastRow - 1, Math.max(9, extrStatusCol + 1, extrLancCol + 1, extrValueCol + 1, extrDateCol + 1))
+        .getValues();
+
+      const lancValues = sheetLanc
+        .getRange(2, 1, lancLastRow - 1, Math.max(19, lancExtratoCol + 1, lancValueCol + 1, lancDateCol + 1))
+        .getValues();
+
+      const normalizeKey = (n: number): string => {
+        const num = Number(n);
+        if (!Number.isFinite(num)) return 'NaN';
+        return (Math.round(num * 100) / 100).toFixed(2);
+      };
+
+      const toTs = (v: any): number => {
+        const d = normalizeDateCell(v);
+        const ts = Date.parse(d);
+        return Number.isFinite(ts) ? ts : new Date(d).getTime();
+      };
+
+      type LancCandidate = { row: number; id: string; ts: number; valueKey: string };
+      const byValue = new Map<string, LancCandidate[]>();
+
+      for (let i = 0; i < lancValues.length; i++) {
+        const rowNum = i + 2;
+        const r = lancValues[i];
+        const id = String(r[lancIdCol] || '').trim();
+        if (!id) continue;
+        const already = String(r[lancExtratoCol] || '').trim();
+        if (already) continue;
+        const ts = toTs(r[lancDateCol]);
+        const valueKey = normalizeKey(Number(r[lancValueCol]));
+        if (valueKey === 'NaN') continue;
+        const arr = byValue.get(valueKey) || [];
+        arr.push({ row: rowNum, id, ts, valueKey });
+        byValue.set(valueKey, arr);
+      }
+
+      // sort candidates by date to speed up selection
+      for (const arr of byValue.values()) {
+        arr.sort((a, b) => a.ts - b.ts);
+      }
+
+      const maxDiffMs = 7 * 24 * 60 * 60 * 1000;
+      let conciliados = 0;
+
+      for (let i = 0; i < extrValues.length; i++) {
+        const rowNum = i + 2;
+        const r = extrValues[i];
+        const status = String(r[extrStatusCol] || '').toUpperCase();
+        if (status !== 'PENDENTE') continue;
+
+        const extratoId = String(r[extrIdCol] || '').trim();
+        if (!extratoId) continue;
+        const extrTs = toTs(r[extrDateCol]);
+        const valueKey = normalizeKey(Number(r[extrValueCol]));
+        if (valueKey === 'NaN') continue;
+
+        const candidates = byValue.get(valueKey);
+        if (!candidates || candidates.length === 0) continue;
+
+        let bestIdx = -1;
+        let bestDiff = Infinity;
+        for (let j = 0; j < candidates.length; j++) {
+          const diff = Math.abs(candidates[j].ts - extrTs);
+          if (diff <= maxDiffMs && diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = j;
+            if (diff === 0) break;
+          }
+          // early exit if candidates are sorted and already too far past
+          if (candidates[j].ts - extrTs > maxDiffMs) break;
+        }
+
+        if (bestIdx < 0) continue;
+        const match = candidates.splice(bestIdx, 1)[0];
+
+        sheetExtratos.getRange(rowNum, extrStatusCol + 1).setValue('CONCILIADO');
+        sheetExtratos.getRange(rowNum, extrLancCol + 1).setValue(match.id);
+        sheetLanc.getRange(match.row, lancExtratoCol + 1).setValue(extratoId);
         conciliados++;
       }
-    }
 
-    return { success: true, conciliados, message: `${conciliados} itens conciliados` };
+      appendAuditLog('conciliarAutomatico', { conciliados }, true);
+      clearReportsCache();
+      return { success: true, conciliados, message: `${conciliados} itens conciliados` };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
   } catch (error: any) {
+    appendAuditLog('conciliarAutomatico', {}, false, error?.message);
     return { success: false, conciliados: 0, message: error.message };
   }
 }
@@ -933,8 +2086,8 @@ function getLancamentosFromSheet(): any[] {
   ]);
 
   const data = getSheetValues(SHEET_TB_LANCAMENTOS);
-  if (!data || data.length <= 1) {
-    // seed fictício para teste rápido
+   if (!data || data.length <= 1) {
+    if (!isSeedDataEnabled()) return [];
     const seed = [
       ['CP-1001','2025-01-02','2025-01-12','2025-01-11','DESPESA','MATRIZ','OPS','Compra MP','10201','','ONLINE','Compra matéria-prima lote A',1500,0,0,0,1500,'PAGO','EXT-5002','Fornecedor X','Lote inicial'],
       ['CP-1002','2025-01-05','2025-01-20','','DESPESA','MATRIZ','OPS','Frete Compras','10205','','ONLINE','Frete compras fornecedores',400,0,0,0,400,'PENDENTE','','Fornecedor Y','À espera de pagamento'],
@@ -1017,6 +2170,7 @@ function getExtratosFromSheet(): any[] {
 
   const data = getSheetValues(SHEET_TB_EXTRATOS);
   if (!data || data.length <= 1) {
+    if (!isSeedDataEnabled()) return [];
     const seed = [
       ['EXT-5001','2025-01-02','Recebimento cartão venda balcão',3200,'ENTRADA','BANCO_A','CC_MATRIZ','CONCILIADO','CR-2001','Pedido balcão','2025-01-03'],
       ['EXT-5002','2025-01-11','Pagamento fornecedor matéria-prima',-1500,'SAIDA','BANCO_A','CC_MATRIZ','CONCILIADO','CP-1001','Pagto lote A','2025-01-11'],
@@ -1090,6 +2244,9 @@ function getPlanoContasMap(): Record<string, any> {
 }
 
 export function getDREMensal(mes: number, ano: number, filial?: string): any {
+  enforcePermission('visualizarRelatorios', 'carregar DRE');
+  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}`;
+  return cacheGetOrLoad(CacheNamespace.DRE, cacheKey, () => {
   try {
     const lancamentos = getLancamentosFromSheet();
     const planoMap = getPlanoContasMap();
@@ -1210,9 +2367,11 @@ export function getDREMensal(mes: number, ano: number, filial?: string): any {
     Logger.log(`Erro ao calcular DRE: ${error.message}`);
     throw new Error(`Erro ao calcular DRE: ${error.message}`);
   }
+  }, 120, CacheScope.SCRIPT);
 }
 
 export function getDREComparativo(meses: Array<{ mes: number; ano: number }>, filial?: string): any {
+  enforcePermission('visualizarRelatorios', 'carregar DRE comparativo');
   try {
     const dres = meses.map(periodo => getDREMensal(periodo.mes, periodo.ano, filial));
 
@@ -1233,6 +2392,7 @@ export function getDREComparativo(meses: Array<{ mes: number; ano: number }>, fi
 }
 
 export function getDREPorFilial(mes: number, ano: number): any {
+  enforcePermission('visualizarRelatorios', 'carregar DRE por filial');
   try {
     const lancamentos = getLancamentosFromSheet();
 
@@ -1302,6 +2462,9 @@ function calcularEvolucao(valores: number[]): any {
 // ============================================================================
 
 export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, saldoInicial?: number): any {
+  enforcePermission('visualizarRelatorios', 'carregar fluxo de caixa');
+  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}:${Number(saldoInicial) || 0}`;
+  return cacheGetOrLoad(CacheNamespace.DFC, cacheKey, () => {
   try {
     const lancamentos = getLancamentosFromSheet();
 
@@ -1368,9 +2531,11 @@ export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, s
     Logger.log(`Erro ao calcular Fluxo de Caixa: ${error.message}`);
     throw new Error(`Erro ao calcular Fluxo de Caixa: ${error.message}`);
   }
+  }, 120, CacheScope.SCRIPT);
 }
 
 export function getFluxoCaixaProjecao(meses: number, filial?: string): any {
+  enforcePermission('visualizarRelatorios', 'carregar projeção de fluxo de caixa');
   try {
     const hoje = new Date();
     const periodos = [];
@@ -1425,6 +2590,9 @@ function agruparPorCategoria(lancamentos: any[]): any[] {
 // ============================================================================
 
 export function getKPIsMensal(mes: number, ano: number, filial?: string): any {
+  enforcePermission('visualizarRelatorios', 'carregar KPIs');
+  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}`;
+  return cacheGetOrLoad(CacheNamespace.KPI, cacheKey, () => {
   try {
     const lancamentos = getLancamentosFromSheet();
 
@@ -1630,6 +2798,7 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string): any {
     Logger.log(`Erro ao calcular KPIs: ${error.message}`);
     throw new Error(`Erro ao calcular KPIs: ${error.message}`);
   }
+  }, 120, CacheScope.SCRIPT);
 }
 
 // Helper function para classificar liquidez
@@ -1643,8 +2812,6 @@ function classificarLiquidez(valor: number): string {
 // ============================================================================
 // USUÁRIOS E PERMISSÕES
 // ============================================================================
-
-const SHEET_USUARIOS = 'TB_Usuarios';
 
 interface Usuario {
   id?: string;
@@ -1665,55 +2832,13 @@ interface Usuario {
 
 export function getUsuarios(): Usuario[] {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_USUARIOS);
-
-    // Se a planilha não existe, criar
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEET_USUARIOS);
-      sheet.getRange('A1:H1').setValues([[
-        'ID', 'Email', 'Nome', 'Perfil', 'Status', 'Último Acesso', 'Permissões', 'Data Criação'
-      ]]);
-      sheet.getRange('A1:H1').setFontWeight('bold');
-      sheet.setFrozenRows(1);
-
-      // Adicionar usuário administrador padrão
-      const userEmail = Session.getActiveUser().getEmail();
-      sheet.appendRow([
-        Utilities.getUuid(),
-        userEmail,
-        'Administrador',
-        'ADMIN',
-        'ATIVO',
-        new Date().toISOString(),
-        JSON.stringify({
-          criarLancamentos: true,
-          editarLancamentos: true,
-          excluirLancamentos: true,
-          aprovarPagamentos: true,
-          visualizarRelatorios: true,
-          gerenciarConfig: true
-        }),
-        new Date().toISOString()
-      ]);
-
-      return [{
-        id: Utilities.getUuid(),
-        email: userEmail,
-        nome: 'Administrador',
-        perfil: 'ADMIN',
-        status: 'ATIVO',
-        ultimoAcesso: new Date().toISOString(),
-        permissoes: {
-          criarLancamentos: true,
-          editarLancamentos: true,
-          excluirLancamentos: true,
-          aprovarPagamentos: true,
-          visualizarRelatorios: true,
-          gerenciarConfig: true
-        }
-      }];
+    const email = getRequestingUserEmail();
+    const requester = getUsuarioByEmail(email);
+    if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+      return [];
     }
+
+    const sheet = ensureUsuariosSheet();
 
     const data = sheet.getDataRange().getValues();
     const usuarios: Usuario[] = [];
@@ -1742,16 +2867,24 @@ export function getUsuarios(): Usuario[] {
 
 export function salvarUsuario(usuario: Usuario): { success: boolean; message: string } {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_USUARIOS);
-
-    if (!sheet) {
-      // Criar planilha se não existe
-      getUsuarios();
-      sheet = ss.getSheetByName(SHEET_USUARIOS);
+    const email = getRequestingUserEmail();
+    const requester = getUsuarioByEmail(email);
+    if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+      return { success: false, message: 'Sem permissão: salvar usuário' };
     }
 
-    const data = sheet!.getDataRange().getValues();
+    const v = combineValidations(
+      validateRequired(usuario?.email, 'Email'),
+      validateRequired(usuario?.nome, 'Nome'),
+      validateEnum(String(usuario?.perfil || ''), ['ADMIN', 'GESTOR', 'OPERACIONAL', 'VISUALIZADOR'], 'Perfil'),
+      validateEnum(String(usuario?.status || ''), ['ATIVO', 'INATIVO'], 'Status')
+    );
+    if (!v.valid) return { success: false, message: v.errors.join('; ') };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ensureUsuariosSheet();
+
+    const data = sheet.getDataRange().getValues();
     let rowIndex = -1;
 
     // Procurar usuário existente
@@ -1767,10 +2900,10 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
     const permissoes = usuario.permissoes || getPermissoesPadrao(usuario.perfil);
     const rowData = [
       usuario.id || Utilities.getUuid(),
-      usuario.email,
-      usuario.nome,
-      usuario.perfil,
-      usuario.status,
+      sanitizeSheetString(usuario.email).toLowerCase(),
+      sanitizeSheetString(usuario.nome),
+      sanitizeSheetString(usuario.perfil),
+      sanitizeSheetString(usuario.status),
       usuario.ultimoAcesso || '',
       JSON.stringify(permissoes),
       rowIndex === -1 ? new Date().toISOString() : data[rowIndex - 1][7]
@@ -1778,14 +2911,17 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
 
     if (rowIndex > 0) {
       // Atualizar existente
-      sheet!.getRange(rowIndex, 1, 1, 8).setValues([rowData]);
+      sheet.getRange(rowIndex, 1, 1, 8).setValues([rowData]);
+      appendAuditLog('salvarUsuario', { id: rowData[0], email: rowData[1], perfil: rowData[3], status: rowData[4] }, true);
       return { success: true, message: 'Usuário atualizado com sucesso!' };
     } else {
       // Criar novo
-      sheet!.appendRow(rowData);
+      sheet.appendRow(rowData);
+      appendAuditLog('salvarUsuario', { id: rowData[0], email: rowData[1], perfil: rowData[3], status: rowData[4] }, true);
       return { success: true, message: 'Usuário criado com sucesso!' };
     }
   } catch (error: any) {
+    appendAuditLog('salvarUsuario', { usuario }, false, error?.message);
     Logger.log(`Erro ao salvar usuário: ${error.message}`);
     return { success: false, message: `Erro ao salvar usuário: ${error.message}` };
   }
@@ -1793,6 +2929,15 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
 
 export function excluirUsuario(id: string): { success: boolean; message: string } {
   try {
+    const email = getRequestingUserEmail();
+    const requester = getUsuarioByEmail(email);
+    if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+      return { success: false, message: 'Sem permissão: excluir usuário' };
+    }
+
+    const v = validateRequired(id, 'ID');
+    if (!v.valid) return { success: false, message: v.errors.join('; ') };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_USUARIOS);
 
@@ -1805,12 +2950,14 @@ export function excluirUsuario(id: string): { success: boolean; message: string 
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === id || data[i][1] === id) {
         sheet.deleteRow(i + 1);
+        appendAuditLog('excluirUsuario', { id }, true);
         return { success: true, message: 'Usuário excluído com sucesso!' };
       }
     }
 
     return { success: false, message: 'Usuário não encontrado' };
   } catch (error: any) {
+    appendAuditLog('excluirUsuario', { id }, false, error?.message);
     Logger.log(`Erro ao excluir usuário: ${error.message}`);
     return { success: false, message: `Erro ao excluir usuário: ${error.message}` };
   }
@@ -1820,6 +2967,13 @@ export function excluirUsuario(id: string): { success: boolean; message: string 
 // SEED: PLANO DE CONTAS (sobrescreve aba REF_PLANO_CONTAS)
 // -----------------------------------------------------------------------------
 export function seedPlanoContasFromList(): { success: boolean; message: string } {
+  const denied = requirePermission('gerenciarConfig', 'seed plano de contas');
+  if (denied) return denied;
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return { success: false, message: 'Sem permissão: seed plano de contas' };
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_REF_PLANO_CONTAS);
   if (!sheet) {

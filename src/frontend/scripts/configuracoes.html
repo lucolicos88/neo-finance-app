@@ -1,9 +1,11 @@
 <script>
 // Dados globais
 let usuariosData = [];
+const gasRun = (window && window.gasRun) ? window.gasRun : google.script.run;
 
 function loadConfiguracoesData() {
   setupConfigTabs();
+  initLogsTabAccess();
   loadCentrosCusto();
   loadPlanoContas();
   loadCanais();
@@ -18,8 +20,395 @@ function setupConfigTabs() {
       const tabName = this.getAttribute('data-tab');
       ModalManager.closeAll();
       switchTab('config', tabName);
+      if (tabName === 'logs') {
+        loadLogs();
+      }
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Logs (Auditoria)
+// ---------------------------------------------------------------------------
+let auditLogsCache = [];
+let auditLogsLoadedAt = 0;
+let auditLogsFilteredCache = [];
+
+function initLogsTabAccess() {
+  const logsTabBtn = document.querySelector('[data-tab-group="config"][data-tab="logs"]');
+  const logsTabContent = document.querySelector('[data-tab-content="config"][data-content="logs"]');
+  if (!logsTabBtn) return;
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) {
+    logsTabBtn.style.display = 'none';
+    if (logsTabContent) logsTabContent.style.display = 'none';
+  }
+}
+
+function refreshLogs() {
+  loadLogs(true);
+}
+
+function loadLogs(force = false) {
+  const tbody = document.getElementById('table-logs');
+  if (!tbody) return;
+
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sem permissão para visualizar logs</td></tr>';
+    return;
+  }
+
+  loadAdminDiagnostics();
+
+  const now = Date.now();
+  if (!force && auditLogsCache.length > 0 && now - auditLogsLoadedAt < 15000) {
+    applyLogsFilter();
+    return;
+  }
+
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>';
+  showLoading('Carregando logs...');
+
+  gasRun
+    .withSuccessHandler(entries => {
+      hideLoading();
+      auditLogsCache = Array.isArray(entries) ? entries : [];
+      auditLogsLoadedAt = Date.now();
+      applyLogsFilter();
+    })
+    .withFailureHandler(err => {
+      hideLoading();
+      handleError(err);
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Falha ao carregar logs</td></tr>';
+    })
+    .getAuditLogEntries(200);
+}
+
+function applyLogsFilter() {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) return;
+
+  const queryEl = document.getElementById('logs-query');
+  const emailEl = document.getElementById('logs-email');
+  const actionEl = document.getElementById('logs-action');
+  const refEl = document.getElementById('logs-ref');
+  const statusEl = document.getElementById('logs-status');
+
+  const query = queryEl && queryEl.value ? String(queryEl.value).trim().toLowerCase() : '';
+  const email = emailEl && emailEl.value ? String(emailEl.value).trim().toLowerCase() : '';
+  const action = actionEl && actionEl.value ? String(actionEl.value).trim().toLowerCase() : '';
+  const ref = refEl && refEl.value ? String(refEl.value).trim() : '';
+  const status = statusEl && statusEl.value ? String(statusEl.value).trim().toLowerCase() : '';
+
+  const filtered = (auditLogsCache || []).filter(e => {
+    const ok = Boolean(e && e.success);
+    if (status === 'ok' && !ok) return false;
+    if (status === 'erro' && ok) return false;
+
+    if (email && String(e && e.email ? e.email : '').toLowerCase().indexOf(email) === -1) return false;
+    if (action && String(e && e.action ? e.action : '').toLowerCase().indexOf(action) === -1) return false;
+
+    if (ref) {
+      const payloadText = String(e && e.payload ? e.payload : '');
+      if (payloadText.indexOf(ref) === -1) return false;
+    }
+
+    if (!query) return true;
+    const hay = [
+      e && e.timestamp,
+      e && e.email,
+      e && e.action,
+      e && e.message,
+      e && e.payload,
+    ].map(v => String(v || '').toLowerCase()).join(' | ');
+    return hay.includes(query);
+  });
+
+  auditLogsFilteredCache = filtered;
+  renderAuditLogs(filtered);
+}
+
+function searchLogsServer() {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  const tbody = document.getElementById('table-logs');
+  if (!tbody) return;
+  if (!isAdmin) {
+    showToast('Sem permissão', 'warning');
+    return;
+  }
+
+  const queryEl = document.getElementById('logs-query');
+  const emailEl = document.getElementById('logs-email');
+  const actionEl = document.getElementById('logs-action');
+  const refEl = document.getElementById('logs-ref');
+  const statusEl = document.getElementById('logs-status');
+
+  const query = queryEl && queryEl.value ? String(queryEl.value).trim() : '';
+  const email = emailEl && emailEl.value ? String(emailEl.value).trim() : '';
+  const action = actionEl && actionEl.value ? String(actionEl.value).trim() : '';
+  const correlationId = refEl && refEl.value ? String(refEl.value).trim() : '';
+  const status = statusEl && statusEl.value ? String(statusEl.value).trim().toLowerCase() : '';
+  const success = status === 'ok' ? true : status === 'erro' ? false : null;
+
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Buscando...</td></tr>';
+  showLoading('Buscando logs...');
+
+  gasRun
+    .withSuccessHandler(entries => {
+      hideLoading();
+      auditLogsCache = Array.isArray(entries) ? entries : [];
+      auditLogsLoadedAt = Date.now();
+      applyLogsFilter();
+    })
+    .withFailureHandler(err => {
+      hideLoading();
+      handleError(err);
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Falha ao buscar logs</td></tr>';
+    })
+    .getAuditLogEntriesFiltered({ limit: 200, query, email, action, correlationId, success });
+}
+
+function exportLogsCsv() {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) {
+    showToast('Sem permissão para exportar logs', 'warning');
+    return;
+  }
+
+  const rows = Array.isArray(auditLogsFilteredCache) ? auditLogsFilteredCache : [];
+  if (rows.length === 0) {
+    showToast('Nenhum log para exportar', 'warning');
+    return;
+  }
+
+  const csvEscape = (value) => {
+    const s = String(value ?? '');
+    const escaped = s.replace(/\"/g, '\"\"');
+    return `\"${escaped}\"`;
+  };
+
+  const header = ['timestamp', 'email', 'action', 'success', 'ref', 'message', 'payload'];
+  const lines = [header.map(csvEscape).join(',')];
+
+  rows.forEach(e => {
+    let ref = '';
+    try {
+      const parsed = JSON.parse(String(e && e.payload ? e.payload : ''));
+      if (parsed && typeof parsed === 'object' && parsed.correlationId) {
+        ref = String(parsed.correlationId);
+      }
+    } catch (_) {}
+    lines.push([
+      e && e.timestamp,
+      e && e.email,
+      e && e.action,
+      e && (e.success ? 'TRUE' : 'FALSE'),
+      ref,
+      e && e.message,
+      e && e.payload,
+    ].map(csvEscape).join(','));
+  });
+
+  const csv = lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  a.href = url;
+  a.download = `audit-logs-${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => {
+    try { URL.revokeObjectURL(url); } catch (_) {}
+  }, 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Diagnósticos (Smoke tests)
+// ---------------------------------------------------------------------------
+let lastSmokeTestsResult = null;
+
+function loadAdminDiagnostics() {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) return;
+
+  gasRun
+    .withSuccessHandler(diag => {
+      if (!diag || !diag.ok || !diag.flags) return;
+      const debugEl = document.getElementById('flag-enable-debug-api');
+      const seedEl = document.getElementById('flag-enable-seed-data');
+      if (debugEl) debugEl.checked = String(diag.flags.ENABLE_DEBUG_API || '').toLowerCase() === 'true';
+      if (seedEl) seedEl.checked = String(diag.flags.ENABLE_SEED_DATA || '').toLowerCase() === 'true';
+    })
+    .withFailureHandler(() => {})
+    .getAdminDiagnostics();
+}
+
+function toggleAdminFlag(key, checked) {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) {
+    showToast('Sem permissão', 'warning');
+    return;
+  }
+  gasRun
+    .withSuccessHandler(result => {
+      if (result && result.success) showToast(result.message, 'success');
+      else showToast(result && result.message ? result.message : 'Falha ao atualizar flag', 'error');
+      loadAdminDiagnostics();
+    })
+    .withFailureHandler(handleError)
+    .setAdminFlag(String(key || ''), Boolean(checked));
+}
+
+function clearCachesUi() {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  if (!isAdmin) {
+    showToast('Sem permissão', 'warning');
+    return;
+  }
+  if (!confirm('Limpar caches do sistema?')) return;
+  showLoading('Limpando caches...');
+  gasRun
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result && result.success) showToast(result.message, 'success');
+      else showToast(result && result.message ? result.message : 'Falha ao limpar caches', 'error');
+    })
+    .withFailureHandler(err => {
+      hideLoading();
+      handleError(err);
+    })
+    .clearCaches();
+}
+
+function runSmokeTestsUi() {
+  const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
+  const out = document.getElementById('smoke-tests-output');
+  if (!out) return;
+  if (!isAdmin) {
+    out.textContent = 'Sem permissão (ADMIN apenas).';
+    return;
+  }
+
+  out.textContent = 'Executando smoke tests...';
+  showLoading('Executando smoke tests...');
+
+  gasRun
+    .withSuccessHandler(result => {
+      hideLoading();
+      lastSmokeTestsResult = result || null;
+      out.textContent = formatSmokeTestResult(result);
+      if (result && result.ok) showToast('Smoke tests: OK', 'success');
+      else showToast('Smoke tests: falhou', 'error');
+    })
+    .withFailureHandler(err => {
+      hideLoading();
+      handleError(err);
+      out.textContent = `Falha ao executar smoke tests: ${err && err.message ? err.message : String(err)}`;
+    })
+    .runSmokeTests();
+}
+
+function formatSmokeTestResult(result) {
+  try {
+    if (!result || typeof result !== 'object') return String(result ?? '');
+    const steps = Array.isArray(result.steps) ? result.steps : [];
+    const ok = Boolean(result.ok);
+    const ranAt = result.ranAt ? String(result.ranAt) : '';
+    const header = `ok=${ok} ranAt=${ranAt} steps=${steps.length}`;
+    return header + '\n' + JSON.stringify(result, null, 2);
+  } catch (e) {
+    return String(result);
+  }
+}
+
+function copySmokeTestsOutput() {
+  const out = document.getElementById('smoke-tests-output');
+  if (!out) return;
+  const text = out.textContent || '';
+  if (!text) {
+    showToast('Nada para copiar', 'warning');
+    return;
+  }
+  try {
+    navigator.clipboard.writeText(text).then(
+      () => showToast('Resultado copiado', 'success'),
+      () => fallbackCopyText(text)
+    );
+  } catch (_) {
+    fallbackCopyText(text);
+  }
+}
+
+function fallbackCopyText(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    showToast('Resultado copiado', 'success');
+  } catch (_) {
+    showToast('Falha ao copiar', 'error');
+  }
+}
+
+function renderAuditLogs(entries) {
+  const tbody = document.getElementById('table-logs');
+  if (!tbody) return;
+
+  if (!entries || entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum registro encontrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = entries.map(e => {
+    const timestamp = escapeHtml(String(e.timestamp || ''));
+    const email = escapeHtml(String(e.email || ''));
+    const action = escapeHtml(String(e.action || ''));
+    const success = Boolean(e.success);
+    const message = escapeHtml(String(e.message || ''));
+    const payloadText = String(e.payload || '');
+    let ref = '';
+    try {
+      const parsed = JSON.parse(payloadText);
+      if (parsed && typeof parsed === 'object' && parsed.correlationId) {
+        ref = String(parsed.correlationId);
+      }
+    } catch (_) {}
+    const payloadShort = payloadText.length > 140 ? payloadText.slice(0, 140) + '…' : payloadText;
+
+    const payloadHtml = `
+      <details>
+        <summary>${escapeHtml(payloadShort || '(vazio)')}</summary>
+        <pre style="white-space: pre-wrap; margin: 0.5rem 0 0;">${escapeHtml(payloadText)}</pre>
+      </details>
+    `;
+
+    return `
+      <tr>
+        <td>${timestamp}</td>
+        <td>${email}</td>
+        <td><code>${action}</code></td>
+        <td>
+          <span class="badge badge-${success ? 'success' : 'danger'}">
+            ${success ? 'OK' : 'ERRO'}
+          </span>
+        </td>
+        <td><code>${escapeHtml(ref || '-')}</code></td>
+        <td>${message}</td>
+        <td>${payloadHtml}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -36,8 +425,8 @@ function loadCentrosCusto() {
 
   tbody.innerHTML = appData.centrosCusto.map((cc, index) => `
     <tr>
-      <td><strong>${cc.codigo}</strong></td>
-      <td>${cc.nome}</td>
+      <td><strong>${escapeHtml(cc.codigo)}</strong></td>
+      <td>${escapeHtml(cc.nome)}</td>
       <td>
         <span class="badge badge-${cc.ativo === false ? 'secondary' : 'success'}">
           ${cc.ativo === false ? 'Inativo' : 'Ativo'}
@@ -88,7 +477,7 @@ function salvarCentroCusto() {
   showLoading('Salvando centro de custo...');
   const centroCusto = { codigo, nome, ativo };
 
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -109,7 +498,7 @@ function excluirCentroCusto(index) {
 
 function alternarCentroCusto(index, ativar) {
   showLoading(ativar ? 'Ativando centro de custo...' : 'Inativando centro de custo...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -138,7 +527,7 @@ function confirmExcluirCentroCusto() {
   ccIndexParaExcluir = null;
   ModalManager.close('modal-confirm-cc');
   showLoading('Excluindo...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -166,14 +555,14 @@ function loadPlanoContas() {
 
   tbody.innerHTML = appData.contas.map((conta, index) => `
     <tr>
-      <td><strong>${conta.codigo}</strong></td>
-      <td>${conta.nome}</td>
-      <td><span class="badge badge-${conta.tipo === 'RECEITA' ? 'success' : (conta.tipo === 'ATIVO' ? 'info' : 'danger')}">${conta.tipo || 'N/A'}</span></td>
-      <td>${conta.grupoDRE || '-'}</td>
-      <td>${conta.subgrupoDRE || '-'}</td>
-      <td>${conta.grupoDFC || '-'}</td>
-      <td>${conta.variavelFixa || '-'}</td>
-      <td>${conta.cmaCmv || '-'}</td>
+      <td><strong>${escapeHtml(conta.codigo)}</strong></td>
+      <td>${escapeHtml(conta.nome)}</td>
+      <td><span class="badge badge-${conta.tipo === 'RECEITA' ? 'success' : (conta.tipo === 'ATIVO' ? 'info' : 'danger')}">${escapeHtml(conta.tipo || 'N/A')}</span></td>
+      <td>${escapeHtml(conta.grupoDRE || '-')}</td>
+      <td>${escapeHtml(conta.subgrupoDRE || '-')}</td>
+      <td>${escapeHtml(conta.grupoDFC || '-')}</td>
+      <td>${escapeHtml(conta.variavelFixa || '-')}</td>
+      <td>${escapeHtml(conta.cmaCmv || '-')}</td>
       <td class="text-right">
         <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">✎</button>
         <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">🗑</button>
@@ -229,7 +618,7 @@ function salvarContaContabil() {
 
   const conta = { codigo, nome, tipo, grupoDRE, subgrupoDRE, grupoDFC, variavelFixa, cmaCmv };
 
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -262,7 +651,7 @@ function confirmExcluirConta() {
   contaIndexParaExcluir = null;
   ModalManager.close('modal-confirm-conta');
   showLoading('Excluindo...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -292,8 +681,8 @@ function loadCanais() {
 
   tbody.innerHTML = appData.canais.map((canal, index) => `
     <tr>
-      <td><strong>${canal.codigo}</strong></td>
-      <td>${canal.nome}</td>
+      <td><strong>${escapeHtml(canal.codigo)}</strong></td>
+      <td>${escapeHtml(canal.nome)}</td>
       <td>
         <span class="badge badge-${canal.ativo === false ? 'secondary' : 'success'}">
           ${canal.ativo === false ? 'Inativo' : 'Ativo'}
@@ -344,7 +733,7 @@ function salvarCanal() {
   showLoading('Salvando canal...');
   const canal = { codigo, nome, ativo };
 
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -365,7 +754,7 @@ function excluirCanal(index) {
 
 function alternarCanal(index, ativar) {
   showLoading(ativar ? 'Ativando canal...' : 'Inativando canal...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -392,7 +781,7 @@ function confirmExcluirCanal() {
   canalIndexParaExcluir = null;
   ModalManager.close('modal-confirm-canal');
   showLoading('Excluindo...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -422,8 +811,8 @@ function loadFiliais() {
 
   tbody.innerHTML = appData.filiais.map((filial, index) => `
     <tr>
-      <td><strong>${filial.codigo}</strong></td>
-      <td>${filial.nome}</td>
+      <td><strong>${escapeHtml(filial.codigo)}</strong></td>
+      <td>${escapeHtml(filial.nome)}</td>
       <td>
         <span class="badge badge-${filial.ativo === false ? 'secondary' : 'success'}">
           ${filial.ativo === false ? 'Inativo' : 'Ativo'}
@@ -474,7 +863,7 @@ function salvarFilial() {
   showLoading('Salvando filial...');
   const filial = { codigo, nome, ativo };
 
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -495,7 +884,7 @@ function excluirFilial(index) {
 
 function alternarFilial(index, ativar) {
   showLoading(ativar ? 'Ativando filial...' : 'Inativando filial...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -522,7 +911,7 @@ function confirmExcluirFilial() {
   filialIndexParaExcluir = null;
   ModalManager.close('modal-confirm-filial');
   showLoading('Excluindo...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -543,7 +932,7 @@ let usuarioIndexParaExcluir = null;
 
 function loadUsuarios() {
   showLoading();
-  google.script.run
+  gasRun
     .withSuccessHandler(usuarios => {
       hideLoading();
       usuariosData = usuarios || [];
@@ -564,10 +953,10 @@ function renderUsuarios() {
 
   tbody.innerHTML = usuariosData.map((user, index) => `
     <tr>
-      <td>${user.email}</td>
-      <td>${user.nome}</td>
+      <td>${escapeHtml(user.email)}</td>
+      <td>${escapeHtml(user.nome)}</td>
       <td><span class="badge badge-${getPerfilBadge(user.perfil)}">${getPerfilLabel(user.perfil)}</span></td>
-      <td><span class="badge badge-${user.status === 'ATIVO' ? 'success' : 'secondary'}">${user.status}</span></td>
+      <td><span class="badge badge-${user.status === 'ATIVO' ? 'success' : 'secondary'}">${escapeHtml(user.status)}</span></td>
       <td>${user.ultimoAcesso ? formatDate(user.ultimoAcesso) : 'Nunca'}</td>
       <td class="text-right">
         <button class="btn btn-sm btn-secondary" onclick="editarUsuario(${index})" title="Editar">✎</button>
@@ -645,7 +1034,7 @@ function salvarUsuario() {
   showLoading();
   closeModalUsuario();
 
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {
@@ -678,7 +1067,7 @@ function confirmExcluirUsuario() {
   usuarioIndexParaExcluir = null;
   ModalManager.close('modal-confirm-usuario');
   showLoading('Excluindo...');
-  google.script.run
+  gasRun
     .withSuccessHandler(result => {
       hideLoading();
       if (result.success) {

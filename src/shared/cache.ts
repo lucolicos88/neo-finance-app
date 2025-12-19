@@ -12,6 +12,7 @@
  */
 
 const DEFAULT_TTL_SECONDS = 3600; // 1 hora
+const INDEX_PREFIX = '__cache_index__:';
 
 /**
  * Enum para tipos de cache disponíveis
@@ -40,6 +41,59 @@ function getCacheInstance(scope: CacheScope): GoogleAppsScript.Cache.Cache {
  */
 function buildCacheKey(namespace: string, key: string): string {
   return `${namespace}:${key}`;
+}
+
+function getProperties(scope: CacheScope): GoogleAppsScript.Properties.Properties {
+  switch (scope) {
+    case CacheScope.USER:
+      return PropertiesService.getUserProperties();
+    case CacheScope.SCRIPT:
+    default:
+      return PropertiesService.getScriptProperties();
+  }
+}
+
+function getIndexPropertyKey(namespace: string): string {
+  return `${INDEX_PREFIX}${namespace}`;
+}
+
+function readNamespaceIndex(namespace: string, scope: CacheScope): string[] {
+  try {
+    const props = getProperties(scope);
+    const raw = props.getProperty(getIndexPropertyKey(namespace));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeNamespaceIndex(namespace: string, scope: CacheScope, keys: string[]): void {
+  const props = getProperties(scope);
+  props.setProperty(getIndexPropertyKey(namespace), JSON.stringify(keys));
+}
+
+function trackKey(namespace: string, key: string, scope: CacheScope): void {
+  try {
+    const existing = readNamespaceIndex(namespace, scope);
+    if (existing.includes(key)) return;
+    existing.push(key);
+    writeNamespaceIndex(namespace, scope, existing);
+  } catch (error) {
+    console.error(`Erro ao atualizar index do cache [${namespace}:${key}]:`, error);
+  }
+}
+
+function untrackKey(namespace: string, key: string, scope: CacheScope): void {
+  try {
+    const existing = readNamespaceIndex(namespace, scope);
+    const next = existing.filter((k) => k !== key);
+    if (next.length === existing.length) return;
+    writeNamespaceIndex(namespace, scope, next);
+  } catch (error) {
+    console.error(`Erro ao remover key do index do cache [${namespace}:${key}]:`, error);
+  }
 }
 
 /**
@@ -105,6 +159,7 @@ export function cacheSet(
     const ttl = Math.min(ttlSeconds, 21600);
 
     cache.put(cacheKey, serialized, ttl);
+    trackKey(namespace, key, scope);
   } catch (error) {
     console.error(`Erro ao escrever cache [${namespace}:${key}]:`, error);
   }
@@ -122,6 +177,7 @@ export function cacheRemove(
     const cache = getCacheInstance(scope);
     const cacheKey = buildCacheKey(namespace, key);
     cache.remove(cacheKey);
+    untrackKey(namespace, key, scope);
   } catch (error) {
     console.error(`Erro ao remover cache [${namespace}:${key}]:`, error);
   }
@@ -141,7 +197,11 @@ export function cacheRemoveNamespace(
 ): void {
   try {
     const cache = getCacheInstance(scope);
-    cache.removeAll([namespace]);
+    const keys = readNamespaceIndex(namespace, scope);
+    if (keys.length > 0) {
+      cache.removeAll(keys.map((k) => buildCacheKey(namespace, k)));
+    }
+    getProperties(scope).deleteProperty(getIndexPropertyKey(namespace));
   } catch (error) {
     console.error(`Erro ao limpar namespace ${namespace}:`, error);
   }

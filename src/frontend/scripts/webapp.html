@@ -52,11 +52,48 @@ document.addEventListener('keydown', function(e) {
 // GLOBAL STATE
 // ============================================================================
 
-const currentUserInfo = {
-  email: 'lucolicos@gmail.com',
-  role: 'Administrador',
-  avatar: 'https://ui-avatars.com/api/?name=Administrador&background=29376F&color=fff&size=64'
+let currentUserInfo = {
+  email: '',
+  nome: '',
+  perfil: '',
+  avatarDataUrl: '',
+  permissoes: {
+    criarLancamentos: false,
+    editarLancamentos: false,
+    excluirLancamentos: false,
+    aprovarPagamentos: false,
+    visualizarRelatorios: false,
+    gerenciarConfig: false
+  }
 };
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createAvatarDataUrl(label) {
+  const text = String(label || '').trim() || 'U';
+  const initials = text
+    .split(/\\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(p => p[0].toUpperCase())
+    .join('');
+
+  const bg = '#29376F';
+  const fg = '#ffffff';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+    <rect width="80" height="80" rx="40" fill="${bg}"/>
+    <text x="50%" y="54%" text-anchor="middle" font-family="Segoe UI, Arial" font-size="28" fill="${fg}" font-weight="700">${escapeHtml(initials || 'U')}</text>
+  </svg>`;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 
 let currentView = 'dashboard';
 let appData = {
@@ -70,6 +107,47 @@ let appData = {
   centrosCusto: []
 };
 
+const correlationId = (() => {
+  try {
+    const k = 'neoFinanceCorrelationId';
+    const existing = sessionStorage.getItem(k);
+    if (existing) return existing;
+    const id = `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    sessionStorage.setItem(k, id);
+    return id;
+  } catch {
+    return `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+})();
+
+function getRequestContext() {
+  return {
+    __ctx: true,
+    correlationId,
+    view: currentView,
+    url: location && location.href ? String(location.href) : '',
+  };
+}
+
+function createGasRun() {
+  const wrap = (runner) =>
+    new Proxy(runner, {
+      get(target, prop) {
+        if (prop === 'withSuccessHandler' || prop === 'withFailureHandler' || prop === 'withUserObject') {
+          return (...args) => wrap(target[prop](...args));
+        }
+        const value = target[prop];
+        if (typeof value === 'function') {
+          return (...args) => value.apply(target, [...args, getRequestContext()]);
+        }
+        return value;
+      },
+    });
+  return wrap(google.script.run);
+}
+
+window.gasRun = createGasRun();
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -82,19 +160,74 @@ function initializeApp() {
   // Setup navigation
   setupNavigation();
 
-  // Load reference data
-  loadReferenceData();
+  Promise.allSettled([loadCurrentUserInfo(), loadReferenceData()]).finally(() => {
+    renderUserInfo();
+    if (currentUserInfo.permissoes?.visualizarRelatorios) {
+      navigateTo('dashboard');
+    } else {
+      const main = document.getElementById('main-content');
+      if (main) {
+        main.innerHTML = '<div class="empty-state"><div class="empty-state-message">Sem permissão para acessar o sistema</div><div class="empty-state-hint">Solicite acesso ao administrador.</div></div>';
+      }
+    }
+  });
+}
 
-  // Render user info
+function renderUserInfo() {
   const userEmail = document.getElementById('user-info-email');
   const userRole = document.getElementById('user-info-role');
   const userAvatar = document.getElementById('user-avatar');
-  if (userEmail) userEmail.textContent = currentUserInfo.email;
-  if (userRole) userRole.textContent = currentUserInfo.role;
-  if (userAvatar) userAvatar.src = currentUserInfo.avatar;
 
-  // Load initial view
-  navigateTo('dashboard');
+  const email = currentUserInfo.email || 'usuario@empresa.com';
+  const perfil = currentUserInfo.perfil || 'USUARIO';
+  const permissoes = currentUserInfo.permissoes || {};
+
+  if (userEmail) userEmail.textContent = email;
+  if (userRole) userRole.textContent = perfil;
+  if (userAvatar) {
+    userAvatar.src = currentUserInfo.avatarDataUrl || createAvatarDataUrl(currentUserInfo.nome || email);
+    userAvatar.alt = currentUserInfo.nome || email;
+  }
+
+  const setNavVisible = (view, visible) => {
+    const el = document.querySelector(`.nav-item[data-view="${view}"]`);
+    if (!el) return;
+    el.style.display = visible ? '' : 'none';
+  };
+
+  // Relatórios e visão geral
+  const canSeeReports = Boolean(permissoes.visualizarRelatorios);
+  setNavVisible('dashboard', canSeeReports);
+  setNavVisible('contas-pagar', canSeeReports);
+  setNavVisible('contas-receber', canSeeReports);
+  setNavVisible('conciliacao', canSeeReports);
+  setNavVisible('dre', canSeeReports);
+  setNavVisible('fluxo-caixa', canSeeReports);
+  setNavVisible('kpis', canSeeReports);
+
+  // Configurações
+  const canManageConfig = Boolean(permissoes.gerenciarConfig) || perfil === 'ADMIN';
+  setNavVisible('configuracoes', canManageConfig);
+}
+
+function loadCurrentUserInfo() {
+  return new Promise(resolve => {
+    window.gasRun
+      .withSuccessHandler(function(data) {
+        if (data && data.email) {
+          currentUserInfo.email = data.email;
+          currentUserInfo.nome = data.nome || '';
+          currentUserInfo.perfil = data.perfil || '';
+          currentUserInfo.permissoes = data.permissoes || currentUserInfo.permissoes;
+          currentUserInfo.avatarDataUrl = createAvatarDataUrl(data.nome || data.email);
+        }
+        resolve(data);
+      })
+      .withFailureHandler(function() {
+        resolve(null);
+      })
+      .getCurrentUserInfo();
+  });
 }
 
 // ============================================================================
@@ -113,6 +246,19 @@ function setupNavigation() {
 }
 
 function navigateTo(view) {
+  const perms = currentUserInfo.permissoes || {};
+  const canSeeReports = Boolean(perms.visualizarRelatorios);
+  const canManageConfig = Boolean(perms.gerenciarConfig) || currentUserInfo.perfil === 'ADMIN';
+
+  if (['dashboard','contas-pagar','contas-receber','conciliacao','dre','fluxo-caixa','kpis','relatorios'].includes(view) && !canSeeReports) {
+    showToast('Sem permissão para acessar relatórios', 'error');
+    return;
+  }
+  if (view === 'configuracoes' && !canManageConfig) {
+    showToast('Sem permissão para acessar configurações', 'error');
+    return;
+  }
+
   // Fechar modais ao trocar de view
   ModalManager.closeAll();
 
@@ -130,7 +276,7 @@ function navigateTo(view) {
 function loadView(view) {
   showLoading();
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(html) {
       document.getElementById('main-content').innerHTML = html;
       hideLoading();
@@ -162,7 +308,9 @@ function loadView(view) {
           loadKPIsData();
           break;
         case 'configuracoes':
-          loadConfiguracoesData();
+          if (currentUserInfo.permissoes?.gerenciarConfig || currentUserInfo.perfil === 'ADMIN') {
+            loadConfiguracoesData();
+          }
           break;
       }
     })
@@ -175,39 +323,43 @@ function loadView(view) {
 // ============================================================================
 
 function loadReferenceData() {
-  google.script.run
-    .withSuccessHandler(function(data) {
-      if (data) {
-        appData.filiais = data.filiais || [];
-        appData.canais = data.canais || [];
-        appData.contas = data.contas || [];
-        appData.centrosCusto = data.centrosCusto || [];
-        populateFilters();
+  return new Promise(resolve => {
+    window.gasRun
+      .withSuccessHandler(function(data) {
+        if (data) {
+          appData.filiais = data.filiais || [];
+          appData.canais = data.canais || [];
+          appData.contas = data.contas || [];
+          appData.centrosCusto = data.centrosCusto || [];
+          populateFilters();
 
-        // Reload config tables if on config view
-        if (currentView === 'configuracoes') {
-          loadConfiguracoesData();
+          if (currentView === 'configuracoes') {
+            loadConfiguracoesData();
+          }
+        } else {
+          console.error('getReferenceData retornou null');
+          showToast('Erro ao carregar dados de referência', 'error');
         }
-      } else {
-        console.error('getReferenceData retornou null');
-        showToast('Erro ao carregar dados de referência', 'error');
-      }
-    })
-    .withFailureHandler(function(error) {
-      console.error('Erro ao carregar dados de referência:', error);
-      handleError(error);
-    })
-    .getReferenceData();
+        resolve(data);
+      })
+      .withFailureHandler(function(error) {
+        console.error('Erro ao carregar dados de referência:', error);
+        handleError(error);
+        resolve(null);
+      })
+      .getReferenceData();
+  });
 }
 
 function populateFilters() {
   // Populate filial filters
   const filiaisSelects = document.querySelectorAll('#filter-cp-filial, #filter-cr-filial');
   filiaisSelects.forEach(select => {
-    select.innerHTML = '<option value="">Todas</option>';
+    const options = ['<option value="">Todas</option>'];
     appData.filiais.forEach(filial => {
-      select.innerHTML += `<option value="${filial.codigo}">${filial.nome}</option>`;
+      options.push(`<option value="${escapeHtml(filial.codigo)}">${escapeHtml(filial.nome)}</option>`);
     });
+    select.innerHTML = options.join('');
   });
 }
 
@@ -216,7 +368,7 @@ function populateFilters() {
 // ============================================================================
 
 function loadDashboardData() {
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(data) {
       if (!data) {
         handleError({ message: 'getDashboardData retornou vazio' });
@@ -244,6 +396,7 @@ function loadDashboardData() {
 
 function renderDashboardTransactions(transactions) {
   const tbody = document.getElementById('dashboard-transactions');
+  if (!tbody) return;
 
   if (!transactions || transactions.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum lançamento encontrado</td></tr>';
@@ -253,12 +406,12 @@ function renderDashboardTransactions(transactions) {
   tbody.innerHTML = transactions.map(t => `
     <tr>
       <td>${formatDate(t.data)}</td>
-      <td>${t.descricao}</td>
-      <td><span class="badge ${t.tipo === 'RECEITA' ? 'badge-success' : 'badge-danger'}">${t.tipo}</span></td>
+      <td>${escapeHtml(t.descricao)}</td>
+      <td><span class="badge ${t.tipo === 'RECEITA' ? 'badge-success' : 'badge-danger'}">${escapeHtml(t.tipo)}</span></td>
       <td class="${t.tipo === 'RECEITA' ? 'text-success' : 'text-danger'}">${formatCurrency(t.valor)}</td>
-      <td><span class="badge badge-${getStatusClass(t.status)}">${t.status}</span></td>
+      <td><span class="badge badge-${getStatusClass(t.status)}">${escapeHtml(t.status)}</span></td>
       <td>
-        <button class="btn btn-outline btn-sm" onclick="viewTransaction('${t.id}')">Ver</button>
+        <button class="btn btn-outline btn-sm" onclick="viewTransaction(${JSON.stringify(String(t.id))})">Ver</button>
       </td>
     </tr>
   `).join('');
@@ -266,16 +419,23 @@ function renderDashboardTransactions(transactions) {
 
 function renderDashboardAlerts(alerts) {
   const container = document.getElementById('dashboard-alerts');
+  if (!container) return;
 
   if (!alerts || alerts.length === 0) {
     container.innerHTML = '<p class="text-muted">Nenhum alerta no momento</p>';
     return;
   }
 
+  const normalizeType = (t) => {
+    const allowed = new Set(['danger', 'warning', 'info', 'success']);
+    const v = String(t || '').toLowerCase();
+    return allowed.has(v) ? v : 'info';
+  };
+
   container.innerHTML = alerts.map(alert => `
-    <div class="alert alert-${alert.type}" style="padding: 1rem; margin-bottom: 0.5rem; border-left: 4px solid; border-radius: 4px;">
-      <strong>${alert.title}</strong>
-      <p style="margin: 0.5rem 0 0 0;">${alert.message}</p>
+    <div class="alert alert-${normalizeType(alert.type)}" style="padding: 1rem; margin-bottom: 0.5rem; border-left: 4px solid; border-radius: 4px;">
+      <strong>${escapeHtml(alert.title)}</strong>
+      <p style="margin: 0.5rem 0 0 0;">${escapeHtml(alert.message)}</p>
     </div>
   `).join('');
 }
@@ -292,7 +452,7 @@ function refreshDashboard() {
 function loadContasPagarData() {
   showLoading();
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(data) {
       hideLoading();
       if (!data) {
@@ -320,6 +480,7 @@ function loadContasPagarData() {
 
 function renderContasPagarTable(contas) {
   const tbody = document.getElementById('table-contas-pagar');
+  if (!tbody) return;
   updateElement('cp-total-registros', contas.length);
 
   if (!contas || contas.length === 0) {
@@ -329,17 +490,17 @@ function renderContasPagarTable(contas) {
 
   tbody.innerHTML = contas.map(c => `
     <tr>
-      <td><input type="checkbox" class="select-cp" value="${c.id}"></td>
-      <td>${c.id}</td>
+      <td><input type="checkbox" class="select-cp" value="${escapeHtml(c.id)}"></td>
+      <td>${escapeHtml(c.id)}</td>
       <td>${formatDate(c.vencimento)}</td>
-      <td>${c.fornecedor}</td>
-      <td>${c.descricao}</td>
+      <td>${escapeHtml(c.fornecedor)}</td>
+      <td>${escapeHtml(c.descricao)}</td>
       <td class="text-danger">${formatCurrency(c.valor)}</td>
-      <td><span class="badge badge-${getStatusClass(c.status)}">${c.status}</span></td>
-      <td>${c.filial}</td>
+      <td><span class="badge badge-${getStatusClass(c.status)}">${escapeHtml(c.status)}</span></td>
+      <td>${escapeHtml(c.filial)}</td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="editContaPagar('${c.id}')">✏️</button>
-        <button class="btn btn-sm btn-success" onclick="pagarConta('${c.id}')" ${c.status !== 'PENDENTE' ? 'disabled' : ''}>✓</button>
+        <button class="btn btn-sm btn-outline" onclick="editContaPagar(${JSON.stringify(String(c.id))})">✏️</button>
+        <button class="btn btn-sm btn-success" onclick="pagarConta(${JSON.stringify(String(c.id))})" ${(c.status !== 'PENDENTE' || !currentUserInfo.permissoes?.aprovarPagamentos) ? 'disabled' : ''}>✓</button>
       </td>
     </tr>
   `).join('');
@@ -386,7 +547,7 @@ function pagarConta(id) {
   if (!confirm('Confirmar pagamento desta conta?')) return;
 
   showLoading();
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function() {
       hideLoading();
       showToast('Conta paga com sucesso', 'success');
@@ -406,7 +567,7 @@ function pagarEmLote() {
   if (!confirm(`Confirmar pagamento de ${selected.length} contas?`)) return;
 
   showLoading();
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function() {
       hideLoading();
       showToast(`${selected.length} contas pagas com sucesso`, 'success');
@@ -438,7 +599,7 @@ function cancelarEmLote() {
 function loadContasReceberData() {
   showLoading();
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(data) {
       hideLoading();
       if (!data) {
@@ -466,6 +627,7 @@ function loadContasReceberData() {
 
 function renderContasReceberTable(contas) {
   const tbody = document.getElementById('table-contas-receber');
+  if (!tbody) return;
   updateElement('cr-total-registros', contas.length);
 
   if (!contas || contas.length === 0) {
@@ -475,17 +637,17 @@ function renderContasReceberTable(contas) {
 
   tbody.innerHTML = contas.map(c => `
     <tr>
-      <td><input type="checkbox" class="select-cr" value="${c.id}"></td>
-      <td>${c.id}</td>
+      <td><input type="checkbox" class="select-cr" value="${escapeHtml(c.id)}"></td>
+      <td>${escapeHtml(c.id)}</td>
       <td>${formatDate(c.vencimento)}</td>
-      <td>${c.cliente}</td>
-      <td>${c.descricao}</td>
+      <td>${escapeHtml(c.cliente)}</td>
+      <td>${escapeHtml(c.descricao)}</td>
       <td class="text-success">${formatCurrency(c.valor)}</td>
-      <td><span class="badge badge-${getStatusClass(c.status)}">${c.status}</span></td>
-      <td>${c.canal}</td>
+      <td><span class="badge badge-${getStatusClass(c.status)}">${escapeHtml(c.status)}</span></td>
+      <td>${escapeHtml(c.canal)}</td>
       <td>
-        <button class="btn btn-sm btn-outline" onclick="editContaReceber('${c.id}')">✏️</button>
-        <button class="btn btn-sm btn-success" onclick="receberConta('${c.id}')" ${c.status !== 'PENDENTE' ? 'disabled' : ''}>✓</button>
+        <button class="btn btn-sm btn-outline" onclick="editContaReceber(${JSON.stringify(String(c.id))})">✏️</button>
+        <button class="btn btn-sm btn-success" onclick="receberConta(${JSON.stringify(String(c.id))})" ${(c.status !== 'PENDENTE' || !currentUserInfo.permissoes?.aprovarPagamentos) ? 'disabled' : ''}>✓</button>
       </td>
     </tr>
   `).join('');
@@ -516,7 +678,7 @@ function receberConta(id) {
   if (!confirm('Confirmar recebimento desta conta?')) return;
 
   showLoading();
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function() {
       hideLoading();
       showToast('Conta recebida com sucesso', 'success');
@@ -536,35 +698,22 @@ function receberEmLote() {
   if (!confirm(`Confirmar recebimento de ${selected.length} contas?`)) return;
 
   showLoading();
-
-  // Receber cada conta individualmente
-  let count = 0;
-  let errors = 0;
-
-  selected.forEach((id, index) => {
-    google.script.run
-      .withSuccessHandler(function() {
-        count++;
-        if (count + errors === selected.length) {
-          hideLoading();
-          if (errors === 0) {
-            showToast(`${count} contas recebidas com sucesso`, 'success');
-          } else {
-            showToast(`${count} contas recebidas, ${errors} com erro`, 'warning');
-          }
-          loadContasReceberData();
-        }
-      })
-      .withFailureHandler(function() {
-        errors++;
-        if (count + errors === selected.length) {
-          hideLoading();
-          showToast(`${count} contas recebidas, ${errors} com erro`, 'warning');
-          loadContasReceberData();
-        }
-      })
-      .receberConta(id);
-  });
+  window.gasRun
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast(result.message || 'Recebimento em lote concluído', 'success');
+      } else {
+        showToast(result && result.message ? result.message : 'Falha no recebimento em lote', 'warning');
+      }
+      loadContasReceberData();
+    })
+    .withFailureHandler(function(err) {
+      hideLoading();
+      handleError(err);
+      loadContasReceberData();
+    })
+    .receberContasEmLote(selected);
 }
 
 function cancelarReceberEmLote() {
@@ -589,7 +738,7 @@ function cancelarReceberEmLote() {
 function loadConciliacaoData() {
   showLoading();
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(data) {
       hideLoading();
       if (!data) {
@@ -619,6 +768,7 @@ function loadConciliacaoData() {
 
 function renderExtratosList(extratos) {
   const container = document.getElementById('extratos-list');
+  if (!container) return;
 
   if (!extratos || extratos.length === 0) {
     container.innerHTML = '<p class="text-muted text-center">Nenhum extrato pendente</p>';
@@ -626,15 +776,15 @@ function renderExtratosList(extratos) {
   }
 
   container.innerHTML = extratos.map(e => `
-    <div class="extrato-item" data-id="${e.id}" onclick="selectExtrato('${e.id}')">
+    <div class="extrato-item" data-id="${escapeHtml(e.id)}" onclick="selectExtrato(${JSON.stringify(String(e.id))})">
       <div class="item-header">
         <span class="item-date">${formatDate(e.data)}</span>
         <span class="item-value ${e.valor >= 0 ? 'positive' : 'negative'}">${formatCurrency(e.valor)}</span>
       </div>
-      <div class="item-description">${e.descricao}</div>
+      <div class="item-description">${escapeHtml(e.descricao)}</div>
       <div class="item-meta">
-        <span>🏦 ${e.banco}</span>
-        <span>📄 ${e.id}</span>
+        <span>🏦 ${escapeHtml(e.banco)}</span>
+        <span>📄 ${escapeHtml(e.id)}</span>
       </div>
     </div>
   `).join('');
@@ -642,6 +792,7 @@ function renderExtratosList(extratos) {
 
 function renderLancamentosList(lancamentos) {
   const container = document.getElementById('lancamentos-list');
+  if (!container) return;
 
   if (!lancamentos || lancamentos.length === 0) {
     container.innerHTML = '<p class="text-muted text-center">Nenhum lançamento pendente</p>';
@@ -649,15 +800,15 @@ function renderLancamentosList(lancamentos) {
   }
 
   container.innerHTML = lancamentos.map(l => `
-    <div class="lancamento-item" data-id="${l.id}" onclick="selectLancamento('${l.id}')">
+    <div class="lancamento-item" data-id="${escapeHtml(l.id)}" onclick="selectLancamento(${JSON.stringify(String(l.id))})">
       <div class="item-header">
         <span class="item-date">${formatDate(l.data)}</span>
         <span class="item-value ${l.tipo === 'RECEITA' ? 'positive' : 'negative'}">${formatCurrency(l.valor)}</span>
       </div>
-      <div class="item-description">${l.descricao}</div>
+      <div class="item-description">${escapeHtml(l.descricao)}</div>
       <div class="item-meta">
-        <span>📊 ${l.tipo}</span>
-        <span>📄 ${l.id}</span>
+        <span>📊 ${escapeHtml(l.tipo)}</span>
+        <span>📄 ${escapeHtml(l.id)}</span>
       </div>
     </div>
   `).join('');
@@ -668,15 +819,21 @@ let selectedLancamento = null;
 
 function selectExtrato(id) {
   document.querySelectorAll('.extrato-item').forEach(item => item.classList.remove('selected'));
-  document.querySelector(`.extrato-item[data-id="${id}"]`).classList.add('selected');
-  selectedExtrato = id;
+  const selectedId = String(id);
+  document.querySelectorAll('.extrato-item').forEach(item => {
+    item.classList.toggle('selected', item.dataset.id === selectedId);
+  });
+  selectedExtrato = selectedId;
   checkConciliacaoPossivel();
 }
 
 function selectLancamento(id) {
   document.querySelectorAll('.lancamento-item').forEach(item => item.classList.remove('selected'));
-  document.querySelector(`.lancamento-item[data-id="${id}"]`).classList.add('selected');
-  selectedLancamento = id;
+  const selectedId = String(id);
+  document.querySelectorAll('.lancamento-item').forEach(item => {
+    item.classList.toggle('selected', item.dataset.id === selectedId);
+  });
+  selectedLancamento = selectedId;
   checkConciliacaoPossivel();
 }
 
@@ -691,7 +848,7 @@ function checkConciliacaoPossivel() {
 function conciliar(extratoId, lancamentoId) {
   showLoading();
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function() {
       hideLoading();
       showToast('Conciliação realizada com sucesso', 'success');
@@ -708,7 +865,7 @@ function conciliarAutomatico() {
 
   showLoading('Processando conciliação automática...');
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
       showToast(`${result.conciliados} itens conciliados automaticamente`, 'success');
@@ -720,6 +877,7 @@ function conciliarAutomatico() {
 
 function renderHistoricoConciliacao(historico) {
   const tbody = document.getElementById('table-historico-conciliacao');
+  if (!tbody) return;
 
   if (!historico || historico.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma conciliação realizada</td></tr>';
@@ -729,14 +887,14 @@ function renderHistoricoConciliacao(historico) {
   tbody.innerHTML = historico.slice(0, 50).map(h => `
     <tr>
       <td>${formatDate(h.dataConciliacao)}</td>
-      <td>${h.extratoId}</td>
-      <td>${h.lancamentoId}</td>
-      <td>${h.descricao}</td>
+      <td>${escapeHtml(h.extratoId)}</td>
+      <td>${escapeHtml(h.lancamentoId)}</td>
+      <td>${escapeHtml(h.descricao)}</td>
       <td>${formatCurrency(h.valor)}</td>
-      <td>${h.banco}</td>
-      <td>${h.usuario || 'Sistema'}</td>
+      <td>${escapeHtml(h.banco)}</td>
+      <td>${escapeHtml(h.usuario || 'Sistema')}</td>
       <td>
-        <button class="btn btn-sm btn-danger" onclick="desfazerConciliacao('${h.extratoId}', '${h.lancamentoId}')">↩️</button>
+        <button class="btn btn-sm btn-danger" onclick="desfazerConciliacao(${JSON.stringify(String(h.extratoId))}, ${JSON.stringify(String(h.lancamentoId))})">↩️</button>
       </td>
     </tr>
   `).join('');
@@ -770,7 +928,7 @@ function loadDREData() {
   if (selectFilial && appData.filiais.length > 0) {
     selectFilial.innerHTML = '<option value="">Consolidado</option>';
     appData.filiais.forEach(filial => {
-      selectFilial.innerHTML += `<option value="${filial.codigo}">${filial.nome}</option>`;
+      selectFilial.innerHTML += `<option value="${escapeHtml(filial.codigo)}">${escapeHtml(filial.nome)}</option>`;
     });
   }
 
@@ -785,7 +943,7 @@ function carregarDRE() {
 
   showLoading('Calculando DRE...');
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(dre) {
       hideLoading();
       renderDRE(dre);
@@ -866,7 +1024,7 @@ function renderDRETable(dre) {
       <td>= MARGEM BRUTA</td>
       <td class="text-right text-success">${formatCurrency(v.margemBruta)}</td>
       <td class="text-right">${p.margemBruta.toFixed(1)}%</td>
-      <td class="text-center"><span class="badge badge-${getClassificacaoBadge(c.margemBruta)}">${c.margemBruta}</span></td>
+      <td class="text-center"><span class="badge badge-${getClassificacaoBadge(c.margemBruta)}">${escapeHtml(c.margemBruta)}</span></td>
     </tr>
 
     <!-- DESPESAS OPERACIONAIS -->
@@ -901,7 +1059,7 @@ function renderDRETable(dre) {
       <td>= EBITDA</td>
       <td class="text-right" style="color: ${v.ebitda >= 0 ? '#008060' : '#D72C0D'}">${formatCurrency(v.ebitda)}</td>
       <td class="text-right">${p.ebitda.toFixed(1)}%</td>
-      <td class="text-center"><span class="badge badge-${getClassificacaoBadge(c.ebitda)}">${c.ebitda}</span></td>
+      <td class="text-center"><span class="badge badge-${getClassificacaoBadge(c.ebitda)}">${escapeHtml(c.ebitda)}</span></td>
     </tr>
 
     <!-- RESULTADO FINANCEIRO -->
@@ -918,7 +1076,7 @@ function renderDRETable(dre) {
       <td>= LUCRO LÍQUIDO</td>
       <td class="text-right" style="color: ${v.lucroLiquido >= 0 ? '#008060' : '#D72C0D'}">${formatCurrency(v.lucroLiquido)}</td>
       <td class="text-right">${p.lucroLiquido.toFixed(1)}%</td>
-      <td class="text-center"><span class="badge badge-${getClassificacaoBadge(c.lucroLiquido)}">${c.lucroLiquido}</span></td>
+      <td class="text-center"><span class="badge badge-${getClassificacaoBadge(c.lucroLiquido)}">${escapeHtml(c.lucroLiquido)}</span></td>
     </tr>
   `;
 }
@@ -973,7 +1131,7 @@ function loadFluxoCaixaData() {
   if (selectFilial && appData.filiais.length > 0) {
     selectFilial.innerHTML = '<option value="">Consolidado</option>';
     appData.filiais.forEach(filial => {
-      selectFilial.innerHTML += `<option value="${filial.codigo}">${filial.nome}</option>`;
+      selectFilial.innerHTML += `<option value="${escapeHtml(filial.codigo)}">${escapeHtml(filial.nome)}</option>`;
     });
   }
 
@@ -991,7 +1149,7 @@ function carregarFluxoCaixa() {
 
   showLoading('Calculando Fluxo de Caixa...');
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(fc) {
       hideLoading();
       renderFluxoCaixa(fc);
@@ -1093,7 +1251,7 @@ function renderEntradasCategorias(fc) {
 
   tbody.innerHTML = entradas.map(e => `
     <tr>
-      <td>${e.categoria}</td>
+      <td>${escapeHtml(e.categoria)}</td>
       <td class="text-right">${formatCurrency(e.valor)}</td>
       <td class="text-right">${total > 0 ? (e.valor / total * 100).toFixed(1) : '0.0'}%</td>
     </tr>
@@ -1118,7 +1276,7 @@ function renderSaidasCategorias(fc) {
 
   tbody.innerHTML = saidas.map(s => `
     <tr>
-      <td>${s.categoria}</td>
+      <td>${escapeHtml(s.categoria)}</td>
       <td class="text-right">${formatCurrency(s.valor)}</td>
       <td class="text-right">${total > 0 ? (s.valor / total * 100).toFixed(1) : '0.0'}%</td>
     </tr>
@@ -1150,7 +1308,7 @@ function loadKPIsData() {
   if (selectFilial && appData.filiais.length > 0) {
     selectFilial.innerHTML = '<option value="">Consolidado</option>';
     appData.filiais.forEach(filial => {
-      selectFilial.innerHTML += `<option value="${filial.codigo}">${filial.nome}</option>`;
+      selectFilial.innerHTML += `<option value="${escapeHtml(filial.codigo)}">${escapeHtml(filial.nome)}</option>`;
     });
   }
 
@@ -1165,7 +1323,7 @@ function carregarKPIs() {
 
   showLoading('Calculando KPIs...');
 
-  google.script.run
+  window.gasRun
     .withSuccessHandler(function(kpis) {
       hideLoading();
       renderKPIs(kpis);
@@ -1271,14 +1429,14 @@ function renderKPIsDetalhado(kpis) {
 
   tbody.innerHTML = indicadores.map(ind => `
     <tr>
-      <td>${ind.nome}</td>
+      <td>${escapeHtml(ind.nome)}</td>
       <td class="text-right">${ind.atual}</td>
       <td class="text-right">${ind.anterior}</td>
       <td class="text-right" style="color: ${ind.variacao > 0 ? '#008060' : ind.variacao < 0 ? '#D72C0D' : '#666'}">
         ${ind.variacao !== 0 ? (ind.variacao > 0 ? '+' : '') + ind.variacao.toFixed(1) + ' p.p.' : '-'}
       </td>
       <td class="text-center">
-        <span class="badge badge-${getStatusBadge(ind.status)}">${ind.status}</span>
+        <span class="badge badge-${getStatusBadge(ind.status)}">${escapeHtml(ind.status)}</span>
       </td>
     </tr>
   `).join('');
@@ -1342,7 +1500,7 @@ function showLoading(message = 'Carregando...') {
   }
   // Evita cliques repetidos enquanto há operação em andamento
   document.body.classList.add('app-busy');
-  document.querySelectorAll('button, a').forEach(el => {
+  document.querySelectorAll('button').forEach(el => {
     el.dataset.prevDisabled = el.disabled ? 'true' : 'false';
     el.disabled = true;
   });
@@ -1352,7 +1510,7 @@ function hideLoading() {
   const overlay = document.getElementById('loading-overlay');
   if (overlay) overlay.style.display = 'none';
   document.body.classList.remove('app-busy');
-  document.querySelectorAll('button, a').forEach(el => {
+  document.querySelectorAll('button').forEach(el => {
     if (el.dataset.prevDisabled === 'false' || el.dataset.prevDisabled === undefined) {
       el.disabled = false;
     }
@@ -1362,11 +1520,12 @@ function hideLoading() {
 
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
+  if (!container) return;
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <span>${message}</span>
-  `;
+  const span = document.createElement('span');
+  span.textContent = String(message ?? '');
+  toast.appendChild(span);
   container.appendChild(toast);
 
   setTimeout(() => {
@@ -1377,8 +1536,56 @@ function showToast(message, type = 'info') {
 function handleError(error) {
   hideLoading();
   console.error('Error:', error);
-  showToast(error.message || 'Ocorreu um erro', 'error');
+  const message = (error && (error.message || error.toString())) ? String(error.message || error.toString()) : 'Ocorreu um erro';
+  if (message.toLowerCase().includes('sem permissão') || message.toLowerCase().includes('sem permissao')) {
+    showToast('Sem permissão para executar esta ação', 'error');
+    tryLogClientError({ message, view: currentView });
+    return;
+  }
+  tryLogClientError({ message, stack: error && error.stack ? String(error.stack) : undefined, view: currentView });
+  const refMatch = message.match(/\(ref:\s*([^)]+)\)/i);
+  const ref = refMatch ? refMatch[1].trim() : '';
+  if (ref) {
+    showToast(`Erro ao executar a ação. Ref: ${ref}`, 'error');
+  } else {
+    showToast(message, 'error');
+  }
 }
+
+function tryLogClientError(details) {
+  try {
+    window.gasRun
+      .withFailureHandler(function() {})
+      .logClientError({
+        message: String(details?.message || 'Erro no frontend'),
+        stack: details?.stack ? String(details.stack) : '',
+        view: details?.view ? String(details.view) : '',
+        url: location && location.href ? String(location.href) : '',
+        userAgent: navigator && navigator.userAgent ? String(navigator.userAgent) : '',
+        correlationId: correlationId
+      });
+  } catch {
+    // ignore
+  }
+}
+
+// Captura erros globais do frontend
+window.addEventListener('error', function(e) {
+  tryLogClientError({
+    message: e && e.message ? String(e.message) : 'Unhandled error',
+    stack: e && e.error && e.error.stack ? String(e.error.stack) : '',
+    view: currentView
+  });
+});
+
+window.addEventListener('unhandledrejection', function(e) {
+  const reason = e && e.reason ? e.reason : null;
+  tryLogClientError({
+    message: reason && (reason.message || reason.toString()) ? String(reason.message || reason.toString()) : 'Unhandled promise rejection',
+    stack: reason && reason.stack ? String(reason.stack) : '',
+    view: currentView
+  });
+});
 
 function toggleSelectAll(type) {
   const checked = document.getElementById(`select-all-${type}`).checked;

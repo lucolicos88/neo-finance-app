@@ -243,15 +243,30 @@ export function findRowByColumnValue(
   value: any
 ): number | null {
   try {
-    const values = getSheetValues(sheetName);
+    const ss = getSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
 
-    for (let i = 0; i < values.length; i++) {
-      if (values[i][columnIndex] === value) {
-        return i + 1; // +1 porque getSheetValues pode ter skipHeader
-      }
+    if (!sheet) {
+      throw new Error(`Aba "${sheetName}" nÇœo encontrada`);
     }
 
-    return null;
+    const lastRow = sheet.getLastRow();
+    if (lastRow === 0) {
+      return null;
+    }
+
+    const col = columnIndex + 1;
+    if (col < 1) {
+      throw new Error(`columnIndex invÇ­lido: ${columnIndex}`);
+    }
+
+    const range = sheet.getRange(1, col, lastRow, 1);
+    const found = range
+      .createTextFinder(String(value))
+      .matchEntireCell(true)
+      .findNext();
+
+    return found ? found.getRow() : null;
   } catch (error) {
     console.error(`Erro ao procurar valor na aba ${sheetName}:`, error);
     throw error;

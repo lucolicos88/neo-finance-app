@@ -4,9 +4,14 @@
 // ============================================================================
 
 let saveAndNew = false;
+const gasRun = (window && window.gasRun) ? window.gasRun : google.script.run;
 
 // Open modal
 function openNovaContaPagar() {
+  if (!currentUserInfo?.permissoes?.criarLancamentos) {
+    showToast('Sem permissão para criar lançamentos', 'error');
+    return;
+  }
   populateFormFiliais();
   populateFormCentrosCusto();
   populateFormContas();
@@ -17,6 +22,10 @@ function openNovaContaPagar() {
 }
 
 function openNovaContaReceber() {
+  if (!currentUserInfo?.permissoes?.criarLancamentos) {
+    showToast('Sem permissão para criar lançamentos', 'error');
+    return;
+  }
   populateFormFiliais();
   populateFormCanais();
   populateFormContas();
@@ -183,6 +192,10 @@ function salvarLancamento() {
 }
 
 function salvarContaPagar() {
+  if (!currentUserInfo?.permissoes?.criarLancamentos) {
+    showToast('Sem permissão para criar lançamentos', 'error');
+    return;
+  }
   // Validate
   if (!validateForm('form-novo-pagar', validationRulesPagar)) {
     showToast('Por favor, corrija os erros no formulário', 'warning');
@@ -224,7 +237,7 @@ function salvarContaPagar() {
   showLoading('Salvando lançamento...');
 
   // Call backend
-  google.script.run
+  gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
       if (result.success) {
@@ -256,6 +269,10 @@ function salvarContaPagar() {
 }
 
 function salvarContaReceber() {
+  if (!currentUserInfo?.permissoes?.criarLancamentos) {
+    showToast('Sem permissão para criar lançamentos', 'error');
+    return;
+  }
   // Validate
   if (!validateForm('form-novo-receber', validationRulesReceber)) {
     showToast('Por favor, corrija os erros no formulário', 'warning');
@@ -297,7 +314,7 @@ function salvarContaReceber() {
   showLoading('Salvando lançamento...');
 
   // Call backend
-  google.script.run
+  gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
       if (result.success) {

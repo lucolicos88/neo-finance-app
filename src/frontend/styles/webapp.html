@@ -13,6 +13,15 @@ body {
   overflow-x: hidden;
 }
 
+body.app-busy {
+  cursor: progress;
+}
+
+body.app-busy a,
+body.app-busy button {
+  pointer-events: none;
+}
+
 /* Navbar */
 .navbar {
   background: #ffffff;

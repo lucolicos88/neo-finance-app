@@ -18,6 +18,7 @@ import {
   pagarContasEmLote,
   getContasReceber,
   receberConta,
+  receberContasEmLote,
   salvarLancamento,
   getConciliacaoData,
   conciliarItens,
@@ -41,9 +42,24 @@ import {
   getFluxoCaixaProjecao,
   getKPIsMensal,
   getUsuarios,
+  getCurrentUserInfo,
+  logClientError,
+  logServerException,
+  getAuditLogEntries,
   salvarUsuario,
   excluirUsuario,
+  setRequestContext,
+  clearRequestContext,
+  logEndpointTiming,
+  runSmokeTests,
+  getAdminDiagnostics,
+  setAdminFlag,
+  clearCaches,
 } from './services/webapp-service';
+
+function isDebugApiEnabled(): boolean {
+  return PropertiesService.getScriptProperties().getProperty('ENABLE_DEBUG_API') === 'true';
+}
 
 /**
  * Função doGet - Entry point para web app
@@ -58,7 +74,7 @@ function doGet(e: any): GoogleAppsScript.HTML.HtmlOutput {
   // Ex.: /exec?api=dashboard
   try {
     const api = e?.parameter?.api;
-    if (api) {
+    if (api && isDebugApiEnabled()) {
       const respond = (payload: unknown) =>
         ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
           ContentService.MimeType.JSON
@@ -86,7 +102,7 @@ function doGet(e: any): GoogleAppsScript.HTML.HtmlOutput {
   const template = HtmlService.createTemplateFromFile('frontend/views/app');
   return template.evaluate()
     .setTitle('Neoformula Finance')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 
 /**
@@ -244,12 +260,19 @@ function setupTriggers(): void {
 
 function openWebApp(): void {
   const url = ScriptApp.getService().getUrl();
+  const urlJs = JSON.stringify(url);
+  const urlHtml = String(url)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
   const html = HtmlService.createHtmlOutput(
     `<html><body>
       <h2>Web App URL</h2>
       <p>Acesse a aplicação web no link abaixo:</p>
-      <p><a href="${url}" target="_blank">${url}</a></p>
-      <p><button onclick="window.open('${url}', '_blank')">Abrir Web App</button></p>
+      <p><a href="${urlHtml}" target="_blank" rel="noopener noreferrer">${urlHtml}</a></p>
+      <p><button onclick="window.open(${urlJs}, '_blank', 'noopener')">Abrir Web App</button></p>
       <br><p><small>Copie este link para acessar a aplicação de qualquer lugar.</small></p>
     </body></html>`
   ).setWidth(600).setHeight(200);
@@ -264,6 +287,36 @@ function openWebApp(): void {
  * e as move para o escopo global do Apps Script
  */
 declare var global: any;
+
+type RequestContext = { __ctx?: boolean; correlationId?: string; view?: string; url?: string } | null;
+
+function wrapApi<T extends (...args: any[]) => any>(name: string, fn: T): (...args: any[]) => any {
+  return (...rawArgs: any[]) => {
+    const args = rawArgs.slice();
+    const last = args.length ? args[args.length - 1] : null;
+    const ctx: RequestContext =
+      last && typeof last === 'object' && (last as any).__ctx ? (args.pop() as any) : null;
+
+    const startedAt = Date.now();
+    try {
+      setRequestContext(ctx);
+      return (fn as any)(...args);
+    } catch (error: any) {
+      const correlationId = ctx?.correlationId ? String(ctx.correlationId) : Utilities.getUuid();
+      logServerException(name, { correlationId, view: ctx?.view, url: ctx?.url }, error);
+      const message = error?.message ? String(error.message) : String(error);
+      throw new Error(`${message} (ref: ${correlationId})`);
+    } finally {
+      const durationMs = Date.now() - startedAt;
+      if (durationMs >= 2000) {
+        try {
+          logEndpointTiming(name, durationMs);
+        } catch (_) {}
+      }
+      clearRequestContext();
+    }
+  };
+}
 
 global.doGet = doGet;
 global.include = includeFile;
@@ -282,46 +335,54 @@ global.setupAllSampleData = setupAllSampleData;
 global.openWebApp = openWebApp;
 
 // Web App API Functions
-global.getViewHtml = getViewHtml;
-global.getReferenceData = getReferenceData;
-global.getDashboardData = getDashboardData;
-global.getContasPagar = getContasPagar;
-global.pagarConta = pagarConta;
-global.pagarContasEmLote = pagarContasEmLote;
-global.getContasReceber = getContasReceber;
-global.receberConta = receberConta;
-global.salvarLancamento = salvarLancamento;
-global.getConciliacaoData = getConciliacaoData;
-global.conciliarItens = conciliarItens;
-global.conciliarAutomatico = conciliarAutomatico;
-global.toggleCentroCusto = toggleCentroCusto;
-global.seedPlanoContasFromList = seedPlanoContasFromList;
+global.getViewHtml = wrapApi('getViewHtml', getViewHtml);
+global.getReferenceData = wrapApi('getReferenceData', getReferenceData);
+global.getDashboardData = wrapApi('getDashboardData', getDashboardData);
+global.getContasPagar = wrapApi('getContasPagar', getContasPagar);
+global.pagarConta = wrapApi('pagarConta', pagarConta);
+global.pagarContasEmLote = wrapApi('pagarContasEmLote', pagarContasEmLote);
+global.getContasReceber = wrapApi('getContasReceber', getContasReceber);
+global.receberConta = wrapApi('receberConta', receberConta);
+global.receberContasEmLote = wrapApi('receberContasEmLote', receberContasEmLote);
+global.salvarLancamento = wrapApi('salvarLancamento', salvarLancamento);
+global.getConciliacaoData = wrapApi('getConciliacaoData', getConciliacaoData);
+global.conciliarItens = wrapApi('conciliarItens', conciliarItens);
+global.conciliarAutomatico = wrapApi('conciliarAutomatico', conciliarAutomatico);
+global.toggleCentroCusto = wrapApi('toggleCentroCusto', toggleCentroCusto);
+global.seedPlanoContasFromList = wrapApi('seedPlanoContasFromList', seedPlanoContasFromList);
 
 // Configurações CRUD
-global.salvarCentroCusto = salvarCentroCusto;
-global.excluirCentroCusto = excluirCentroCusto;
-global.salvarContaContabil = salvarContaContabil;
-global.excluirConta = excluirConta;
-global.salvarCanal = salvarCanal;
-global.excluirCanal = excluirCanal;
-global.toggleCanal = toggleCanal;
-global.salvarFilial = salvarFilial;
-global.excluirFilial = excluirFilial;
-global.toggleFilial = toggleFilial;
+global.salvarCentroCusto = wrapApi('salvarCentroCusto', salvarCentroCusto);
+global.excluirCentroCusto = wrapApi('excluirCentroCusto', excluirCentroCusto);
+global.salvarContaContabil = wrapApi('salvarContaContabil', salvarContaContabil);
+global.excluirConta = wrapApi('excluirConta', excluirConta);
+global.salvarCanal = wrapApi('salvarCanal', salvarCanal);
+global.excluirCanal = wrapApi('excluirCanal', excluirCanal);
+global.toggleCanal = wrapApi('toggleCanal', toggleCanal);
+global.salvarFilial = wrapApi('salvarFilial', salvarFilial);
+global.excluirFilial = wrapApi('excluirFilial', excluirFilial);
+global.toggleFilial = wrapApi('toggleFilial', toggleFilial);
 
 // DRE Functions
-global.getDREMensal = getDREMensal;
-global.getDREComparativo = getDREComparativo;
-global.getDREPorFilial = getDREPorFilial;
+global.getDREMensal = wrapApi('getDREMensal', getDREMensal);
+global.getDREComparativo = wrapApi('getDREComparativo', getDREComparativo);
+global.getDREPorFilial = wrapApi('getDREPorFilial', getDREPorFilial);
 
 // Fluxo de Caixa Functions
-global.getFluxoCaixaMensal = getFluxoCaixaMensal;
-global.getFluxoCaixaProjecao = getFluxoCaixaProjecao;
+global.getFluxoCaixaMensal = wrapApi('getFluxoCaixaMensal', getFluxoCaixaMensal);
+global.getFluxoCaixaProjecao = wrapApi('getFluxoCaixaProjecao', getFluxoCaixaProjecao);
 
 // KPIs Functions
-global.getKPIsMensal = getKPIsMensal;
+global.getKPIsMensal = wrapApi('getKPIsMensal', getKPIsMensal);
 
 // Usuários Functions
-global.getUsuarios = getUsuarios;
-global.salvarUsuario = salvarUsuario;
-global.excluirUsuario = excluirUsuario;
+global.getUsuarios = wrapApi('getUsuarios', getUsuarios);
+global.getCurrentUserInfo = wrapApi('getCurrentUserInfo', getCurrentUserInfo);
+global.logClientError = logClientError;
+global.getAuditLogEntries = wrapApi('getAuditLogEntries', getAuditLogEntries);
+global.salvarUsuario = wrapApi('salvarUsuario', salvarUsuario);
+global.excluirUsuario = wrapApi('excluirUsuario', excluirUsuario);
+global.runSmokeTests = wrapApi('runSmokeTests', runSmokeTests);
+global.getAdminDiagnostics = wrapApi('getAdminDiagnostics', getAdminDiagnostics);
+global.setAdminFlag = wrapApi('setAdminFlag', setAdminFlag);
+global.clearCaches = wrapApi('clearCaches', clearCaches);

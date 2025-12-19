@@ -10,6 +10,7 @@
     <button class="tab" data-tab-group="config" data-tab="canais">🛍 Canais de Venda</button>
     <button class="tab" data-tab-group="config" data-tab="filiais">🏢 Filiais</button>
     <button class="tab" data-tab-group="config" data-tab="usuarios">👥 Usuários</button>
+    <button class="tab" data-tab-group="config" data-tab="logs">Logs</button>
   </div>
 </div>
 
@@ -37,6 +38,101 @@
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Logs -->
+<div class="tab-content" data-tab-content="config" data-content="logs">
+  <div class="card">
+    <div class="card-header">
+      <h3>Logs (Auditoria)</h3>
+    </div>
+    <div class="card-body">
+      <p class="text-muted" style="margin-bottom: 1rem;">Disponível apenas para administradores.</p>
+      <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 1rem;">
+        <div>
+          <label class="form-label" for="logs-query">Pesquisar</label>
+          <input id="logs-query" class="form-control" type="text" placeholder="email, ação, mensagem..." oninput="applyLogsFilter()" />
+        </div>
+        <div>
+          <label class="form-label" for="logs-email">Email</label>
+          <input id="logs-email" class="form-control" type="text" placeholder="usuario@empresa.com" oninput="applyLogsFilter()" />
+        </div>
+        <div>
+          <label class="form-label" for="logs-action">Ação</label>
+          <input id="logs-action" class="form-control" type="text" placeholder="ex: salvarLancamento" oninput="applyLogsFilter()" />
+        </div>
+        <div>
+          <label class="form-label" for="logs-ref">Ref</label>
+          <input id="logs-ref" class="form-control" type="text" placeholder="correlationId" oninput="applyLogsFilter()" />
+        </div>
+        <div>
+          <label class="form-label" for="logs-status">Status</label>
+          <select id="logs-status" class="form-control" onchange="applyLogsFilter()">
+            <option value="">Todos</option>
+            <option value="ok">OK</option>
+            <option value="erro">Erro</option>
+          </select>
+        </div>
+        <div style="margin-left:auto;">
+          <button class="btn btn-secondary" onclick="refreshLogs()">Atualizar</button>
+          <button class="btn btn-secondary" onclick="searchLogsServer()">Buscar no servidor</button>
+          <button class="btn btn-primary" onclick="exportLogsCsv()">Exportar CSV</button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Email</th>
+              <th>Ação</th>
+              <th>Status</th>
+              <th>Ref</th>
+              <th>Mensagem</th>
+              <th>Payload</th>
+            </tr>
+          </thead>
+          <tbody id="table-logs">
+            <tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top: 1.25rem;">
+  <div class="card-header">
+    <h3>Diagnósticos</h3>
+    <div style="display:flex; gap: 0.5rem; margin-left:auto;">
+      <button class="btn btn-primary" onclick="runSmokeTestsUi()">Rodar Smoke Tests</button>
+      <button class="btn btn-secondary" onclick="copySmokeTestsOutput()">Copiar Resultado</button>
+    </div>
+  </div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-bottom: 0.75rem;">Use para validar rapidamente o backend (ADMIN). Se falhar, envie o resultado para análise.</p>
+    <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 0.75rem;">
+      <div>
+        <label class="form-label">ENABLE_DEBUG_API</label>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <input id="flag-enable-debug-api" type="checkbox" onchange="toggleAdminFlag('ENABLE_DEBUG_API', this.checked)" />
+          <span class="text-muted" style="font-size:0.85rem;">Habilita endpoint `?api=` no `doGet`</span>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">ENABLE_SEED_DATA</label>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <input id="flag-enable-seed-data" type="checkbox" onchange="toggleAdminFlag('ENABLE_SEED_DATA', this.checked)" />
+          <span class="text-muted" style="font-size:0.85rem;">Permite seed automático em abas vazias</span>
+        </div>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:0.5rem;">
+        <button class="btn btn-secondary" onclick="loadAdminDiagnostics()">Atualizar Flags</button>
+        <button class="btn btn-warning" onclick="clearCachesUi()">Limpar Caches</button>
+      </div>
+    </div>
+    <pre id="smoke-tests-output" style="white-space: pre-wrap; margin: 0; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa;">Clique em "Rodar Smoke Tests".</pre>
   </div>
 </div>
 
