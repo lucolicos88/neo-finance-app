@@ -19,6 +19,7 @@ import {
   Money,
   LedgerEntry,
   LedgerEntryStatus,
+  LedgerEntryType,
   ReportFilter,
 } from '../shared/types';
 import { listEntries } from './ledger-service';
@@ -106,11 +107,13 @@ export function calculateDRE(period: Period, branchId: BranchId | null = null): 
 
   // Agrupa lançamentos por grupo DRE
   for (const entry of entries) {
-    const account = getAccountByCode(entry.contaGerencial);
-    if (!account) continue;
+    const accountCode = entry.contaContabil || entry.contaGerencial;
+    const account = accountCode ? getAccountByCode(accountCode) : null;
 
-    const group = account.grupoDRE;
-    const subGroup = account.subgrupoDRE;
+    const group =
+      account?.grupoDRE ||
+      (entry.tipo === LedgerEntryType.RECEBER ? DRE_GROUPS.RECEITA_BRUTA : DRE_GROUPS.DESPESAS_OPERACIONAIS);
+    const subGroup = account?.subgrupoDRE || null;
 
     const current = groupTotals.get(group) || 0;
     groupTotals.set(group, current + entry.valorLiquido);

@@ -20,6 +20,7 @@ import {
   Money,
   LedgerEntry,
   LedgerEntryStatus,
+  LedgerEntryType,
 } from '../shared/types';
 import { listEntries } from './ledger-service';
 import { sumMoney } from '../shared/money-utils';
@@ -59,12 +60,13 @@ export function calculateRealCashflow(period: Period): CashflowLine[] {
     }
 
     // Determina categoria baseado na conta gerencial
-    const account = getAccountByCode(entry.contaGerencial);
+    const accountCode = entry.contaContabil || entry.contaGerencial;
+    const account = accountCode ? getAccountByCode(accountCode) : null;
     const category: CashflowCategory = account?.grupoDFC || CashflowCategory.OPERACIONAL;
 
     // Determina tipo (entrada ou saída)
     const type: CashflowType =
-      entry.tipo === 'RECEBER' ? CashflowType.ENTRADA : CashflowType.SAIDA;
+      entry.tipo === LedgerEntryType.RECEBER ? CashflowType.ENTRADA : CashflowType.SAIDA;
 
     const line: CashflowLine = {
       date: entry.pagamento,
@@ -163,11 +165,12 @@ export function calculateForecastCashflow(
     });
 
     for (const entry of periodEntries) {
-      const account = getAccountByCode(entry.contaGerencial);
+      const accountCode = entry.contaContabil || entry.contaGerencial;
+      const account = accountCode ? getAccountByCode(accountCode) : null;
       const category: CashflowCategory = account?.grupoDFC || CashflowCategory.OPERACIONAL;
 
       const type: CashflowType =
-        entry.tipo === 'RECEBER' ? CashflowType.ENTRADA : CashflowType.SAIDA;
+        entry.tipo === LedgerEntryType.RECEBER ? CashflowType.ENTRADA : CashflowType.SAIDA;
 
       const line: CashflowLine = {
         date: entry.vencimento!,
