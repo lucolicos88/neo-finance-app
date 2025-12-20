@@ -27,7 +27,13 @@ import {
   Period,
 } from '../shared/types';
 import { validateLedgerEntry, isPeriodLocked } from '../shared/validation';
-import { formatDateISO, parseDateISO, dateToPeriod } from '../shared/date-utils';
+import {
+  formatDateISO,
+  parseDateISO,
+  dateToPeriod,
+  getFirstDayOfPeriod,
+  getLastDayOfPeriod,
+} from '../shared/date-utils';
 import { ConfigService } from './config-service';
 
 // ============================================================================
@@ -220,6 +226,11 @@ export function listEntries(filter: LedgerFilter = {}): LedgerEntry[] {
   const values = getSheetValues(Sheets.TB_LANCAMENTOS, { skipHeader: true });
   const entries: LedgerEntry[] = [];
 
+  const startDate = filter.periodStart ? getFirstDayOfPeriod(filter.periodStart) : null;
+  const endDate = filter.periodEnd ? getLastDayOfPeriod(filter.periodEnd) : null;
+  if (startDate) startDate.setHours(0, 0, 0, 0);
+  if (endDate) endDate.setHours(23, 59, 59, 999);
+
   for (const row of values) {
     if (!row || row.length === 0) continue;
 
@@ -233,7 +244,12 @@ export function listEntries(filter: LedgerFilter = {}): LedgerEntry[] {
     if (filter.status && entry.status !== filter.status) continue;
     if (filter.contaGerencial && entry.contaGerencial !== filter.contaGerencial) continue;
 
-    // TODO: Filtrar por período (periodStart, periodEnd)
+    if (startDate || endDate) {
+      const competencia = entry.competencia ? new Date(entry.competencia) : null;
+      if (!competencia || isNaN(competencia.getTime())) continue;
+      if (startDate && competencia < startDate) continue;
+      if (endDate && competencia > endDate) continue;
+    }
 
     entries.push(entry);
   }

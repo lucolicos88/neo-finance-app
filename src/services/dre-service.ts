@@ -22,7 +22,7 @@ import {
   ReportFilter,
 } from '../shared/types';
 import { listEntries } from './ledger-service';
-import { getAccountByCode } from './reference-data-service';
+import { getAccountByCode, getActiveBranches } from './reference-data-service';
 import { sumMoney, calculatePercentage } from '../shared/money-utils';
 
 // ============================================================================
@@ -96,7 +96,8 @@ export function calculateDRE(period: Period, branchId: BranchId | null = null): 
   // Busca lançamentos realizados do período
   const entries = listEntries({
     status: LedgerEntryStatus.REALIZADO,
-    // TODO: Filtrar por período (competência)
+    periodStart: period,
+    periodEnd: period,
     ...(branchId && { filial: branchId }),
   });
 
@@ -181,11 +182,10 @@ export function calculateMultiBranchDRE(
   }
 
   // DRE por filial
-  // TODO: Buscar lista de filiais ativas e calcular para cada uma
-  // const branches = getActiveBranches();
-  // for (const branch of branches) {
-  //   statements.push(calculateDRE(period, branch.id));
-  // }
+  const branches = getActiveBranches();
+  for (const branch of branches) {
+    statements.push(calculateDRE(period, branch.id));
+  }
 
   return statements;
 }

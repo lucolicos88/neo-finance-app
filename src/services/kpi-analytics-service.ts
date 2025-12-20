@@ -21,12 +21,14 @@ import {
   DashboardData,
   ReportFilter,
   LedgerEntryStatus,
+  LedgerEntryType,
 } from '../shared/types';
 import { calculatePercentage, sumMoney } from '../shared/money-utils';
 import { BenchmarkRange, KPIMetric, getBenchmarkRange } from '../config/benchmarks';
 import { getAllBenchmarks } from './reference-data-service';
 import { calculateDRE } from './dre-service';
 import { listEntries } from './ledger-service';
+import { getFirstDayOfPeriod } from '../shared/date-utils';
 
 // ============================================================================
 // CÁLCULO DE KPIs
@@ -151,7 +153,8 @@ function calculateDescontoMedio(
     status: LedgerEntryStatus.REALIZADO,
     ...(branchId && { filial: branchId }),
     ...(channelId && { canal: channelId }),
-    // TODO: Filtrar por período
+    periodStart: period,
+    periodEnd: period,
   });
 
   let totalBruto = 0;
@@ -204,11 +207,9 @@ export function getDashboardData(period: Period, branchId: BranchId | null = nul
   const dre = calculateDRE(period, branchId);
   const kpis = calculateKPIs(period, branchId);
 
-  // TODO: Calcular saldo de caixa real
-  const saldoCaixa = 0;
+  const saldoCaixa = calculateSaldoCaixa(period, branchId);
 
-  // TODO: Buscar top despesas
-  const topDespesas: Array<{ descricao: string; valor: Money }> = [];
+  const topDespesas = getTopDespesas(period, branchId);
 
   return {
     period,
@@ -227,6 +228,46 @@ export function getDashboardData(period: Period, branchId: BranchId | null = nul
     })),
     topDespesas,
   };
+}
+
+function calculateSaldoCaixa(period: Period, branchId: BranchId | null): Money {
+  const entries = listEntries({
+    status: LedgerEntryStatus.REALIZADO,
+    ...(branchId && { filial: branchId }),
+  });
+  const startDate = getFirstDayOfPeriod(period);
+  startDate.setHours(0, 0, 0, 0);
+
+  let saldo = 0;
+  for (const entry of entries) {
+    if (!entry.pagamento) continue;
+    const pagamento = new Date(entry.pagamento);
+    if (pagamento >= startDate) continue;
+    if (entry.tipo === LedgerEntryType.RECEBER) saldo += entry.valorLiquido;
+    else if (entry.tipo === LedgerEntryType.PAGAR) saldo -= entry.valorLiquido;
+  }
+  return saldo;
+}
+
+function getTopDespesas(period: Period, branchId: BranchId | null): Array<{ descricao: string; valor: Money }> {
+  const entries = listEntries({
+    status: LedgerEntryStatus.REALIZADO,
+    tipo: LedgerEntryType.PAGAR,
+    periodStart: period,
+    periodEnd: period,
+    ...(branchId && { filial: branchId }),
+  });
+
+  const totals = new Map<string, Money>();
+  for (const entry of entries) {
+    const key = String(entry.descricao || 'Sem descrição');
+    totals.set(key, (totals.get(key) || 0) + entry.valorLiquido);
+  }
+
+  return Array.from(totals.entries())
+    .map(([descricao, valor]) => ({ descricao, valor }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 10);
 }
 
 /**

@@ -19,6 +19,7 @@ import { calculateDRE } from './dre-service';
 import { calculateKPIs } from './kpi-analytics-service';
 import { calculateRealCashflow } from './cashflow-service';
 import { listEntries } from './ledger-service';
+import { getActiveBranches } from './reference-data-service';
 
 // ============================================================================
 // ESTRUTURAS DE RELATÓRIOS
@@ -101,7 +102,8 @@ export function generateFaturamentoReport(period: Period): FaturamentoReport {
   const entries = listEntries({
     status: LedgerEntryStatus.REALIZADO,
     tipo: LedgerEntryType.RECEBER,
-    // TODO: Filtrar por período
+    periodStart: period,
+    periodEnd: period,
   });
 
   let receitaBrutaTotal = 0;
@@ -122,6 +124,17 @@ export function generateFaturamentoReport(period: Period): FaturamentoReport {
     }
   }
 
+  const previousPeriod = getPreviousPeriod(period);
+  const previousEntries = listEntries({
+    status: LedgerEntryStatus.REALIZADO,
+    tipo: LedgerEntryType.RECEBER,
+    periodStart: previousPeriod,
+    periodEnd: previousPeriod,
+  });
+  const receitaAnterior = previousEntries.reduce((sum, e) => sum + e.valorBruto, 0);
+  const variacao = receitaBrutaTotal - receitaAnterior;
+  const variacaoPct = receitaAnterior ? (variacao / receitaAnterior) * 100 : 0;
+
   return {
     period,
     receitaBrutaTotal,
@@ -134,8 +147,8 @@ export function generateFaturamentoReport(period: Period): FaturamentoReport {
       valor,
     })),
     comparativoMesAnterior: {
-      variacao: 0, // TODO: Calcular
-      variacaoPct: 0, // TODO: Calcular
+      variacao,
+      variacaoPct,
     },
   };
 }
@@ -146,8 +159,15 @@ export function generateFaturamentoReport(period: Period): FaturamentoReport {
 export function generateDREReport(period: Period): DREReport {
   const dreConsolidado = calculateDRE(period, null);
 
-  // TODO: Calcular DRE por filial
-  const porFilial: Array<{ filial: BranchId; receitaLiquida: Money; ebitda: Money }> = [];
+  const branches = getActiveBranches();
+  const porFilial = branches.map((branch) => {
+    const dre = calculateDRE(period, branch.id);
+    return {
+      filial: branch.id,
+      receitaLiquida: dre.summary.receitaLiquida,
+      ebitda: dre.summary.ebitda,
+    };
+  });
 
   return {
     period,
@@ -204,8 +224,7 @@ export function generateDFCReport(period: Period): DFCReport {
     }
   }
 
-  // TODO: Calcular saldo inicial e final real
-  const saldoInicial = 0;
+  const saldoInicial = calculateSaldoInicial(period);
   const variacao =
     entradasOperacionais -
     saidasOperacionais +
@@ -260,6 +279,29 @@ export function generateCommitteeReport(period: Period): {
     dfc: generateDFCReport(period),
     kpis: generateKPIReport(period),
   };
+}
+
+function getPreviousPeriod(period: Period): Period {
+  if (period.month === 1) {
+    return { year: period.year - 1, month: 12 };
+  }
+  return { year: period.year, month: period.month - 1 };
+}
+
+function calculateSaldoInicial(period: Period): Money {
+  const entries = listEntries({ status: LedgerEntryStatus.REALIZADO });
+  const startDate = new Date(period.year, period.month - 1, 1);
+  startDate.setHours(0, 0, 0, 0);
+
+  let saldo = 0;
+  for (const entry of entries) {
+    if (!entry.pagamento) continue;
+    const pagamento = new Date(entry.pagamento);
+    if (pagamento >= startDate) continue;
+    if (entry.tipo === LedgerEntryType.RECEBER) saldo += entry.valorLiquido;
+    else if (entry.tipo === LedgerEntryType.PAGAR) saldo -= entry.valorLiquido;
+  }
+  return saldo;
 }
 
 // ============================================================================
