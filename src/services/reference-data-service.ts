@@ -29,6 +29,7 @@ import {
   CashflowCategory,
   RevenueGroup,
 } from '../shared/types';
+import { BenchmarkConfig, MetricUnit } from '../config/benchmarks';
 
 // ============================================================================
 // PLANO DE CONTAS
@@ -330,16 +331,41 @@ export function getNatureById(id: string): Nature | null {
  *
  * TODO: Implementar parsing completo da estrutura de benchmarks
  */
-function loadBenchmarksFromSheet(): any[] {
+function loadBenchmarksFromSheet(): BenchmarkConfig[] {
   const values = getSheetValues(Sheets.CFG_BENCHMARKS, { skipHeader: true });
-  // TODO: Parsear para BenchmarkConfig[]
-  return values;
+  const benchmarks: BenchmarkConfig[] = [];
+
+  const toNumber = (value: any): number => {
+    const n = Number(String(value || '').replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  for (const row of values) {
+    if (!row || row.length === 0) continue;
+    const metric = String(row[0] || '').trim();
+    if (!metric) continue;
+    const unit = String(row[1] || MetricUnit.PERCENT) as MetricUnit;
+
+    benchmarks.push({
+      metric,
+      unit,
+      ranges: {
+        SENSACIONAL: { min: toNumber(row[2]), max: toNumber(row[3]) },
+        EXCELENTE: { min: toNumber(row[4]), max: toNumber(row[5]) },
+        BOM: { min: toNumber(row[6]), max: toNumber(row[7]) },
+        RUIM: { min: toNumber(row[8]), max: toNumber(row[9]) },
+        PESSIMO: { min: toNumber(row[10]), max: toNumber(row[11]) },
+      },
+    });
+  }
+
+  return benchmarks;
 }
 
 /**
  * Obtém todos os benchmarks (com cache)
  */
-export function getAllBenchmarks(): any[] {
+export function getAllBenchmarks(): BenchmarkConfig[] {
   return cacheGetOrLoad(
     CacheNamespace.BENCHMARKS,
     'all',

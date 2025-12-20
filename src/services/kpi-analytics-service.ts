@@ -24,8 +24,8 @@ import {
   LedgerEntryType,
 } from '../shared/types';
 import { calculatePercentage, sumMoney } from '../shared/money-utils';
-import { BenchmarkRange, KPIMetric, getBenchmarkRange } from '../config/benchmarks';
-import { getAllBenchmarks } from './reference-data-service';
+import { BenchmarkRange, KPIMetric, getBenchmarkRange, BenchmarkConfig } from '../config/benchmarks';
+import { getAllBenchmarks, getAccountByCode } from './reference-data-service';
 import { calculateDRE } from './dre-service';
 import { listEntries } from './ledger-service';
 import { getFirstDayOfPeriod } from '../shared/date-utils';
@@ -65,71 +65,91 @@ export function calculateKPIs(
   // Calcula DRE do período
   const dre = calculateDRE(period, branchId);
 
-  // TODO: Buscar benchmarks
-  // const benchmarks = getAllBenchmarks();
+  const benchmarkMap = getBenchmarkMap();
+  const withBenchmark = (
+    metric: KPIMetric,
+    value: number,
+    fallbackRange: BenchmarkRange,
+    fallbackUnit: string
+  ): { range: BenchmarkRange; unit: string } => {
+    const benchmark = benchmarkMap.get(metric);
+    if (!benchmark) {
+      return { range: fallbackRange, unit: fallbackUnit };
+    }
+    return {
+      range: getBenchmarkRange(value, benchmark),
+      unit: benchmark.unit,
+    };
+  };
 
   // ========================================================================
   // KPI: Desconto Médio
   // ========================================================================
   const descontoMedio = calculateDescontoMedio(period, branchId, channelId);
+  const descontoBench = withBenchmark(KPIMetric.DESCONTO_MEDIO, descontoMedio, BenchmarkRange.BOM, '%');
   kpis.push({
     metric: KPIMetric.DESCONTO_MEDIO,
     value: descontoMedio,
-    range: BenchmarkRange.BOM, // TODO: Aplicar benchmark real
-    unit: '%',
+    range: descontoBench.range,
+    unit: descontoBench.unit,
   });
 
   // ========================================================================
   // KPI: CMA (Custo de Mercadoria Adquirida)
   // ========================================================================
   const cma = calculateCMA(period, branchId);
+  const cmaBench = withBenchmark(KPIMetric.CMA, cma, BenchmarkRange.BOM, 'R$/UNID');
   kpis.push({
     metric: KPIMetric.CMA,
     value: cma,
-    range: BenchmarkRange.BOM,
-    unit: 'R$/UNID',
+    range: cmaBench.range,
+    unit: cmaBench.unit,
   });
 
   // ========================================================================
   // KPI: CMV (Custo de Mercadoria Vendida)
   // ========================================================================
   const cmv = calculateCMV(period, branchId);
+  const cmvBench = withBenchmark(KPIMetric.CMV, cmv, BenchmarkRange.BOM, 'R$/UNID');
   kpis.push({
     metric: KPIMetric.CMV,
     value: cmv,
-    range: BenchmarkRange.BOM,
-    unit: 'R$/UNID',
+    range: cmvBench.range,
+    unit: cmvBench.unit,
   });
 
   // ========================================================================
   // KPI: Margem Bruta
   // ========================================================================
   const margemBruta = calculatePercentage(dre.summary.lucroBruto, dre.summary.receitaLiquida);
+  const margemBrutaBench = withBenchmark(KPIMetric.MARGEM_BRUTA, margemBruta, BenchmarkRange.EXCELENTE, '%');
   kpis.push({
     metric: KPIMetric.MARGEM_BRUTA,
     value: margemBruta,
-    range: BenchmarkRange.EXCELENTE,
-    unit: '%',
+    range: margemBrutaBench.range,
+    unit: margemBrutaBench.unit,
   });
 
   // ========================================================================
   // KPI: EBITDA %
   // ========================================================================
+  const ebitdaBench = withBenchmark(KPIMetric.EBITDA_PCT, dre.summary.ebitdaPct, BenchmarkRange.BOM, '%');
   kpis.push({
     metric: KPIMetric.EBITDA_PCT,
     value: dre.summary.ebitdaPct,
-    range: BenchmarkRange.BOM,
-    unit: '%',
+    range: ebitdaBench.range,
+    unit: ebitdaBench.unit,
   });
 
   // ========================================================================
   // KPI: Margem Líquida
   // ========================================================================
+  const margemLiquidaBench = withBenchmark(KPIMetric.MARGEM_LIQUIDA, dre.summary.margemLiquida, BenchmarkRange.BOM, '%');
   kpis.push({
     metric: KPIMetric.MARGEM_LIQUIDA,
     value: dre.summary.margemLiquida,
-    range: BenchmarkRange.BOM,
-    unit: '%',
+    range: margemLiquidaBench.range,
+    unit: margemLiquidaBench.unit,
   });
 
   return kpis;
@@ -176,9 +196,7 @@ function calculateDescontoMedio(
  * TODO: Implementar cálculo real baseado em contas CMA
  */
 function calculateCMA(period: Period, branchId: BranchId | null): number {
-  // TODO: Filtrar lançamentos com cmaCmv = 'CMA'
-  // TODO: Dividir por quantidade de unidades adquiridas
-  return 0;
+  return calculateCmaCmv(period, branchId, 'CMA');
 }
 
 /**
@@ -187,9 +205,7 @@ function calculateCMA(period: Period, branchId: BranchId | null): number {
  * TODO: Implementar cálculo real baseado em contas CMV
  */
 function calculateCMV(period: Period, branchId: BranchId | null): number {
-  // TODO: Filtrar lançamentos com cmaCmv = 'CMV'
-  // TODO: Dividir por quantidade de unidades vendidas
-  return 0;
+  return calculateCmaCmv(period, branchId, 'CMV');
 }
 
 // ============================================================================
@@ -268,6 +284,42 @@ function getTopDespesas(period: Period, branchId: BranchId | null): Array<{ desc
     .map(([descricao, valor]) => ({ descricao, valor }))
     .sort((a, b) => b.valor - a.valor)
     .slice(0, 10);
+}
+
+function getBenchmarkMap(): Map<KPIMetric, BenchmarkConfig> {
+  const benchmarks = getAllBenchmarks();
+  const map = new Map<KPIMetric, BenchmarkConfig>();
+  benchmarks.forEach((b) => {
+    const metric = String(b.metric || '').trim() as KPIMetric;
+    if (!metric) return;
+    map.set(metric, b);
+  });
+  return map;
+}
+
+function calculateCmaCmv(period: Period, branchId: BranchId | null, kind: 'CMA' | 'CMV'): number {
+  const entries = listEntries({
+    status: LedgerEntryStatus.REALIZADO,
+    tipo: LedgerEntryType.PAGAR,
+    periodStart: period,
+    periodEnd: period,
+    ...(branchId && { filial: branchId }),
+  });
+
+  let total = 0;
+  let count = 0;
+  for (const entry of entries) {
+    const accountCode = entry.contaContabil || entry.contaGerencial;
+    if (!accountCode) continue;
+    const account = getAccountByCode(accountCode);
+    const cmaCmv = String(account?.cmaCmv || '').toUpperCase();
+    if (cmaCmv !== kind) continue;
+    total += entry.valorLiquido;
+    count++;
+  }
+
+  if (count === 0) return 0;
+  return total / count;
 }
 
 /**
