@@ -8,6 +8,13 @@
 import { Money, LedgerEntry, Period } from './types';
 import { isFuture, isWithinRetroactiveLimit, diffDays } from './date-utils';
 import { isPositive } from './money-utils';
+import { getSheetValues } from './sheets-client';
+import {
+  SHEET_REF_FILIAIS,
+  SHEET_REF_CANAIS,
+  SHEET_REF_CCUSTO,
+  SHEET_REF_PLANO_CONTAS,
+} from '../config/sheet-mapping';
 
 /**
  * Resultado de validação
@@ -195,7 +202,19 @@ export function validateLedgerEntry(
   if (!entry.contaGerencial) errors.push('Conta gerencial é obrigatória');
   if (!entry.descricao) errors.push('Descrição é obrigatória');
 
-  // TODO: Validar se filial, canal, centroCusto, contaGerencial existem nas REF_*
+  const refs = getReferenceSets();
+  if (entry.filial && refs.filiais.size > 0 && !refs.filiais.has(String(entry.filial))) {
+    errors.push(`Filial inválida: ${entry.filial}`);
+  }
+  if (entry.canal && refs.canais.size > 0 && !refs.canais.has(String(entry.canal))) {
+    errors.push(`Canal inválido: ${entry.canal}`);
+  }
+  if (entry.centroCusto && refs.centrosCusto.size > 0 && !refs.centrosCusto.has(String(entry.centroCusto))) {
+    errors.push(`Centro de custo inválido: ${entry.centroCusto}`);
+  }
+  if (entry.contaContabil && refs.contasContabeis.size > 0 && !refs.contasContabeis.has(String(entry.contaContabil))) {
+    errors.push(`Conta contábil inválida: ${entry.contaContabil}`);
+  }
 
   return errors.length > 0 ? validationError(errors) : validationSuccess();
 }
@@ -206,8 +225,85 @@ export function validateLedgerEntry(
  * TODO: Implementar lógica de períodos fechados via config ou tabela
  */
 export function isPeriodLocked(period: Period): boolean {
-  // TODO: Consultar tabela de períodos fechados ou config
-  return false;
+  const locked = getLockedPeriods();
+  if (locked.size === 0) return false;
+  const key = `${period.year}-${String(period.month).padStart(2, '0')}`;
+  return locked.has(key);
+}
+
+type ReferenceSets = {
+  filiais: Set<string>;
+  canais: Set<string>;
+  centrosCusto: Set<string>;
+  contasContabeis: Set<string>;
+};
+
+function getReferenceSets(): ReferenceSets {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('refsets:v1');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached) as Record<string, string[]>;
+      return {
+        filiais: new Set(parsed.filiais || []),
+        canais: new Set(parsed.canais || []),
+        centrosCusto: new Set(parsed.centrosCusto || []),
+        contasContabeis: new Set(parsed.contasContabeis || []),
+      };
+    } catch (_) {
+      // ignore cache parse errors
+    }
+  }
+
+  const filiais = readReferenceSet(SHEET_REF_FILIAIS);
+  const canais = readReferenceSet(SHEET_REF_CANAIS);
+  const centrosCusto = readReferenceSet(SHEET_REF_CCUSTO);
+  const contasContabeis = readReferenceSet(SHEET_REF_PLANO_CONTAS);
+
+  const payload = JSON.stringify({
+    filiais: Array.from(filiais),
+    canais: Array.from(canais),
+    centrosCusto: Array.from(centrosCusto),
+    contasContabeis: Array.from(contasContabeis),
+  });
+  cache.put('refsets:v1', payload, 600);
+
+  return { filiais, canais, centrosCusto, contasContabeis };
+}
+
+function readReferenceSet(sheetName: string): Set<string> {
+  try {
+    const rows = getSheetValues(sheetName, { skipHeader: true });
+    const set = new Set<string>();
+    for (const row of rows) {
+      const value = row && row.length > 0 ? String(row[0] || '').trim() : '';
+      if (value) set.add(value);
+    }
+    return set;
+  } catch (_e) {
+    return new Set();
+  }
+}
+
+function getLockedPeriods(): Set<string> {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('locked_periods:v1');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached) as string[];
+      return new Set(parsed || []);
+    } catch (_) {
+      // ignore cache parse errors
+    }
+  }
+
+  const raw = PropertiesService.getScriptProperties().getProperty('LOCKED_PERIODS') || '';
+  const items = raw
+    .split(',')
+    .map((s) => String(s || '').trim())
+    .filter(Boolean);
+  cache.put('locked_periods:v1', JSON.stringify(items), 600);
+  return new Set(items);
 }
 
 /**

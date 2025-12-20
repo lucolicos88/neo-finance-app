@@ -274,8 +274,23 @@ export function markAsRealized(id: string, dataPagamento: Date): void {
  * TODO: Implementar tabela de períodos fechados
  */
 export function lockPeriod(period: Period): void {
-  // TODO: Adicionar período na tabela de períodos fechados
-  throw new Error('lockPeriod não implementado');
+  const key = `${period.year}-${String(period.month).padStart(2, '0')}`;
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(5000);
+  try {
+    const raw = props.getProperty('LOCKED_PERIODS') || '';
+    const items = raw
+      .split(',')
+      .map((s) => String(s || '').trim())
+      .filter(Boolean);
+    if (!items.includes(key)) items.push(key);
+    props.setProperty('LOCKED_PERIODS', items.sort().join(','));
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (_) {}
+  }
 }
 
 /**
@@ -284,6 +299,21 @@ export function lockPeriod(period: Period): void {
  * TODO: Implementar tabela de períodos fechados
  */
 export function unlockPeriod(period: Period): void {
-  // TODO: Remover período da tabela de períodos fechados
-  throw new Error('unlockPeriod não implementado');
+  const key = `${period.year}-${String(period.month).padStart(2, '0')}`;
+  const props = PropertiesService.getScriptProperties();
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(5000);
+  try {
+    const raw = props.getProperty('LOCKED_PERIODS') || '';
+    const items = raw
+      .split(',')
+      .map((s) => String(s || '').trim())
+      .filter(Boolean)
+      .filter((p) => p !== key);
+    props.setProperty('LOCKED_PERIODS', items.sort().join(','));
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (_) {}
+  }
 }
