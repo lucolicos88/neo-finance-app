@@ -18,7 +18,13 @@ import { autoReconcile } from './reconciliation-service';
 import { calculateDRE, persistDREMensal, persistDREResumo } from './dre-service';
 import { calculateRealCashflow, persistRealCashflow } from './cashflow-service';
 import { calculateKPIs, persistKPIs } from './kpi-analytics-service';
-import { generateCommitteeReport } from './reporting-service';
+import {
+  generateCommitteeReport,
+  persistFaturamentoReport,
+  persistDREReport,
+  persistDFCReport,
+  persistKPIReport,
+} from './reporting-service';
 
 // ============================================================================
 // CONFIGURAÇÃO DE TRIGGERS
@@ -211,7 +217,10 @@ export function monthlyClosing(): void {
     // ========================================================================
     console.log('[4/5] Gerando relatórios de comitê...');
     const committeeReport = generateCommitteeReport(previousPeriod);
-    // TODO: Persistir relatórios em RPT_*
+    persistFaturamentoReport(committeeReport.faturamento);
+    persistDREReport(committeeReport.dre);
+    persistDFCReport(committeeReport.dfc);
+    persistKPIReport(committeeReport.kpis);
 
     checkExecutionTime(startTime, 'Relatórios');
 

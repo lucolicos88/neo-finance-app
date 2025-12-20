@@ -10,7 +10,7 @@
  * - Persistir em TB_DRE_MENSAL e TB_DRE_RESUMO
  */
 
-import { getSheetValues, setSheetValues, clearRange } from '../shared/sheets-client';
+import { getSheetValues, setSheetValues, clearRange, createSheetIfNotExists } from '../shared/sheets-client';
 import { Sheets } from '../config/sheet-mapping';
 import {
   DRELine,
@@ -203,6 +203,9 @@ export function calculateMultiBranchDRE(
  * TODO: Implementar lógica de merge (atualizar apenas o período específico)
  */
 export function persistDREMensal(statement: DREStatement): void {
+  const headers = ['Ano', 'Mes', 'Filial', 'Grupo', 'Subgrupo', 'Valor'];
+  createSheetIfNotExists(Sheets.TB_DRE_MENSAL, headers);
+
   // Agrupa linhas por grupo/subgrupo
   const aggregated = new Map<string, Money>();
 
@@ -227,15 +230,29 @@ export function persistDREMensal(statement: DREStatement): void {
     ]);
   }
 
-  // TODO: Encontrar range correto para atualizar apenas este período/filial
-  // clearRange(Sheets.TB_DRE_MENSAL, 'A2:Z');
-  // setSheetValues(Sheets.TB_DRE_MENSAL, 'A2', rows);
+  const existing = getSheetValues(Sheets.TB_DRE_MENSAL);
+  const filtered = existing.length > 1
+    ? existing.slice(1).filter((r) => !(r[0] === statement.period.year && r[1] === statement.period.month && String(r[2] || '') === String(statement.branchId || '')))
+    : [];
+
+  const allRows = [headers, ...filtered, ...rows];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(Sheets.TB_DRE_MENSAL);
+  if (!sheet) return;
+  sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > allRows.length) {
+    sheet.getRange(allRows.length + 1, 1, lastRow - allRows.length, headers.length).clearContent();
+  }
 }
 
 /**
  * Persiste resumo DRE na aba TB_DRE_RESUMO
  */
 export function persistDREResumo(statement: DREStatement): void {
+  const headers = ['Ano', 'Mes', 'Indicador', 'Valor'];
+  createSheetIfNotExists(Sheets.TB_DRE_RESUMO, headers);
+
   const rows: any[][] = [
     [statement.period.year, statement.period.month, 'RECEITA_BRUTA', statement.summary.receitaBruta],
     [statement.period.year, statement.period.month, 'RECEITA_LIQUIDA', statement.summary.receitaLiquida],
@@ -248,8 +265,20 @@ export function persistDREResumo(statement: DREStatement): void {
     [statement.period.year, statement.period.month, 'MARGEM_LIQUIDA', statement.summary.margemLiquida],
   ];
 
-  // TODO: Atualizar apenas este período
-  // setSheetValues(Sheets.TB_DRE_RESUMO, 'A2', rows);
+  const existing = getSheetValues(Sheets.TB_DRE_RESUMO);
+  const filtered = existing.length > 1
+    ? existing.slice(1).filter((r) => !(r[0] === statement.period.year && r[1] === statement.period.month))
+    : [];
+
+  const allRows = [headers, ...filtered, ...rows];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(Sheets.TB_DRE_RESUMO);
+  if (!sheet) return;
+  sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > allRows.length) {
+    sheet.getRange(allRows.length + 1, 1, lastRow - allRows.length, headers.length).clearContent();
+  }
 }
 
 // ============================================================================

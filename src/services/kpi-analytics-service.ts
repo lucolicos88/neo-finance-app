@@ -10,7 +10,7 @@
  * - Persistir em TB_KPI_RESUMO e TB_KPI_DETALHE
  */
 
-import { getSheetValues, setSheetValues } from '../shared/sheets-client';
+import { getSheetValues, setSheetValues, createSheetIfNotExists } from '../shared/sheets-client';
 import { Sheets } from '../config/sheet-mapping';
 import {
   KPILine,
@@ -366,6 +366,9 @@ export function persistKPIs(
   channelId: ChannelId | null,
   kpis: CalculatedKPI[]
 ): void {
+  const headers = ['Ano', 'Mes', 'Filial', 'Canal', 'Metric', 'Valor', 'Faixa'];
+  createSheetIfNotExists(Sheets.TB_KPI_RESUMO, headers);
+
   const rows = kpis.map((kpi) => [
     period.year,
     period.month,
@@ -376,8 +379,25 @@ export function persistKPIs(
     kpi.range,
   ]);
 
-  // TODO: Usar setSheetValues para atualizar range específico
-  // setSheetValues(Sheets.TB_KPI_RESUMO, 'A2', rows);
+  const existing = getSheetValues(Sheets.TB_KPI_RESUMO);
+  const filtered = existing.length > 1
+    ? existing.slice(1).filter((r) => {
+        const samePeriod = r[0] === period.year && r[1] === period.month;
+        const sameBranch = String(r[2] || '') === String(branchId || '');
+        const sameChannel = String(r[3] || '') === String(channelId || '');
+        return !(samePeriod && sameBranch && sameChannel);
+      })
+    : [];
+
+  const allRows = [headers, ...filtered, ...rows];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(Sheets.TB_KPI_RESUMO);
+  if (!sheet) return;
+  sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > allRows.length) {
+    sheet.getRange(allRows.length + 1, 1, lastRow - allRows.length, headers.length).clearContent();
+  }
 }
 
 /**

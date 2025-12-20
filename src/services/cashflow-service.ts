@@ -10,7 +10,7 @@
  * - Calcular saldo projetado
  */
 
-import { getSheetValues, setSheetValues, clearRange } from '../shared/sheets-client';
+import { getSheetValues, setSheetValues, clearRange, createSheetIfNotExists } from '../shared/sheets-client';
 import { Sheets } from '../config/sheet-mapping';
 import {
   CashflowLine,
@@ -90,8 +90,8 @@ export function calculateRealCashflow(period: Period): CashflowLine[] {
  * TODO: Implementar lógica de merge (não sobrescrever tudo)
  */
 export function persistRealCashflow(period: Period, lines: CashflowLine[]): void {
-  // TODO: Limpar apenas o período específico
-  // clearRange(Sheets.TB_DFC_REAL, 'A2:Z');
+  const headers = ['Data', 'Categoria', 'Tipo', 'Descricao', 'Valor', 'Conta'];
+  createSheetIfNotExists(Sheets.TB_DFC_REAL, headers);
 
   const rows = lines.map((line) => [
     formatDateISO(line.date),
@@ -102,8 +102,27 @@ export function persistRealCashflow(period: Period, lines: CashflowLine[]): void
     line.contaBancaria || '',
   ]);
 
-  // TODO: Usar appendRows ou atualizar range específico
-  // appendRows(Sheets.TB_DFC_REAL, rows);
+  const existing = getSheetValues(Sheets.TB_DFC_REAL);
+  const filtered = existing.length > 1
+    ? existing.slice(1).filter((r) => {
+        const raw = String(r[0] || '');
+        const parts = raw.split('-');
+        if (parts.length < 2) return true;
+        const year = Number(parts[0]);
+        const month = Number(parts[1]);
+        return !(year === period.year && month === period.month);
+      })
+    : [];
+
+  const allRows = [headers, ...filtered, ...rows];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(Sheets.TB_DFC_REAL);
+  if (!sheet) return;
+  sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
+  const lastRow = sheet.getLastRow();
+  if (lastRow > allRows.length) {
+    sheet.getRange(allRows.length + 1, 1, lastRow - allRows.length, headers.length).clearContent();
+  }
 }
 
 // ============================================================================

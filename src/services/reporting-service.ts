@@ -312,11 +312,10 @@ function calculateSaldoInicial(period: Period): Money {
  * Persiste relatório de faturamento em RPT_COMITE_FATURAMENTO
  */
 export function persistFaturamentoReport(report: FaturamentoReport): void {
-  // TODO: Formatar dados e escrever na aba
-  // clearRange(Sheets.RPT_COMITE_FATURAMENTO, 'A2:Z');
-
   const rows = [
     ['Receita Bruta Total', formatMoney(report.receitaBrutaTotal)],
+    ['Variacao Mes Anterior', formatMoney(report.comparativoMesAnterior.variacao)],
+    ['Variacao %', formatPercentage(report.comparativoMesAnterior.variacaoPct)],
     ['', ''],
     ['Por Filial', ''],
     ...report.receitaBrutaPorFilial.map((item) => [item.filial, formatMoney(item.valor)]),
@@ -325,28 +324,64 @@ export function persistFaturamentoReport(report: FaturamentoReport): void {
     ...report.receitaBrutaPorCanal.map((item) => [item.canal, formatMoney(item.valor)]),
   ];
 
-  // setSheetValues(Sheets.RPT_COMITE_FATURAMENTO, 'A2', rows);
+  clearRange(Sheets.RPT_COMITE_FATURAMENTO, 'A1:Z');
+  setSheetValues(Sheets.RPT_COMITE_FATURAMENTO, 'A1', rows);
 }
 
 /**
  * Persiste relatório DRE em RPT_COMITE_DRE
  */
 export function persistDREReport(report: DREReport): void {
-  // TODO: Formatar DRE em layout de comitê
+  const rows: any[][] = [
+    ['Resumo DRE', 'Valor'],
+    ['Receita Bruta', formatMoney(report.resumo.receitaBruta)],
+    ['Receita Liquida', formatMoney(report.resumo.receitaLiquida)],
+    ['Lucro Bruto', formatMoney(report.resumo.lucroBruto)],
+    ['EBITDA', formatMoney(report.resumo.ebitda)],
+    ['EBITDA %', formatPercentage(report.resumo.ebitdaPct)],
+    ['Lucro Liquido', formatMoney(report.resumo.lucroLiquido)],
+    ['Margem Liquida', formatPercentage(report.resumo.margemLiquida)],
+    ['', ''],
+    ['Por Filial', ''],
+    ['Filial', 'Receita Liquida', 'EBITDA'],
+    ...report.porFilial.map((item) => [item.filial, formatMoney(item.receitaLiquida), formatMoney(item.ebitda)]),
+  ];
+
+  clearRange(Sheets.RPT_COMITE_DRE, 'A1:Z');
+  setSheetValues(Sheets.RPT_COMITE_DRE, 'A1', rows);
 }
 
 /**
  * Persiste relatório DFC em RPT_COMITE_DFC
  */
 export function persistDFCReport(report: DFCReport): void {
-  // TODO: Formatar DFC em layout de comitê
+  const rows: any[][] = [
+    ['DFC', 'Valor'],
+    ['Saldo Inicial', formatMoney(report.saldoInicial)],
+    ['Entradas Operacionais', formatMoney(report.entradasOperacionais)],
+    ['Saidas Operacionais', formatMoney(report.saidasOperacionais)],
+    ['Entradas Investimento', formatMoney(report.entradasInvestimento)],
+    ['Saidas Investimento', formatMoney(report.saidasInvestimento)],
+    ['Entradas Financiamento', formatMoney(report.entradasFinanciamento)],
+    ['Saidas Financiamento', formatMoney(report.saidasFinanciamento)],
+    ['Saldo Final', formatMoney(report.saldoFinal)],
+  ];
+
+  clearRange(Sheets.RPT_COMITE_DFC, 'A1:Z');
+  setSheetValues(Sheets.RPT_COMITE_DFC, 'A1', rows);
 }
 
 /**
  * Persiste relatório KPIs em RPT_COMITE_KPIS
  */
 export function persistKPIReport(report: KPIReport): void {
-  // TODO: Formatar KPIs em layout de comitê com cores de faixa
+  const rows: any[][] = [
+    ['KPI', 'Valor', 'Faixa', 'Unidade'],
+    ...report.kpis.map((kpi) => [kpi.metric, kpi.value, kpi.faixa, kpi.unit]),
+  ];
+
+  clearRange(Sheets.RPT_COMITE_KPIS, 'A1:Z');
+  setSheetValues(Sheets.RPT_COMITE_KPIS, 'A1', rows);
 }
 
 // ============================================================================
