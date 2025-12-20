@@ -22,6 +22,7 @@ import {
   receberContasEmLote,
   cancelarContasReceberEmLote,
   salvarLancamento,
+  atualizarLancamento,
   getLancamentoDetalhes,
   getConciliacaoData,
   conciliarItens,
@@ -351,6 +352,7 @@ global.receberConta = wrapApi('receberConta', receberConta);
 global.receberContasEmLote = wrapApi('receberContasEmLote', receberContasEmLote);
 global.cancelarContasReceberEmLote = wrapApi('cancelarContasReceberEmLote', cancelarContasReceberEmLote);
 global.salvarLancamento = wrapApi('salvarLancamento', salvarLancamento);
+global.atualizarLancamento = wrapApi('atualizarLancamento', atualizarLancamento);
 global.getLancamentoDetalhes = wrapApi('getLancamentoDetalhes', getLancamentoDetalhes);
 global.getConciliacaoData = wrapApi('getConciliacaoData', getConciliacaoData);
 global.conciliarItens = wrapApi('conciliarItens', conciliarItens);

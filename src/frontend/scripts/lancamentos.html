@@ -12,6 +12,8 @@ function openNovaContaPagar() {
     showToast('Sem permissão para criar lançamentos', 'error');
     return;
   }
+  setLancamentoModalMode('new');
+  clearEditIds();
   populateFormFiliais();
   populateFormCentrosCusto();
   populateFormContas();
@@ -26,6 +28,8 @@ function openNovaContaReceber() {
     showToast('Sem permissão para criar lançamentos', 'error');
     return;
   }
+  setLancamentoModalMode('new');
+  clearEditIds();
   populateFormFiliais();
   populateFormCanais();
   populateFormContas();
@@ -50,6 +54,25 @@ function resetForm(formId) {
     document.getElementById('pagar-valor-liquido').textContent = 'R$ 0,00';
   } else {
     document.getElementById('receber-valor-liquido').textContent = 'R$ 0,00';
+  }
+}
+
+function clearEditIds() {
+  const pagarEditId = document.getElementById('pagar-edit-id');
+  const receberEditId = document.getElementById('receber-edit-id');
+  if (pagarEditId) pagarEditId.value = '';
+  if (receberEditId) receberEditId.value = '';
+}
+
+function setLancamentoModalMode(mode) {
+  const title = document.getElementById('modal-lancamento-title');
+  const btnSalvarNovo = document.getElementById('btn-salvar-novo');
+  if (mode === 'edit') {
+    if (title) title.textContent = 'Editar Lancamento';
+    if (btnSalvarNovo) btnSalvarNovo.style.display = 'none';
+  } else {
+    if (title) title.textContent = 'Novo Lancamento';
+    if (btnSalvarNovo) btnSalvarNovo.style.display = '';
   }
 }
 
@@ -192,7 +215,13 @@ function salvarLancamento() {
 }
 
 function salvarContaPagar() {
-  if (!currentUserInfo?.permissoes?.criarLancamentos) {
+  const editId = document.getElementById('pagar-edit-id')?.value || '';
+  const isEdit = Boolean(editId);
+  if (isEdit && !currentUserInfo?.permissoes?.editarLancamentos) {
+    showToast('Sem permissão para editar lançamentos', 'error');
+    return;
+  }
+  if (!isEdit && !currentUserInfo?.permissoes?.criarLancamentos) {
     showToast('Sem permissão para criar lançamentos', 'error');
     return;
   }
@@ -210,7 +239,7 @@ function salvarContaPagar() {
   const valorLiquido = valor - desconto + juros + multa;
 
   const lancamento = {
-    id: generateId(),
+    id: editId || generateId(),
     dataCompetencia: document.getElementById('pagar-data-competencia').value,
     dataVencimento: document.getElementById('pagar-data-vencimento').value,
     dataPagamento: '',
@@ -237,19 +266,22 @@ function salvarContaPagar() {
   showLoading('Salvando lançamento...');
 
   // Call backend
+  const action = isEdit ? 'atualizarLancamento' : 'salvarLancamento';
   gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
       if (result.success) {
-        showToast('Conta a pagar salva com sucesso!', 'success');
+        showToast(isEdit ? 'Conta a pagar atualizada com sucesso!' : 'Conta a pagar salva com sucesso!', 'success');
 
-        if (saveAndNew) {
+        if (!isEdit && saveAndNew) {
           resetForm('form-novo-pagar');
           setDefaultDates('pagar');
           saveAndNew = false;
         } else {
           ModalManager.close('modal-novo-lancamento');
         }
+        clearEditIds();
+        setLancamentoModalMode('new');
 
         // Reload current view
         if (currentView === 'contas-pagar') {
@@ -265,11 +297,17 @@ function salvarContaPagar() {
       hideLoading();
       handleError(error);
     })
-    .salvarLancamento(lancamento);
+    [action](lancamento);
 }
 
 function salvarContaReceber() {
-  if (!currentUserInfo?.permissoes?.criarLancamentos) {
+  const editId = document.getElementById('receber-edit-id')?.value || '';
+  const isEdit = Boolean(editId);
+  if (isEdit && !currentUserInfo?.permissoes?.editarLancamentos) {
+    showToast('Sem permissão para editar lançamentos', 'error');
+    return;
+  }
+  if (!isEdit && !currentUserInfo?.permissoes?.criarLancamentos) {
     showToast('Sem permissão para criar lançamentos', 'error');
     return;
   }
@@ -287,7 +325,7 @@ function salvarContaReceber() {
   const valorLiquido = valor - desconto + juros + multa;
 
   const lancamento = {
-    id: generateId(),
+    id: editId || generateId(),
     dataCompetencia: document.getElementById('receber-data-competencia').value,
     dataVencimento: document.getElementById('receber-data-vencimento').value,
     dataPagamento: '',
@@ -314,19 +352,22 @@ function salvarContaReceber() {
   showLoading('Salvando lançamento...');
 
   // Call backend
+  const action = isEdit ? 'atualizarLancamento' : 'salvarLancamento';
   gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
       if (result.success) {
-        showToast('Conta a receber salva com sucesso!', 'success');
+        showToast(isEdit ? 'Conta a receber atualizada com sucesso!' : 'Conta a receber salva com sucesso!', 'success');
 
-        if (saveAndNew) {
+        if (!isEdit && saveAndNew) {
           resetForm('form-novo-receber');
           setDefaultDates('receber');
           saveAndNew = false;
         } else {
           ModalManager.close('modal-novo-lancamento');
         }
+        clearEditIds();
+        setLancamentoModalMode('new');
 
         // Reload current view
         if (currentView === 'contas-receber') {
@@ -342,7 +383,7 @@ function salvarContaReceber() {
       hideLoading();
       handleError(error);
     })
-    .salvarLancamento(lancamento);
+    [action](lancamento);
 }
 
 // Generate unique ID
@@ -354,23 +395,181 @@ function generateId() {
 
 // Edit functions
 function editContaPagar(id) {
-  showToast('Funcionalidade de edição em desenvolvimento', 'info');
-  // TODO: Implement edit modal
+  if (!currentUserInfo?.permissoes?.editarLancamentos) {
+    showToast('Sem permissão para editar lançamentos', 'error');
+    return;
+  }
+  showLoading();
+  gasRun
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      if (!data) {
+        showToast('Lançamento não encontrado', 'error');
+        return;
+      }
+      if (String(data.tipo || '').toUpperCase() !== 'DESPESA') {
+        showToast('Tipo inválido para contas a pagar', 'error');
+        return;
+      }
+      const status = String(data.status || '').toUpperCase();
+      if (status !== 'PENDENTE' && status !== 'VENCIDA') {
+        showToast(`Não é possível editar (status: ${status || 'N/A'})`, 'warning');
+        return;
+      }
+      setLancamentoModalMode('edit');
+      populateFormFiliais();
+      populateFormCentrosCusto();
+      populateFormContas();
+      switchTab('tipo-lancamento', 'pagar');
+      resetForm('form-novo-pagar');
+      preencherFormPagar(data);
+      ModalManager.open('modal-novo-lancamento');
+    })
+    .withFailureHandler(handleError)
+    .getLancamentoDetalhes(id);
 }
 
 function editContaReceber(id) {
-  showToast('Funcionalidade de edição em desenvolvimento', 'info');
-  // TODO: Implement edit modal
+  if (!currentUserInfo?.permissoes?.editarLancamentos) {
+    showToast('Sem permissão para editar lançamentos', 'error');
+    return;
+  }
+  showLoading();
+  gasRun
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      if (!data) {
+        showToast('Lançamento não encontrado', 'error');
+        return;
+      }
+      if (String(data.tipo || '').toUpperCase() !== 'RECEITA') {
+        showToast('Tipo inválido para contas a receber', 'error');
+        return;
+      }
+      const status = String(data.status || '').toUpperCase();
+      if (status !== 'PENDENTE' && status !== 'VENCIDA') {
+        showToast(`Não é possível editar (status: ${status || 'N/A'})`, 'warning');
+        return;
+      }
+      setLancamentoModalMode('edit');
+      populateFormFiliais();
+      populateFormCanais();
+      populateFormContas();
+      switchTab('tipo-lancamento', 'receber');
+      resetForm('form-novo-receber');
+      preencherFormReceber(data);
+      ModalManager.open('modal-novo-lancamento');
+    })
+    .withFailureHandler(handleError)
+    .getLancamentoDetalhes(id);
+}
+
+function setSelectValue(selectId, value, label) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const targetValue = String(value || '');
+  if (!targetValue) return;
+  const exists = Array.from(select.options).some(opt => opt.value === targetValue);
+  if (!exists) {
+    const option = document.createElement('option');
+    option.value = targetValue;
+    option.textContent = label || targetValue;
+    select.appendChild(option);
+  }
+  select.value = targetValue;
+}
+
+function preencherFormPagar(data) {
+  document.getElementById('pagar-edit-id').value = String(data.id || '');
+  document.getElementById('pagar-data-competencia').value = String(data.dataCompetencia || '').slice(0, 10);
+  document.getElementById('pagar-data-vencimento').value = String(data.dataVencimento || '').slice(0, 10);
+  document.getElementById('pagar-descricao').value = String(data.descricao || '');
+  document.getElementById('pagar-valor').value = String(data.valorBruto || 0);
+  document.getElementById('pagar-desconto').value = String(data.desconto || 0);
+  document.getElementById('pagar-juros').value = String(data.juros || 0);
+  document.getElementById('pagar-multa').value = String(data.multa || 0);
+  setSelectValue('pagar-filial', data.filial, data.filial);
+  setSelectValue('pagar-centro-custo', data.centroCusto, data.centroCusto);
+  setSelectValue('pagar-conta-contabil', data.contaContabil, data.contaContabil);
+  document.getElementById('pagar-observacoes').value = String(data.observacoes || '');
+  calcularValorLiquidoPagar();
+}
+
+function preencherFormReceber(data) {
+  document.getElementById('receber-edit-id').value = String(data.id || '');
+  document.getElementById('receber-data-competencia').value = String(data.dataCompetencia || '').slice(0, 10);
+  document.getElementById('receber-data-vencimento').value = String(data.dataVencimento || '').slice(0, 10);
+  document.getElementById('receber-descricao').value = String(data.descricao || '');
+  document.getElementById('receber-valor').value = String(data.valorBruto || 0);
+  document.getElementById('receber-desconto').value = String(data.desconto || 0);
+  document.getElementById('receber-juros').value = String(data.juros || 0);
+  document.getElementById('receber-multa').value = String(data.multa || 0);
+  setSelectValue('receber-filial', data.filial, data.filial);
+  setSelectValue('receber-canal', data.canal, data.canal);
+  setSelectValue('receber-conta-contabil', data.contaContabil, data.contaContabil);
+  document.getElementById('receber-observacoes').value = String(data.observacoes || '');
+  calcularValorLiquidoReceber();
 }
 
 // Export functions
 function exportContasPagar() {
-  showToast('Exportação em desenvolvimento', 'info');
-  // TODO: Implement export
+  const rows = [
+    ['ID', 'Vencimento', 'Fornecedor', 'Descricao', 'Valor', 'Status', 'Filial'],
+  ];
+  (appData.contasPagar || []).forEach(c => {
+    rows.push([
+      c.id,
+      c.vencimento,
+      c.fornecedor,
+      c.descricao,
+      String(c.valor || 0),
+      c.status,
+      c.filial,
+    ]);
+  });
+  downloadCsv('contas_pagar', rows);
 }
 
 function exportContasReceber() {
-  showToast('Exportação em desenvolvimento', 'info');
-  // TODO: Implement export
+  const rows = [
+    ['ID', 'Vencimento', 'Cliente', 'Descricao', 'Valor', 'Status', 'Canal'],
+  ];
+  (appData.contasReceber || []).forEach(c => {
+    rows.push([
+      c.id,
+      c.vencimento,
+      c.cliente,
+      c.descricao,
+      String(c.valor || 0),
+      c.status,
+      c.canal,
+    ]);
+  });
+  downloadCsv('contas_receber', rows);
+}
+
+function downloadCsv(prefix, rows) {
+  if (!rows || rows.length <= 1) {
+    showToast('Sem dados para exportar', 'warning');
+    return;
+  }
+  const escapeCell = (value) => {
+    const v = String(value ?? '');
+    if (/[\";\n\r]/.test(v)) {
+      return '"' + v.replace(/"/g, '""') + '"';
+    }
+    return v;
+  };
+  const csv = rows.map(r => r.map(escapeCell).join(';')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `${prefix}_${date}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 </script>

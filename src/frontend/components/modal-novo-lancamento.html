@@ -2,7 +2,7 @@
 <div class="modal-overlay" id="modal-novo-lancamento">
   <div class="modal">
     <div class="modal-header">
-      <h2 class="modal-title">Novo Lançamento</h2>
+      <h2 class="modal-title" id="modal-lancamento-title">Novo Lançamento</h2>
       <button class="modal-close" onclick="ModalManager.close('modal-novo-lancamento')">×</button>
     </div>
 
@@ -20,6 +20,7 @@
       <!-- Tab Content: Contas a Pagar -->
       <div class="tab-content active" data-tab-content="tipo-lancamento" data-content="pagar">
         <form id="form-novo-pagar">
+          <input type="hidden" id="pagar-edit-id">
           <div class="form-row">
             <div class="form-group required">
               <label class="form-label">Data de Competência</label>
@@ -127,6 +128,7 @@
       <!-- Tab Content: Contas a Receber -->
       <div class="tab-content" data-tab-content="tipo-lancamento" data-content="receber">
         <form id="form-novo-receber">
+          <input type="hidden" id="receber-edit-id">
           <div class="form-row">
             <div class="form-group required">
               <label class="form-label">Data de Competência</label>
@@ -221,8 +223,8 @@
 
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="ModalManager.close('modal-novo-lancamento')">Cancelar</button>
-      <button class="btn btn-outline" onclick="salvarENovoLancamento()">Salvar e Novo</button>
-      <button class="btn btn-primary" onclick="salvarLancamento()">Salvar</button>
+      <button class="btn btn-outline" id="btn-salvar-novo" onclick="salvarENovoLancamento()">Salvar e Novo</button>
+      <button class="btn btn-primary" id="btn-salvar-lancamento" onclick="salvarLancamento()">Salvar</button>
     </div>
   </div>
 </div>

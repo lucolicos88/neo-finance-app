@@ -3,7 +3,7 @@
 <head>
   <base target="_top">
   <meta charset="UTF-8">
-  <title>Configurações - Neoformula Finance</title>
+  <title>Configuracoes - Neoformula Finance</title>
   <?!= include('frontend/styles/theme-neoformula'); ?>
   <?!= include('frontend/styles/base'); ?>
 </head>
@@ -13,16 +13,22 @@
     <div class="app-body">
       <?!= include('frontend/components/sidebar'); ?>
       <main class="app-main">
-        <h2 class="text-2xl font-bold mb-4">Configurações do Sistema</h2>
-        <div class="card">
-          <div class="card-body">
-            <p class="text-muted">TODO: Implementar interface de configurações</p>
-          </div>
-        </div>
+        <?!= include('frontend/views/configuracoes-view'); ?>
       </main>
     </div>
   </div>
-  <?!= include('frontend/scripts/main'); ?>
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="spinner"></div>
+    <p>Carregando...</p>
+  </div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <script>
+    window.__standaloneView = 'configuracoes';
+  </script>
+  <?!= include('frontend/scripts/webapp'); ?>
   <?!= include('frontend/scripts/configuracoes'); ?>
 </body>
 </html>
+
+

@@ -2015,6 +2015,120 @@ export function salvarLancamento(lancamento: any): { success: boolean; message: 
 // CONCILIAÇÃO
 // ============================================================================
 
+export function atualizarLancamento(lancamento: any): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('editarLancamentos', 'atualizar lanÇõamento');
+    if (denied) return denied;
+
+    const v = combineValidations(
+      validateRequired(lancamento?.id, 'ID'),
+      validateRequired(lancamento?.dataCompetencia, 'Data competÇ¦ncia'),
+      validateRequired(lancamento?.dataVencimento, 'Data vencimento'),
+      validateEnum(String(lancamento?.tipo || ''), ['RECEITA', 'DESPESA'], 'Tipo'),
+      validateRequired(lancamento?.filial, 'Filial'),
+      validateRequired(lancamento?.contaContabil, 'Conta contÇ­bil'),
+      validateRequired(lancamento?.descricao, 'DescriÇõÇœo')
+    );
+    if (!v.valid) {
+      return { success: false, message: v.errors.join('; ') };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheet) throw new Error('Aba de lanÇõamentos nÇœo encontrada');
+
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const tipoCol = headers['Tipo'];
+      if (idCol === undefined || statusCol === undefined || tipoCol === undefined) {
+        throw new Error('CabeÇõalhos obrigatÇürios nÇœo encontrados (ID, Status, Tipo)');
+      }
+
+      const row = findRowByExactValueInColumn(sheet, idCol, lancamento.id);
+      if (!row) throw new Error('LanÇõamento nÇœo encontrado');
+
+      const statusAtual = String(sheet.getRange(row, statusCol + 1).getDisplayValue() || '').toUpperCase();
+      if (statusAtual !== 'PENDENTE' && statusAtual !== 'VENCIDA') {
+        return { success: false, message: `LanÇõamento nÇœo estÇ­ pendente (status: ${statusAtual || 'N/A'})` };
+      }
+
+      const tipoAtual = String(sheet.getRange(row, tipoCol + 1).getDisplayValue() || '').toUpperCase();
+      const tipoNovo = String(lancamento.tipo || '').toUpperCase();
+      if (tipoAtual && tipoAtual !== tipoNovo) {
+        return { success: false, message: `Tipo nÇœo pode ser alterado (${tipoAtual})` };
+      }
+
+      const valorBruto = Number(lancamento.valorBruto);
+      const desconto = Number(lancamento.desconto || 0);
+      const juros = Number(lancamento.juros || 0);
+      const multa = Number(lancamento.multa || 0);
+      const valorLiquido = valorBruto - desconto + juros + multa;
+
+      if (!Number.isFinite(valorBruto) || valorBruto <= 0) {
+        return { success: false, message: 'Valor bruto invÇ­lido' };
+      }
+      if (![desconto, juros, multa, valorLiquido].every(Number.isFinite)) {
+        return { success: false, message: 'Valores numÇ¸ricos invÇ­lidos' };
+      }
+
+      const dataCompetencia = String(lancamento.dataCompetencia || '').trim();
+      const dataVencimento = String(lancamento.dataVencimento || '').trim();
+      const isValidDate = (value: string) => Number.isFinite(Date.parse(value));
+      if (!isValidDate(dataCompetencia)) {
+        return { success: false, message: 'Data competÇ¦ncia invÇ­lida' };
+      }
+      if (!isValidDate(dataVencimento)) {
+        return { success: false, message: 'Data vencimento invÇ­lida' };
+      }
+      if (new Date(dataCompetencia).getTime() > new Date(dataVencimento).getTime()) {
+        return { success: false, message: 'Data competÇ¦ncia nÇœo pode ser maior que data vencimento' };
+      }
+
+      const lastCol = sheet.getLastColumn();
+      const rowValues = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
+
+      const setValue = (header: string, value: unknown) => {
+        const colIndex = headers[header];
+        if (colIndex === undefined) return;
+        rowValues[colIndex] = value;
+      };
+
+      setValue('Data CompetÇ¦ncia', dataCompetencia);
+      setValue('Data Vencimento', dataVencimento);
+      setValue('Filial', sanitizeSheetString(lancamento.filial));
+      setValue('Centro Custo', sanitizeSheetString(lancamento.centroCusto || ''));
+      setValue('Conta Gerencial', sanitizeSheetString(lancamento.contaGerencial || ''));
+      setValue('Conta ContÇ­bil', sanitizeSheetString(lancamento.contaContabil));
+      setValue('Grupo Receita', sanitizeSheetString(lancamento.grupoReceita || ''));
+      setValue('Canal', sanitizeSheetString(lancamento.canal || ''));
+      setValue('DescriÇõÇœo', sanitizeSheetString(lancamento.descricao));
+      setValue('Valor Bruto', valorBruto);
+      setValue('Desconto', desconto);
+      setValue('Juros', juros);
+      setValue('Multa', multa);
+      setValue('Valor LÇðquido', valorLiquido);
+      setValue('ObservaÇõÇæes', sanitizeSheetString(lancamento.observacoes || ''));
+
+      sheet.getRange(row, 1, 1, lastCol).setValues([rowValues]);
+
+      appendAuditLog('atualizarLancamento', { id: lancamento.id }, true);
+      clearReportsCache();
+      return { success: true, message: 'LanÇõamento atualizado com sucesso' };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
+  } catch (error: any) {
+    appendAuditLog('atualizarLancamento', { id: lancamento?.id }, false, error?.message);
+    return { success: false, message: error.message };
+  }
+}
+
 export function getConciliacaoData() {
   enforcePermission('visualizarRelatorios', 'carregar conciliação');
   const extratos = getExtratosFromSheet();

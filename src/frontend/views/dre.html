@@ -13,15 +13,19 @@
     <div class="app-body">
       <?!= include('frontend/components/sidebar'); ?>
       <main class="app-main">
-        <h2 class="text-2xl font-bold mb-4">Demonstrativo de Resultados (DRE)</h2>
-        <div class="card">
-          <div class="card-body">
-            <p class="text-muted">TODO: Implementar visualização de DRE</p>
-          </div>
-        </div>
+        <?!= include('frontend/views/dre-view'); ?>
       </main>
     </div>
   </div>
-  <?!= include('frontend/scripts/main'); ?>
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="spinner"></div>
+    <p>Carregando...</p>
+  </div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <script>
+    window.__standaloneView = 'dre';
+  </script>
+  <?!= include('frontend/scripts/webapp'); ?>
 </body>
 </html>
