@@ -1288,6 +1288,21 @@ export function getDashboardData() {
   };
 }
 
+export function getLancamentoDetalhes(id: string): any {
+  enforcePermission('visualizarRelatorios', 'ver lanÇõamento');
+  const validation = validateRequired(id, 'ID');
+  if (!validation.valid) {
+    throw new Error(validation.errors.join('; '));
+  }
+
+  const lancamentos = getLancamentosFromSheet();
+  const lancamento = lancamentos.find(l => String(l.id) === String(id));
+  if (!lancamento) {
+    throw new Error('LanÇõamento nÇœo encontrado');
+  }
+  return lancamento;
+}
+
 // ============================================================================
 // CONTAS A PAGAR
 // ============================================================================
@@ -1473,6 +1488,105 @@ export function pagarContasEmLote(ids: string[]): { success: boolean; message: s
     }
   } catch (error: any) {
     appendAuditLog('pagarContasEmLote', { ids }, false, error?.message);
+    return { success: false, message: error.message };
+  }
+}
+
+export function cancelarContasEmLote(ids: string[]): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('aprovarPagamentos', 'cancelar contas a pagar em lote');
+    if (denied) return denied;
+    if (!Array.isArray(ids) || ids.length === 0) return { success: false, message: 'IDs invÇ­lidos' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheet) throw new Error('Aba de lanÇõamentos nÇœo encontrada');
+
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const tipoCol = headers['Tipo'];
+      const dataPagCol = headers['Data Pagamento'];
+      if (idCol === undefined || statusCol === undefined || tipoCol === undefined || dataPagCol === undefined) {
+        throw new Error('CabeÇõalhos obrigatÇürios nÇœo encontrados (ID, Status, Tipo, Data Pagamento)');
+      }
+
+      const lastRow = sheet.getLastRow();
+      const numRows = lastRow > 1 ? lastRow - 1 : 0;
+      const idsColumnValues =
+        numRows > 0 ? sheet.getRange(2, idCol + 1, numRows, 1).getDisplayValues() : [];
+      const statusValues =
+        numRows > 0 ? sheet.getRange(2, statusCol + 1, numRows, 1).getDisplayValues() : [];
+      const tipoValues =
+        numRows > 0 ? sheet.getRange(2, tipoCol + 1, numRows, 1).getDisplayValues() : [];
+
+      const idToRow = new Map<string, number>();
+      idsColumnValues.forEach((r, idx) => {
+        const cell = String(r[0] || '').trim();
+        if (!cell) return;
+        idToRow.set(cell, idx + 2);
+      });
+
+      let count = 0;
+      const errors: string[] = [];
+      const statusRanges: string[] = [];
+      const dateRanges: string[] = [];
+      const allowed = new Set(['PENDENTE', 'VENCIDA']);
+
+      for (const rawId of ids) {
+        const wanted = String(rawId || '').trim();
+        if (!wanted) continue;
+        const row = idToRow.get(wanted);
+        if (!row) {
+          errors.push(`${wanted}: nÇœo encontrada`);
+          continue;
+        }
+
+        const status = String(statusValues[row - 2]?.[0] || '').toUpperCase();
+        const tipo = String(tipoValues[row - 2]?.[0] || '').toUpperCase();
+        if (tipo !== 'DESPESA') {
+          errors.push(`${wanted}: tipo ${tipo || 'N/A'}`);
+          continue;
+        }
+        if (!allowed.has(status)) {
+          errors.push(`${wanted}: status ${status || 'N/A'}`);
+          continue;
+        }
+
+        statusRanges.push(`${columnToLetter(statusCol + 1)}${row}`);
+        dateRanges.push(`${columnToLetter(dataPagCol + 1)}${row}`);
+        appendAuditLog('cancelarConta', { id: wanted }, true);
+        count++;
+      }
+
+      if (statusRanges.length > 0) {
+        sheet.getRangeList(statusRanges).setValue('CANCELADA');
+        sheet.getRangeList(dateRanges).setValue('');
+        clearReportsCache();
+      }
+
+      if (count === 0) {
+        appendAuditLog('cancelarContasEmLote', { ids, count, errorsCount: errors.length }, false, 'Nenhuma cancelada');
+        return { success: false, message: errors.length ? errors[0] : 'Nenhuma conta cancelada' };
+      }
+
+      if (errors.length > 0) {
+        appendAuditLog('cancelarContasEmLote', { ids, count, errorsCount: errors.length }, true, 'Parcial');
+        return { success: true, message: `${count} contas canceladas; ${errors.length} falharam` };
+      }
+
+      appendAuditLog('cancelarContasEmLote', { ids, count }, true);
+      return { success: true, message: `${count} contas canceladas com sucesso` };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
+  } catch (error: any) {
+    appendAuditLog('cancelarContasEmLote', { ids }, false, error?.message);
     return { success: false, message: error.message };
   }
 }
@@ -1674,6 +1788,105 @@ export function receberContasEmLote(ids: string[]): { success: boolean; message:
 // ============================================================================
 // SALVAR LANÇAMENTO
 // ============================================================================
+
+export function cancelarContasReceberEmLote(ids: string[]): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('aprovarPagamentos', 'cancelar contas a receber em lote');
+    if (denied) return denied;
+    if (!Array.isArray(ids) || ids.length === 0) return { success: false, message: 'IDs invÇ­lidos' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheet) throw new Error('Aba de lanÇõamentos nÇœo encontrada');
+
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const headers = getHeaderIndexMap(sheet);
+      const idCol = headers['ID'];
+      const statusCol = headers['Status'];
+      const tipoCol = headers['Tipo'];
+      const dataPagCol = headers['Data Pagamento'];
+      if (idCol === undefined || statusCol === undefined || tipoCol === undefined || dataPagCol === undefined) {
+        throw new Error('CabeÇõalhos obrigatÇürios nÇœo encontrados (ID, Status, Tipo, Data Pagamento)');
+      }
+
+      const lastRow = sheet.getLastRow();
+      const numRows = lastRow > 1 ? lastRow - 1 : 0;
+      const idsColumnValues =
+        numRows > 0 ? sheet.getRange(2, idCol + 1, numRows, 1).getDisplayValues() : [];
+      const statusValues =
+        numRows > 0 ? sheet.getRange(2, statusCol + 1, numRows, 1).getDisplayValues() : [];
+      const tipoValues =
+        numRows > 0 ? sheet.getRange(2, tipoCol + 1, numRows, 1).getDisplayValues() : [];
+
+      const idToRow = new Map<string, number>();
+      idsColumnValues.forEach((r, idx) => {
+        const cell = String(r[0] || '').trim();
+        if (!cell) return;
+        idToRow.set(cell, idx + 2);
+      });
+
+      let count = 0;
+      const errors: string[] = [];
+      const statusRanges: string[] = [];
+      const dateRanges: string[] = [];
+      const allowed = new Set(['PENDENTE', 'VENCIDA']);
+
+      for (const rawId of ids) {
+        const wanted = String(rawId || '').trim();
+        if (!wanted) continue;
+        const row = idToRow.get(wanted);
+        if (!row) {
+          errors.push(`${wanted}: nÇœo encontrada`);
+          continue;
+        }
+
+        const status = String(statusValues[row - 2]?.[0] || '').toUpperCase();
+        const tipo = String(tipoValues[row - 2]?.[0] || '').toUpperCase();
+        if (tipo !== 'RECEITA') {
+          errors.push(`${wanted}: tipo ${tipo || 'N/A'}`);
+          continue;
+        }
+        if (!allowed.has(status)) {
+          errors.push(`${wanted}: status ${status || 'N/A'}`);
+          continue;
+        }
+
+        statusRanges.push(`${columnToLetter(statusCol + 1)}${row}`);
+        dateRanges.push(`${columnToLetter(dataPagCol + 1)}${row}`);
+        appendAuditLog('cancelarContaReceber', { id: wanted }, true);
+        count++;
+      }
+
+      if (statusRanges.length > 0) {
+        sheet.getRangeList(statusRanges).setValue('CANCELADA');
+        sheet.getRangeList(dateRanges).setValue('');
+        clearReportsCache();
+      }
+
+      if (count === 0) {
+        appendAuditLog('cancelarContasReceberEmLote', { ids, count, errorsCount: errors.length }, false, 'Nenhuma cancelada');
+        return { success: false, message: errors.length ? errors[0] : 'Nenhuma conta cancelada' };
+      }
+
+      if (errors.length > 0) {
+        appendAuditLog('cancelarContasReceberEmLote', { ids, count, errorsCount: errors.length }, true, 'Parcial');
+        return { success: true, message: `${count} contas canceladas; ${errors.length} falharam` };
+      }
+
+      appendAuditLog('cancelarContasReceberEmLote', { ids, count }, true);
+      return { success: true, message: `${count} contas canceladas com sucesso` };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
+  } catch (error: any) {
+    appendAuditLog('cancelarContasReceberEmLote', { ids }, false, error?.message);
+    return { success: false, message: error.message };
+  }
+}
 
 export function salvarLancamento(lancamento: any): { success: boolean; message: string; id?: string } {
   try {
@@ -1918,6 +2131,77 @@ export function conciliarItens(extratoId: string, lancamentoId: string): { succe
     }
   } catch (error: any) {
     appendAuditLog('conciliarItens', { extratoId, lancamentoId }, false, error?.message);
+    return { success: false, message: error.message };
+  }
+}
+
+export function desfazerConciliacao(extratoId: string, lancamentoId: string): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('editarLancamentos', 'desfazer conciliaÇõÇœo');
+    if (denied) return denied;
+
+    const v = combineValidations(
+      validateRequired(extratoId, 'Extrato ID'),
+      validateRequired(lancamentoId, 'LanÇõamento ID')
+    );
+    if (!v.valid) return { success: false, message: v.errors.join('; ') };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const lock = LockService.getDocumentLock();
+    lock.waitLock(5000);
+    try {
+      const sheetExtratos = ss.getSheetByName(SHEET_TB_EXTRATOS);
+      if (!sheetExtratos) throw new Error('Aba de extratos nÇœo encontrada');
+      const extrHeaders = getHeaderIndexMap(sheetExtratos);
+      const extrIdCol = extrHeaders['ID'];
+      const extrStatusCol = extrHeaders['Status ConciliaÇõÇœo'];
+      const extrLancCol = extrHeaders['ID LanÇõamento'];
+      if (extrIdCol === undefined || extrStatusCol === undefined || extrLancCol === undefined) {
+        throw new Error('CabeÇõalhos obrigatÇürios nÇœo encontrados em extratos (ID, Status ConciliaÇõÇœo, ID LanÇõamento)');
+      }
+
+      const extratoRow = findRowByExactValueInColumn(sheetExtratos, extrIdCol, extratoId);
+      if (!extratoRow) throw new Error('Extrato nÇœo encontrado');
+      const status = String(sheetExtratos.getRange(extratoRow, extrStatusCol + 1).getDisplayValue() || '').toUpperCase();
+      if (status !== 'CONCILIADO') {
+        return { success: false, message: `Extrato nÇœo estÇ­ conciliado (status: ${status || 'N/A'})` };
+      }
+
+      const currentLancId = String(sheetExtratos.getRange(extratoRow, extrLancCol + 1).getDisplayValue() || '').trim();
+      if (currentLancId && currentLancId !== String(lancamentoId || '').trim()) {
+        return { success: false, message: `Extrato vinculado a outro lanÇõamento: ${currentLancId}` };
+      }
+
+      const sheetLanc = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+      if (!sheetLanc) throw new Error('Aba de lanÇõamentos nÇœo encontrada');
+      const lancHeaders = getHeaderIndexMap(sheetLanc);
+      const lancIdCol = lancHeaders['ID'];
+      const lancExtratoCol = lancHeaders['ID Extrato Banco'];
+      if (lancIdCol === undefined || lancExtratoCol === undefined) {
+        throw new Error('CabeÇõalhos obrigatÇürios nÇœo encontrados em lanÇõamentos (ID, ID Extrato Banco)');
+      }
+
+      const lancRow = findRowByExactValueInColumn(sheetLanc, lancIdCol, lancamentoId);
+      if (!lancRow) throw new Error('LanÇõamento nÇœo encontrado');
+      const currentExtratoId = String(sheetLanc.getRange(lancRow, lancExtratoCol + 1).getDisplayValue() || '').trim();
+      if (currentExtratoId && currentExtratoId !== String(extratoId || '').trim()) {
+        return { success: false, message: `LanÇõamento vinculado a outro extrato: ${currentExtratoId}` };
+      }
+
+      sheetExtratos.getRange(extratoRow, extrStatusCol + 1).setValue('PENDENTE');
+      sheetExtratos.getRange(extratoRow, extrLancCol + 1).setValue('');
+      sheetLanc.getRange(lancRow, lancExtratoCol + 1).setValue('');
+
+      appendAuditLog('desfazerConciliacao', { extratoId, lancamentoId }, true);
+      clearReportsCache();
+      return { success: true, message: 'ConciliaÇõÇœo desfeita com sucesso' };
+    } finally {
+      try {
+        lock.releaseLock();
+      } catch (_) {}
+    }
+  } catch (error: any) {
+    appendAuditLog('desfazerConciliacao', { extratoId, lancamentoId }, false, error?.message);
     return { success: false, message: error.message };
   }
 }

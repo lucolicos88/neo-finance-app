@@ -1,0 +1,44 @@
+<style>
+.modal-transaction .details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.modal-transaction .detail-item {
+  background: #f8f9fa;
+  border: 1px solid #e6e9ef;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.modal-transaction .detail-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.modal-transaction .detail-value {
+  font-size: 0.95rem;
+  color: #2b2b2b;
+  word-break: break-word;
+}
+</style>
+
+<div id="modal-transaction" class="modal-overlay">
+  <div class="modal modal-transaction">
+    <div class="modal-header">
+      <h3 class="modal-title">Detalhes da transacao</h3>
+      <button class="modal-close" onclick="ModalManager.close('modal-transaction')">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="transaction-details" class="details-grid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="ModalManager.close('modal-transaction')">Fechar</button>
+    </div>
+  </div>
+</div>

@@ -16,12 +16,16 @@ import {
   getContasPagar,
   pagarConta,
   pagarContasEmLote,
+  cancelarContasEmLote,
   getContasReceber,
   receberConta,
   receberContasEmLote,
+  cancelarContasReceberEmLote,
   salvarLancamento,
+  getLancamentoDetalhes,
   getConciliacaoData,
   conciliarItens,
+  desfazerConciliacao,
   conciliarAutomatico,
   toggleCentroCusto,
   seedPlanoContasFromList,
@@ -341,12 +345,16 @@ global.getDashboardData = wrapApi('getDashboardData', getDashboardData);
 global.getContasPagar = wrapApi('getContasPagar', getContasPagar);
 global.pagarConta = wrapApi('pagarConta', pagarConta);
 global.pagarContasEmLote = wrapApi('pagarContasEmLote', pagarContasEmLote);
+global.cancelarContasEmLote = wrapApi('cancelarContasEmLote', cancelarContasEmLote);
 global.getContasReceber = wrapApi('getContasReceber', getContasReceber);
 global.receberConta = wrapApi('receberConta', receberConta);
 global.receberContasEmLote = wrapApi('receberContasEmLote', receberContasEmLote);
+global.cancelarContasReceberEmLote = wrapApi('cancelarContasReceberEmLote', cancelarContasReceberEmLote);
 global.salvarLancamento = wrapApi('salvarLancamento', salvarLancamento);
+global.getLancamentoDetalhes = wrapApi('getLancamentoDetalhes', getLancamentoDetalhes);
 global.getConciliacaoData = wrapApi('getConciliacaoData', getConciliacaoData);
 global.conciliarItens = wrapApi('conciliarItens', conciliarItens);
+global.desfazerConciliacao = wrapApi('desfazerConciliacao', desfazerConciliacao);
 global.conciliarAutomatico = wrapApi('conciliarAutomatico', conciliarAutomatico);
 global.toggleCentroCusto = wrapApi('toggleCentroCusto', toggleCentroCusto);
 global.seedPlanoContasFromList = wrapApi('seedPlanoContasFromList', seedPlanoContasFromList);

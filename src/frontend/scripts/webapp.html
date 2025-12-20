@@ -587,9 +587,18 @@ function cancelarEmLote() {
   if (!confirm(`Confirmar cancelamento de ${selected.length} contas?`)) return;
 
   showLoading();
-  // TODO: Implement backend cancelarContasEmLote
-  hideLoading();
-  showToast('Funcionalidade em desenvolvimento', 'info');
+  window.gasRun
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast(result.message || 'Contas canceladas com sucesso', 'success');
+        loadContasPagarData();
+      } else {
+        showToast(result?.message || 'Erro ao cancelar contas', 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .cancelarContasEmLote(selected);
 }
 
 // ============================================================================
@@ -726,9 +735,18 @@ function cancelarReceberEmLote() {
   if (!confirm(`Confirmar cancelamento de ${selected.length} contas?`)) return;
 
   showLoading();
-  // TODO: Implement backend cancelarContasReceberEmLote
-  hideLoading();
-  showToast('Funcionalidade em desenvolvimento', 'info');
+  window.gasRun
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast(result.message || 'Contas canceladas com sucesso', 'success');
+        loadContasReceberData();
+      } else {
+        showToast(result?.message || 'Erro ao cancelar contas', 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .cancelarContasReceberEmLote(selected);
 }
 
 // ============================================================================
@@ -901,12 +919,21 @@ function renderHistoricoConciliacao(historico) {
 }
 
 function desfazerConciliacao(extratoId, lancamentoId) {
-  if (!confirm('Desfazer esta conciliação?')) return;
+  if (!confirm('Desfazer esta conciliacao?')) return;
 
   showLoading();
-  // TODO: Implement backend desfazerConciliacao
-  hideLoading();
-  showToast('Funcionalidade em desenvolvimento', 'info');
+  window.gasRun
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast(result.message || 'Conciliacao desfeita', 'success');
+        loadConciliacaoData();
+      } else {
+        showToast(result?.message || 'Erro ao desfazer conciliacao', 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .desfazerConciliacao(extratoId, lancamentoId);
 }
 
 // ============================================================================
@@ -1294,8 +1321,59 @@ function renderSaidasCategorias(fc) {
 // ============================================================================
 
 function viewTransaction(id) {
-  showToast('Visualização de detalhes em desenvolvimento', 'info');
-  // TODO: Open modal with transaction details
+  showLoading();
+  window.gasRun
+    .withSuccessHandler(function(data) {
+      hideLoading();
+      if (!data) {
+        showToast('Lancamento nao encontrado', 'error');
+        return;
+      }
+      renderTransactionDetails(data);
+      ModalManager.open('modal-transaction');
+    })
+    .withFailureHandler(handleError)
+    .getLancamentoDetalhes(id);
+}
+
+function renderTransactionDetails(tx) {
+  const container = document.getElementById('transaction-details');
+  if (!container) return;
+
+  const fields = [
+    { label: 'ID', value: tx.id },
+    { label: 'Tipo', value: tx.tipo },
+    { label: 'Status', value: tx.status },
+    { label: 'Data competencia', value: formatDate(tx.dataCompetencia) },
+    { label: 'Data vencimento', value: formatDate(tx.dataVencimento) },
+    { label: 'Data pagamento', value: tx.dataPagamento ? formatDate(tx.dataPagamento) : '-' },
+    { label: 'Filial', value: tx.filial || '-' },
+    { label: 'Centro custo', value: tx.centroCusto || '-' },
+    { label: 'Conta gerencial', value: tx.contaGerencial || '-' },
+    { label: 'Conta contabil', value: tx.contaContabil || '-' },
+    { label: 'Grupo receita', value: tx.grupoReceita || '-' },
+    { label: 'Canal', value: tx.canal || '-' },
+    { label: 'Descricao', value: tx.descricao || '-' },
+    { label: 'Valor bruto', value: formatCurrency(tx.valorBruto || 0) },
+    { label: 'Desconto', value: formatCurrency(tx.desconto || 0) },
+    { label: 'Juros', value: formatCurrency(tx.juros || 0) },
+    { label: 'Multa', value: formatCurrency(tx.multa || 0) },
+    { label: 'Valor liquido', value: formatCurrency(tx.valorLiquido || 0) },
+    { label: 'ID extrato', value: tx.idExtratoBanco || '-' },
+    { label: 'Origem', value: tx.origem || '-' },
+    { label: 'Observacoes', value: tx.observacoes || '-' },
+  ];
+
+  const html = fields.map(f => {
+    const label = escapeHtml(f.label);
+    const value = escapeHtml(String(f.value ?? ''));
+    return '<div class="detail-item">' +
+      '<span class="detail-label">' + label + '</span>' +
+      '<span class="detail-value">' + value + '</span>' +
+      '</div>';
+  }).join('');
+
+  container.innerHTML = html;
 }
 
 // ============================================================================
@@ -1613,3 +1691,9 @@ function updateBatchButtonsReceber() {
   document.getElementById('btn-cancelar-receber-lote').disabled = selected.length === 0;
 }
 </script>
+
+
+
+
+
+
