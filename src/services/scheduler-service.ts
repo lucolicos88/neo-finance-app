@@ -15,8 +15,13 @@ import { getCurrentPeriod, Period } from '../shared/types';
 import { ConfigService } from './config-service';
 import { reloadReferenceCache } from './reference-data-service';
 import { autoReconcile } from './reconciliation-service';
-import { calculateDRE, persistDREMensal, persistDREResumo } from './dre-service';
-import { calculateRealCashflow, persistRealCashflow } from './cashflow-service';
+import { calculateDRE, persistDREMensal, persistDREResumo, validateDREAgainstLedger } from './dre-service';
+import {
+  calculateRealCashflow,
+  persistRealCashflow,
+  calculateForecastCashflow,
+  persistForecastCashflow,
+} from './cashflow-service';
 import { calculateKPIs, persistKPIs } from './kpi-analytics-service';
 import {
   generateCommitteeReport,
@@ -188,6 +193,10 @@ export function monthlyClosing(): void {
     persistDREMensal(dre);
     persistDREResumo(dre);
     console.log(`  → DRE calculado: EBITDA = R$ ${dre.summary.ebitda.toFixed(2)}`);
+    const valid = validateDREAgainstLedger(dre);
+    if (!valid) {
+      console.warn('  ⚠️ DRE divergente dos lançamentos (sanity check)');
+    }
 
     // TODO: Calcular DRE por filial
     checkExecutionTime(startTime, 'DRE');
@@ -199,6 +208,16 @@ export function monthlyClosing(): void {
     const cashflow = calculateRealCashflow(previousPeriod);
     persistRealCashflow(previousPeriod, cashflow);
     console.log(`  → ${cashflow.length} movimentações de caixa`);
+
+    if (ConfigService.isDFCProjectionEnabled()) {
+      const forecast = calculateForecastCashflow(previousPeriod, {
+        horizonMonths: 3,
+        includePrevisto: true,
+        saldoInicial: 0,
+      });
+      persistForecastCashflow(forecast);
+      console.log(`  → ${forecast.length} linhas de projeção de caixa`);
+    }
 
     checkExecutionTime(startTime, 'DFC');
 

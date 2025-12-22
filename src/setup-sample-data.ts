@@ -7,7 +7,20 @@
 import {
   SHEET_TB_LANCAMENTOS,
   SHEET_TB_EXTRATOS,
+  SHEET_REF_FILIAIS,
+  SHEET_REF_CANAIS,
+  SHEET_REF_CCUSTO,
+  SHEET_REF_PLANO_CONTAS,
 } from './config/sheet-mapping';
+import { getSheetValues } from './shared/sheets-client';
+
+type SeedRefs = {
+  filiais: string[];
+  canais: string[];
+  centros: string[];
+  contasReceita: string[];
+  contasDespesa: string[];
+};
 
 /**
  * Popula dados de exemplo em TB_LANCAMENTOS
@@ -380,4 +393,215 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+function getSeedReferences(): SeedRefs {
+  const filiais = getSheetValues(SHEET_REF_FILIAIS, { skipHeader: true })
+    .map((r) => String(r[0] || '').trim())
+    .filter(Boolean);
+  const canais = getSheetValues(SHEET_REF_CANAIS, { skipHeader: true })
+    .map((r) => String(r[0] || '').trim())
+    .filter(Boolean);
+  const centros = getSheetValues(SHEET_REF_CCUSTO, { skipHeader: true })
+    .map((r) => String(r[0] || '').trim())
+    .filter(Boolean);
+
+  const contasReceita: string[] = [];
+  const contasDespesa: string[] = [];
+  const contas = getSheetValues(SHEET_REF_PLANO_CONTAS, { skipHeader: true });
+  for (const row of contas) {
+    const codigo = String(row[0] || '').trim();
+    const tipo = String(row[2] || '').trim().toUpperCase();
+    if (!codigo) continue;
+    if (tipo === 'RECEITA') contasReceita.push(codigo);
+    if (tipo === 'DESPESA' || tipo === 'CUSTO') contasDespesa.push(codigo);
+  }
+
+  return {
+    filiais: filiais.length ? filiais : ['MATRIZ', 'FILIAL_RJ', 'FILIAL_SP'],
+    canais: canais.length ? canais : ['DIRETO', 'ONLINE', 'PARCEIRO'],
+    centros: centros.length ? centros : ['ADM', 'COM', 'FIN', 'MKT', 'OPS', 'TI'],
+    contasReceita: contasReceita.length ? contasReceita : ['1.01.001', '1.01.002'],
+    contasDespesa: contasDespesa.length ? contasDespesa : ['3.01.001', '3.02.001', '3.02.002', '3.03.001'],
+  };
+}
+
+function randomFrom<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function randomNumber(min: number, max: number): number {
+  return Math.round((min + Math.random() * (max - min)) * 100) / 100;
+}
+
+function randomDateBetween(start: Date, end: Date): Date {
+  const ts = start.getTime() + Math.random() * (end.getTime() - start.getTime());
+  return new Date(ts);
+}
+
+export function setupBulkSampleData(): void {
+  const ui = SpreadsheetApp.getUi();
+  const confirm = ui.alert(
+    'Criar Dados de Exemplo (Massa)',
+    'Deseja gerar muitos dados ficticios para teste?\n' +
+      'Isso adiciona lancamentos e extratos sem apagar os atuais.\n\n' +
+      'Continuar?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm !== ui.Button.YES) return;
+
+  const lancPrompt = ui.prompt('Quantidade de lancamentos', '300', ui.ButtonSet.OK_CANCEL);
+  if (lancPrompt.getSelectedButton() !== ui.Button.OK) return;
+  const extrPrompt = ui.prompt('Quantidade de extratos', '150', ui.ButtonSet.OK_CANCEL);
+  if (extrPrompt.getSelectedButton() !== ui.Button.OK) return;
+
+  const numLanc = Math.max(50, Math.min(2000, Number(lancPrompt.getResponseText()) || 300));
+  const numExtr = Math.max(20, Math.min(2000, Number(extrPrompt.getResponseText()) || 150));
+
+  populateBulkSampleData(numLanc, numExtr);
+}
+
+function populateBulkSampleData(numLanc: number, numExtr: number): void {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const lancSheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+  const extrSheet = ss.getSheetByName(SHEET_TB_EXTRATOS);
+
+  if (!lancSheet) {
+    SpreadsheetApp.getUi().alert('Erro', 'Aba TB_LANCAMENTOS nao encontrada', SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+  if (!extrSheet) {
+    SpreadsheetApp.getUi().alert('Erro', 'Aba TB_EXTRATOS nao encontrada', SpreadsheetApp.getUi().ButtonSet.OK);
+    return;
+  }
+
+  const refs = getSeedReferences();
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 4, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 2, 28);
+
+  const paidCandidates: Array<{ id: string; data: Date; valor: number; tipo: string; descricao: string }> = [];
+  const rows: any[][] = [];
+
+  for (let i = 0; i < numLanc; i++) {
+    const isReceita = Math.random() < 0.5;
+    const tipo = isReceita ? 'RECEITA' : 'DESPESA';
+    const idPrefix = isReceita ? 'CR' : 'CP';
+    const id = `${idPrefix}-${Utilities.getUuid().slice(0, 8).toUpperCase()}-${i + 1}`;
+    const dataCompetencia = randomDateBetween(start, end);
+    let dataVencimento = addDays(dataCompetencia, Math.floor(Math.random() * 40) + 3);
+
+    const statusPool = isReceita
+      ? ['PENDENTE', 'VENCIDA', 'RECEBIDA', 'CANCELADA']
+      : ['PENDENTE', 'VENCIDA', 'PAGA', 'CANCELADA'];
+    const status = randomFrom(statusPool);
+
+    if (status === 'VENCIDA') {
+      dataVencimento = addDays(now, -Math.floor(Math.random() * 20) - 1);
+    }
+
+    let dataPagamento = '';
+    if (status === 'PAGA' || status === 'RECEBIDA') {
+      const pg = addDays(dataVencimento, Math.floor(Math.random() * 5) - 2);
+      dataPagamento = pg > now ? now.toISOString() : pg.toISOString();
+    }
+
+    const valorBruto = randomNumber(200, 25000);
+    const desconto = Math.random() < 0.2 ? randomNumber(10, 300) : 0;
+    const juros = status === 'VENCIDA' ? randomNumber(5, 100) : 0;
+    const multa = status === 'VENCIDA' ? randomNumber(5, 80) : 0;
+    const valorLiquido = valorBruto - desconto + juros + multa;
+
+    const filial = randomFrom(refs.filiais);
+    const centro = randomFrom(refs.centros);
+    const canal = isReceita ? randomFrom(refs.canais) : '';
+    const contaContabil = isReceita ? randomFrom(refs.contasReceita) : randomFrom(refs.contasDespesa);
+    const contaGerencial = isReceita ? 'Receita' : 'Despesa';
+    const grupoReceita = isReceita ? (Math.random() < 0.5 ? 'Servicos' : 'Produtos') : '';
+    const descricao = `${tipo} seed ${i + 1} ${filial}`;
+
+    rows.push([
+      id,
+      dataCompetencia,
+      dataVencimento,
+      dataPagamento ? new Date(dataPagamento) : '',
+      tipo,
+      filial,
+      centro,
+      contaGerencial,
+      contaContabil,
+      grupoReceita,
+      canal,
+      descricao,
+      valorBruto,
+      desconto,
+      juros,
+      multa,
+      valorLiquido,
+      status,
+      '',
+      'SEED',
+      'Gerado automaticamente',
+    ]);
+
+    if (status === 'PAGA' || status === 'RECEBIDA') {
+      const pgDate = dataPagamento ? new Date(dataPagamento) : dataVencimento;
+      paidCandidates.push({ id, data: pgDate, valor: valorLiquido, tipo, descricao });
+    }
+  }
+
+  const startRow = lancSheet.getLastRow() + 1;
+  lancSheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+
+  const bancos = ['BRADESCO', 'ITAU', 'SANTANDER', 'BB', 'CAIXA'];
+  const contas = ['1234-5', '5678-9', '9999-0'];
+  const extrRows: any[][] = [];
+
+  const conciliarCount = Math.min(Math.floor(numExtr * 0.5), paidCandidates.length);
+  for (let i = 0; i < conciliarCount; i++) {
+    const item = paidCandidates[i];
+    const credito = item.tipo === 'RECEITA';
+    extrRows.push([
+      `EXT-${Utilities.getUuid().slice(0, 8).toUpperCase()}-${i + 1}`,
+      item.data,
+      `Conciliado ${item.descricao}`,
+      credito ? item.valor : -Math.abs(item.valor),
+      credito ? 'CREDITO' : 'DEBITO',
+      randomFrom(bancos),
+      randomFrom(contas),
+      'CONCILIADO',
+      item.id,
+      '',
+      new Date(),
+    ]);
+  }
+
+  for (let i = conciliarCount; i < numExtr; i++) {
+    const credito = Math.random() < 0.5;
+    const valor = randomNumber(50, 15000);
+    const data = randomDateBetween(start, end);
+    extrRows.push([
+      `EXT-${Utilities.getUuid().slice(0, 8).toUpperCase()}-${i + 1}`,
+      data,
+      `Movimento seed ${i + 1}`,
+      credito ? valor : -Math.abs(valor),
+      credito ? 'CREDITO' : 'DEBITO',
+      randomFrom(bancos),
+      randomFrom(contas),
+      'PENDENTE',
+      '',
+      '',
+      new Date(),
+    ]);
+  }
+
+  const extrStartRow = extrSheet.getLastRow() + 1;
+  extrSheet.getRange(extrStartRow, 1, extrRows.length, extrRows[0].length).setValues(extrRows);
+
+  SpreadsheetApp.getUi().alert(
+    'Dados de Exemplo Criados',
+    `${rows.length} lancamentos e ${extrRows.length} extratos foram adicionados.`,
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
 }

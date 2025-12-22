@@ -8,7 +8,7 @@
 import { include } from './services/ui-service';
 import { installTriggers } from './services/scheduler-service';
 import { runCompleteSetup } from './setup-sheets';
-import { setupAllSampleData } from './setup-sample-data';
+import { setupAllSampleData, setupBulkSampleData } from './setup-sample-data';
 import {
   getViewHtml,
   getReferenceData,
@@ -153,6 +153,7 @@ function onOpen(): void {
         .addSeparator()
         .addItem('⚙️ Setup da Planilha', 'runCompleteSetup')
         .addItem('📝 Criar Dados de Exemplo', 'setupAllSampleData')
+        .addItem('📈 Criar Dados de Exemplo (Massa)', 'setupBulkSampleData')
         .addSeparator()
         .addItem('🌐 Abrir Web App', 'openWebApp')
     )
@@ -337,6 +338,7 @@ global.refreshCache = refreshCache;
 global.setupTriggers = setupTriggers;
 global.runCompleteSetup = runCompleteSetup;
 global.setupAllSampleData = setupAllSampleData;
+global.setupBulkSampleData = setupBulkSampleData;
 global.openWebApp = openWebApp;
 
 // Web App API Functions
