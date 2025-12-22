@@ -399,8 +399,13 @@ export function persistKPIReport(report: KPIReport): void {
  * TODO: Implementar usando Google Drive API
  */
 export function exportToPDF(period: Period): string {
-  // TODO: Gerar PDF da planilha ou de template customizado
-  throw new Error('exportToPDF não implementado');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const month = String(period.month).padStart(2, '0');
+  const name = `NeoFinance_${period.year}-${month}.pdf`;
+  const blob = ss.getBlob().setName(name);
+  const folder = getOrCreateFolder_('NeoFinance Exports');
+  const file = folder.createFile(blob);
+  return file.getUrl();
 }
 
 /**
@@ -411,4 +416,12 @@ export function exportToPDF(period: Period): string {
 export function exportToSlides(period: Period): string {
   // TODO: Popular template de apresentação com dados
   throw new Error('exportToSlides não implementado');
+}
+
+function getOrCreateFolder_(name: string): GoogleAppsScript.Drive.Folder {
+  const folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return DriveApp.createFolder(name);
 }

@@ -6,7 +6,7 @@
  */
 
 import { include } from './services/ui-service';
-import { installTriggers } from './services/scheduler-service';
+import { backupJob, installTriggers } from './services/scheduler-service';
 import { runCompleteSetup } from './setup-sheets';
 import { setupAllSampleData, setupBulkSampleData } from './setup-sample-data';
 import {
@@ -150,6 +150,7 @@ function onOpen(): void {
         .createMenu('Administração')
         .addItem('Configurações', 'openConfiguracoes')
         .addItem('Instalar Triggers', 'setupTriggers')
+        .addItem('Backup Agora', 'runBackupNow')
         .addSeparator()
         .addItem('⚙️ Setup da Planilha', 'runCompleteSetup')
         .addItem('📝 Criar Dados de Exemplo', 'setupAllSampleData')
@@ -286,6 +287,35 @@ function openWebApp(): void {
   SpreadsheetApp.getUi().showModalDialog(html, 'URL da Web App');
 }
 
+function runBackupNow(): void {
+  try {
+    const result = backupJob();
+    const folderUrl = String(result.folderUrl)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const html = HtmlService.createHtmlOutput(
+      `<html><body>
+        <h2>Backup concluído</h2>
+        <p>Arquivos gerados: <strong>${result.filesCreated}</strong></p>
+        <p>Pasta: <a href="${folderUrl}" target="_blank" rel="noopener noreferrer">${folderUrl}</a></p>
+        <p><small>Carimbo: ${result.stamp}</small></p>
+      </body></html>`
+    ).setWidth(520).setHeight(220);
+
+    SpreadsheetApp.getUi().showModalDialog(html, 'Backup');
+  } catch (error: any) {
+    SpreadsheetApp.getUi().alert(
+      'Erro',
+      `Erro ao executar backup: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
 /**
  * Exporta funções globais para o escopo do Apps Script
  *
@@ -340,6 +370,7 @@ global.runCompleteSetup = runCompleteSetup;
 global.setupAllSampleData = setupAllSampleData;
 global.setupBulkSampleData = setupBulkSampleData;
 global.openWebApp = openWebApp;
+global.runBackupNow = runBackupNow;
 
 // Web App API Functions
 global.getViewHtml = wrapApi('getViewHtml', getViewHtml);

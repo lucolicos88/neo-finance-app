@@ -30,6 +30,7 @@ import {
   persistDFCReport,
   persistKPIReport,
 } from './reporting-service';
+import { Sheets } from '../config/sheet-mapping';
 
 // ============================================================================
 // CONFIGURAÇÃO DE TRIGGERS
@@ -299,7 +300,59 @@ export function checkLimits(): void {
  *
  * TODO: Implementar backup para Google Drive
  */
-export function backupJob(): void {
-  console.log('Job de backup não implementado');
-  // TODO: Exportar TB_* para arquivos CSV no Drive
+export function backupJob(): { filesCreated: number; folderUrl: string; stamp: string } {
+  console.log('=== Iniciando backup ===');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tz = Session.getScriptTimeZone();
+  const stamp = Utilities.formatDate(new Date(), tz, 'yyyyMMdd_HHmmss');
+  const folder = getOrCreateFolder_('NeoFinance Backups');
+
+  const sheetNames = [
+    Sheets.TB_LANCAMENTOS,
+    Sheets.TB_EXTRATOS,
+    Sheets.TB_DRE_MENSAL,
+    Sheets.TB_DRE_RESUMO,
+    Sheets.TB_DFC_REAL,
+    Sheets.TB_DFC_PROJ,
+    Sheets.TB_KPI_RESUMO,
+    Sheets.TB_KPI_DETALHE,
+    Sheets.RPT_COMITE_FATURAMENTO,
+    Sheets.RPT_COMITE_DRE,
+    Sheets.RPT_COMITE_DFC,
+    Sheets.RPT_COMITE_KPIS,
+  ];
+
+  let filesCreated = 0;
+  for (const name of sheetNames) {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet) continue;
+    const values = sheet.getDataRange().getDisplayValues();
+    if (!values || values.length === 0) continue;
+    const csv = toCsv_(values);
+    const fileName = `${name}_${stamp}.csv`;
+    folder.createFile(fileName, csv, MimeType.CSV);
+    filesCreated += 1;
+  }
+
+  console.log('=== Backup concluido ===');
+  return { filesCreated, folderUrl: folder.getUrl(), stamp };
+}
+
+function getOrCreateFolder_(name: string): GoogleAppsScript.Drive.Folder {
+  const folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return DriveApp.createFolder(name);
+}
+
+function toCsv_(rows: string[][]): string {
+  const escapeCell = (value: string) => {
+    const v = String(value ?? '');
+    if (/[\";\n\r]/.test(v)) {
+      return '"' + v.replace(/"/g, '""') + '"';
+    }
+    return v;
+  };
+  return rows.map((r) => r.map(escapeCell).join(';')).join('\n');
 }
