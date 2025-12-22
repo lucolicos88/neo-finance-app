@@ -3,6 +3,79 @@
 let usuariosData = [];
 var gasRun = (window && window.gasRun) ? window.gasRun : google.script.run;
 
+const PERFIL_DEFAULTS = {
+  ADMIN: {
+    criarLancamentos: true,
+    editarLancamentos: true,
+    excluirLancamentos: true,
+    aprovarPagamentos: true,
+    visualizarRelatorios: true,
+    gerenciarConfig: true
+  },
+  GESTOR: {
+    criarLancamentos: true,
+    editarLancamentos: true,
+    excluirLancamentos: false,
+    aprovarPagamentos: true,
+    visualizarRelatorios: true,
+    gerenciarConfig: false
+  },
+  OPERACIONAL: {
+    criarLancamentos: true,
+    editarLancamentos: true,
+    excluirLancamentos: false,
+    aprovarPagamentos: false,
+    visualizarRelatorios: true,
+    gerenciarConfig: false
+  },
+  VISUALIZADOR: {
+    criarLancamentos: false,
+    editarLancamentos: false,
+    excluirLancamentos: false,
+    aprovarPagamentos: false,
+    visualizarRelatorios: true,
+    gerenciarConfig: false
+  }
+};
+
+let usuarioPermissoesDirty = false;
+
+function applyPermissoesFromPerfil(perfil) {
+  const perms = PERFIL_DEFAULTS[String(perfil || '').toUpperCase()] || PERFIL_DEFAULTS.VISUALIZADOR;
+  document.getElementById('perm-criar-lancamentos').checked = !!perms.criarLancamentos;
+  document.getElementById('perm-editar-lancamentos').checked = !!perms.editarLancamentos;
+  document.getElementById('perm-excluir-lancamentos').checked = !!perms.excluirLancamentos;
+  document.getElementById('perm-aprovar-pagamentos').checked = !!perms.aprovarPagamentos;
+  document.getElementById('perm-visualizar-relatorios').checked = !!perms.visualizarRelatorios;
+  document.getElementById('perm-gerenciar-config').checked = !!perms.gerenciarConfig;
+  usuarioPermissoesDirty = false;
+}
+
+function initUsuarioPermissoesListeners() {
+  const perfilSelect = document.getElementById('usuario-perfil');
+  if (perfilSelect) {
+    perfilSelect.addEventListener('change', function() {
+      applyPermissoesFromPerfil(this.value);
+    });
+  }
+  const permIds = [
+    'perm-criar-lancamentos',
+    'perm-editar-lancamentos',
+    'perm-excluir-lancamentos',
+    'perm-aprovar-pagamentos',
+    'perm-visualizar-relatorios',
+    'perm-gerenciar-config'
+  ];
+  permIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', function() {
+        usuarioPermissoesDirty = true;
+      });
+    }
+  });
+}
+
 function loadConfiguracoesData() {
   setupConfigTabs();
   initLogsTabAccess();
@@ -982,10 +1055,12 @@ function getPerfilLabel(perfil) {
 }
 
 function openModalNovoUsuario() {
-  document.getElementById('modal-usuario-title').textContent = 'Novo Usuário';
+  document.getElementById('modal-usuario-title').textContent = 'Novo Usuario';
   document.getElementById('form-usuario').reset();
   document.getElementById('usuario-id').value = '';
   document.getElementById('usuario-status').value = 'ATIVO';
+  const perfilSelect = document.getElementById('usuario-perfil');
+  applyPermissoesFromPerfil(perfilSelect ? perfilSelect.value : 'VISUALIZADOR');
   document.getElementById('modal-usuario').style.display = 'flex';
 }
 
@@ -1006,6 +1081,7 @@ function editarUsuario(index) {
   document.getElementById('perm-aprovar-pagamentos').checked = !!perms.aprovarPagamentos;
   document.getElementById('perm-visualizar-relatorios').checked = !!perms.visualizarRelatorios;
   document.getElementById('perm-gerenciar-config').checked = !!perms.gerenciarConfig;
+  usuarioPermissoesDirty = false;
 
   document.getElementById('modal-usuario').style.display = 'flex';
 }
@@ -1021,14 +1097,14 @@ function salvarUsuario() {
     nome: document.getElementById('usuario-nome').value,
     perfil: document.getElementById('usuario-perfil').value,
     status: document.getElementById('usuario-status').value,
-    permissoes: {
+    permissoes: usuarioPermissoesDirty ? {
       criarLancamentos: document.getElementById('perm-criar-lancamentos').checked,
       editarLancamentos: document.getElementById('perm-editar-lancamentos').checked,
       excluirLancamentos: document.getElementById('perm-excluir-lancamentos').checked,
       aprovarPagamentos: document.getElementById('perm-aprovar-pagamentos').checked,
       visualizarRelatorios: document.getElementById('perm-visualizar-relatorios').checked,
       gerenciarConfig: document.getElementById('perm-gerenciar-config').checked
-    }
+    } : null
   };
 
   showLoading();
@@ -1082,6 +1158,7 @@ function confirmExcluirUsuario() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  initUsuarioPermissoesListeners();
   const form = document.getElementById('form-usuario');
   if (form) {
     form.addEventListener('submit', function(e) {

@@ -134,6 +134,8 @@ function normalizePermissoes(
 ): NonNullable<Usuario['permissoes']> {
   const base = getPermissoesPadrao(perfil);
   if (!perms) return base;
+  const hasAnyTrue = Object.values(perms).some((value) => Boolean(value));
+  if (!hasAnyTrue) return base;
   return { ...base, ...perms };
 }
 
@@ -205,6 +207,18 @@ function getUsuarioByEmail(email: string): Usuario | null {
   }
 
   return null;
+}
+
+function updateUserLastAccess(email: string): void {
+  if (!email) return;
+  const sheet = ensureUsuariosSheet();
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (!data[i][0]) continue;
+    if (String(data[i][1]).toLowerCase() !== email.toLowerCase()) continue;
+    sheet.getRange(i + 1, 6).setValue(new Date().toISOString());
+    return;
+  }
 }
 
 type PermissionKey = keyof NonNullable<Usuario['permissoes']>;
@@ -712,6 +726,7 @@ export function getCurrentUserInfo(): {
 
   const perfil = normalizePerfil(user.perfil);
   const permissoes = normalizePermissoes(perfil, user.permissoes);
+  updateUserLastAccess(email);
   return { email, nome: user.nome || fallbackNome, perfil, permissoes };
 }
 
