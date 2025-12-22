@@ -675,9 +675,15 @@ export function getCurrentUserInfo(): {
 
   const fallbackNome = email.split('@')[0] || email;
   const user = getUsuarioByEmail(email);
-  const perfil = user?.perfil || 'USUARIO';
-  const permissoes = user?.permissoes || getPermissoesPadrao(perfil);
-  return { email, nome: user?.nome || fallbackNome, perfil, permissoes };
+  if (!user || user.status !== 'ATIVO') {
+    const perfil = 'SEM_ACESSO';
+    const permissoes = getPermissoesPadrao(perfil);
+    return { email, nome: fallbackNome, perfil, permissoes };
+  }
+
+  const perfil = user.perfil || 'USUARIO';
+  const permissoes = user.permissoes || getPermissoesPadrao(perfil);
+  return { email, nome: user.nome || fallbackNome, perfil, permissoes };
 }
 
 // ============================================================================
@@ -3617,6 +3623,14 @@ export function seedPlanoContasFromList(): { success: boolean; message: string }
 
 function getPermissoesPadrao(perfil: string): any {
   const permissoes: any = {
+    'SEM_ACESSO': {
+      criarLancamentos: false,
+      editarLancamentos: false,
+      excluirLancamentos: false,
+      aprovarPagamentos: false,
+      visualizarRelatorios: false,
+      gerenciarConfig: false
+    },
     'ADMIN': {
       criarLancamentos: true,
       editarLancamentos: true,

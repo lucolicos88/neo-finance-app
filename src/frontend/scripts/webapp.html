@@ -167,15 +167,15 @@ function initializeApp() {
 
   Promise.allSettled([loadCurrentUserInfo(), loadReferenceData()]).finally(() => {
     renderUserInfo();
-    if (currentUserInfo.permissoes?.visualizarRelatorios) {
+    const canSeeReports = Boolean(currentUserInfo.permissoes?.visualizarRelatorios);
+    if (canSeeReports) {
       navigateTo('dashboard');
     } else {
-      const main = document.getElementById('main-content');
-      if (main) {
-        main.innerHTML = '<div class="empty-state"><div class="empty-state-message">Sem permissão para acessar o sistema</div><div class="empty-state-hint">Solicite acesso ao administrador.</div></div>';
-      }
+      navigateTo('ajuda');
+      showToast('Sem permissao para acessar o sistema', 'error');
     }
   });
+}
 }
 
 function bootStandaloneView(view) {
@@ -183,6 +183,17 @@ function bootStandaloneView(view) {
   Promise.allSettled([loadCurrentUserInfo(), loadReferenceData()]).finally(() => {
     hideLoading();
     renderUserInfo();
+    const canSeeReports = Boolean(currentUserInfo.permissoes?.visualizarRelatorios);
+    const canManageConfig = Boolean(currentUserInfo.permissoes?.gerenciarConfig) || currentUserInfo.perfil === 'ADMIN';
+    const reportViews = ['dashboard', 'contas-pagar', 'contas-receber', 'conciliacao', 'dre', 'fluxo-caixa', 'kpis', 'relatorios'];
+    if ((reportViews.includes(view) && !canSeeReports) || (view === 'configuracoes' && !canManageConfig)) {
+      const host = document.querySelector('.app-main') || document.body;
+      if (host) {
+        host.innerHTML = '<div class="empty-state"><div class="empty-state-message">Sem permissao para acessar o sistema</div><div class="empty-state-hint">Solicite acesso ao administrador.</div></div>';
+      }
+      showToast('Sem permissao para acessar o sistema', 'error');
+      return;
+    }
     currentView = view;
     switch (view) {
       case 'dashboard':
