@@ -293,8 +293,45 @@ export function persistDREResumo(statement: DREStatement): void {
  * TODO: Implementar validação completa
  */
 export function validateDREAgainstLedger(statement: DREStatement): boolean {
-  // TODO: Somar todos os lançamentos do período e comparar com DRE
-  return true;
+  const entries = listEntries({
+    status: LedgerEntryStatus.REALIZADO,
+    periodStart: statement.period,
+    periodEnd: statement.period,
+    ...(statement.branchId && { filial: statement.branchId }),
+  });
+
+  const totals = new Map<string, Money>();
+  for (const entry of entries) {
+    const accountCode = entry.contaContabil || entry.contaGerencial;
+    const account = accountCode ? getAccountByCode(accountCode) : null;
+    const group = account?.grupoDRE || (entry.tipo === LedgerEntryType.RECEBER ? DRE_GROUPS.RECEITA_BRUTA : DRE_GROUPS.DESPESAS_OPERACIONAIS);
+    totals.set(group, (totals.get(group) || 0) + entry.valorLiquido);
+  }
+
+  const receitaBruta = totals.get(DRE_GROUPS.RECEITA_BRUTA) || 0;
+  const deducoes = totals.get(DRE_GROUPS.DEDUCOES) || 0;
+  const receitaLiquida = receitaBruta - deducoes;
+  const custos = totals.get(DRE_GROUPS.CUSTOS) || 0;
+  const lucroBruto = receitaLiquida - custos;
+  const despesasOperacionais = totals.get(DRE_GROUPS.DESPESAS_OPERACIONAIS) || 0;
+  const ebitda = lucroBruto - despesasOperacionais;
+  const depreciacao = totals.get(DRE_GROUPS.DEPRECIACAO) || 0;
+  const ebit = ebitda - depreciacao;
+  const resultadoFinanceiro = totals.get(DRE_GROUPS.RESULTADO_FINANCEIRO) || 0;
+  const lucroLiquido = ebit + resultadoFinanceiro;
+
+  const tolerance = 0.01;
+  const closeEnough = (a: number, b: number) => Math.abs(a - b) <= tolerance;
+
+  return (
+    closeEnough(statement.summary.receitaBruta, receitaBruta) &&
+    closeEnough(statement.summary.receitaLiquida, receitaLiquida) &&
+    closeEnough(statement.summary.custos, custos) &&
+    closeEnough(statement.summary.lucroBruto, lucroBruto) &&
+    closeEnough(statement.summary.despesasOperacionais, despesasOperacionais) &&
+    closeEnough(statement.summary.ebitda, ebitda) &&
+    closeEnough(statement.summary.lucroLiquido, lucroLiquido)
+  );
 }
 
 // ============================================================================

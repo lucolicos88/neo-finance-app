@@ -10,7 +10,7 @@
  * - Alimentar abas RPT_COMITE_*
  */
 
-import { setSheetValues, clearRange } from '../shared/sheets-client';
+import { setSheetValues, clearRange, createSheetIfNotExists } from '../shared/sheets-client';
 import { Sheets } from '../config/sheet-mapping';
 import { Period, BranchId, Money, LedgerEntryStatus, LedgerEntryType } from '../shared/types';
 import { formatMoney, formatPercentage } from '../shared/money-utils';
@@ -312,6 +312,8 @@ function calculateSaldoInicial(period: Period): Money {
  * Persiste relatório de faturamento em RPT_COMITE_FATURAMENTO
  */
 export function persistFaturamentoReport(report: FaturamentoReport): void {
+  const headers = ['Item', 'Valor'];
+  createSheetIfNotExists(Sheets.RPT_COMITE_FATURAMENTO, headers);
   const rows = [
     ['Receita Bruta Total', formatMoney(report.receitaBrutaTotal)],
     ['Variacao Mes Anterior', formatMoney(report.comparativoMesAnterior.variacao)],
@@ -332,6 +334,7 @@ export function persistFaturamentoReport(report: FaturamentoReport): void {
  * Persiste relatório DRE em RPT_COMITE_DRE
  */
 export function persistDREReport(report: DREReport): void {
+  createSheetIfNotExists(Sheets.RPT_COMITE_DRE, ['Item', 'Valor']);
   const rows: any[][] = [
     ['Resumo DRE', 'Valor'],
     ['Receita Bruta', formatMoney(report.resumo.receitaBruta)],
@@ -355,6 +358,7 @@ export function persistDREReport(report: DREReport): void {
  * Persiste relatório DFC em RPT_COMITE_DFC
  */
 export function persistDFCReport(report: DFCReport): void {
+  createSheetIfNotExists(Sheets.RPT_COMITE_DFC, ['Item', 'Valor']);
   const rows: any[][] = [
     ['DFC', 'Valor'],
     ['Saldo Inicial', formatMoney(report.saldoInicial)],
@@ -375,6 +379,7 @@ export function persistDFCReport(report: DFCReport): void {
  * Persiste relatório KPIs em RPT_COMITE_KPIS
  */
 export function persistKPIReport(report: KPIReport): void {
+  createSheetIfNotExists(Sheets.RPT_COMITE_KPIS, ['KPI', 'Valor', 'Faixa', 'Unidade']);
   const rows: any[][] = [
     ['KPI', 'Valor', 'Faixa', 'Unidade'],
     ...report.kpis.map((kpi) => [kpi.metric, kpi.value, kpi.faixa, kpi.unit]),

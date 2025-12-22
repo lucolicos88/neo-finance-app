@@ -213,19 +213,24 @@ export function calculateForecastCashflow(
  * TODO: Implementar estrutura agregada por mês (não dia a dia)
  */
 export function persistForecastCashflow(lines: CashflowLine[]): void {
-  // TODO: Agrupar por ano/mês antes de persistir
-  // clearRange(Sheets.TB_DFC_PROJ, 'A2:Z');
+  const headers = ['Ano', 'Mes', 'Categoria', 'Tipo', 'Valor'];
+  createSheetIfNotExists(Sheets.TB_DFC_PROJ, headers);
 
-  const rows = lines.map((line) => [
-    line.date.getFullYear(),
-    line.date.getMonth() + 1,
-    line.category,
-    line.type,
-    line.value,
-  ]);
+  const aggregated = new Map<string, Money>();
+  for (const line of lines) {
+    const year = line.date.getFullYear();
+    const month = line.date.getMonth() + 1;
+    const key = `${year}|${month}|${line.category}|${line.type}`;
+    aggregated.set(key, (aggregated.get(key) || 0) + line.value);
+  }
 
-  // TODO: Usar setSheetValues
-  // setSheetValues(Sheets.TB_DFC_PROJ, 'A2', rows);
+  const rows = Array.from(aggregated.entries()).map(([key, value]) => {
+    const [year, month, category, type] = key.split('|');
+    return [Number(year), Number(month), category, type, value];
+  });
+
+  clearRange(Sheets.TB_DFC_PROJ, 'A1:Z');
+  setSheetValues(Sheets.TB_DFC_PROJ, 'A1', [headers, ...rows]);
 }
 
 // ============================================================================
