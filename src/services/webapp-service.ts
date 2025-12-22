@@ -112,6 +112,32 @@ function sanitizeSheetString(value: unknown): string {
   return s;
 }
 
+function normalizePerfil(raw: unknown): string {
+  const value = String(raw ?? '').trim().toUpperCase();
+  const allowed = ['ADMIN', 'GESTOR', 'OPERACIONAL', 'VISUALIZADOR', 'SEM_ACESSO'];
+  return allowed.includes(value) ? value : 'VISUALIZADOR';
+}
+
+function safeParsePermissions(raw: unknown): Record<string, boolean> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(String(raw));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePermissoes(
+  perfil: string,
+  perms: Record<string, boolean> | null | undefined
+): NonNullable<Usuario['permissoes']> {
+  const base = getPermissoesPadrao(perfil);
+  if (!perms) return base;
+  return { ...base, ...perms };
+}
+
+
 type RequestContext = { __ctx?: boolean; correlationId?: string; view?: string; url?: string } | null;
 let activeRequestContext: RequestContext = null;
 
@@ -164,14 +190,17 @@ function getUsuarioByEmail(email: string): Usuario | null {
     if (!row[0]) continue;
     if (String(row[1]).toLowerCase() !== email.toLowerCase()) continue;
 
+    const perfil = normalizePerfil(row[3]);
+    const permissoes = normalizePermissoes(perfil, safeParsePermissions(row[6]));
+
     return {
       id: String(row[0]),
       email: String(row[1]),
       nome: String(row[2]),
-      perfil: String(row[3]) as any,
+      perfil: perfil as any,
       status: String(row[4]) as any,
       ultimoAcesso: row[5] ? String(row[5]) : undefined,
-      permissoes: row[6] ? JSON.parse(String(row[6])) : getPermissoesPadrao(String(row[3])),
+      permissoes,
     };
   }
 
@@ -677,12 +706,12 @@ export function getCurrentUserInfo(): {
   const user = getUsuarioByEmail(email);
   if (!user || user.status !== 'ATIVO') {
     const perfil = 'SEM_ACESSO';
-    const permissoes = getPermissoesPadrao(perfil);
+    const permissoes = normalizePermissoes(perfil, null);
     return { email, nome: fallbackNome, perfil, permissoes };
   }
 
-  const perfil = user.perfil || 'USUARIO';
-  const permissoes = user.permissoes || getPermissoesPadrao(perfil);
+  const perfil = normalizePerfil(user.perfil);
+  const permissoes = normalizePermissoes(perfil, user.permissoes);
   return { email, nome: user.nome || fallbackNome, perfil, permissoes };
 }
 
@@ -3321,6 +3350,9 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
     );
     if (!v.valid) return { success: false, message: v.errors.join('; ') };
 
+    const perfil = normalizePerfil(usuario.perfil);
+    const permissoes = normalizePermissoes(perfil, usuario.permissoes);
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ensureUsuariosSheet();
 
@@ -3337,12 +3369,11 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
       }
     }
 
-    const permissoes = usuario.permissoes || getPermissoesPadrao(usuario.perfil);
     const rowData = [
       usuario.id || Utilities.getUuid(),
       sanitizeSheetString(usuario.email).toLowerCase(),
       sanitizeSheetString(usuario.nome),
-      sanitizeSheetString(usuario.perfil),
+      sanitizeSheetString(perfil),
       sanitizeSheetString(usuario.status),
       usuario.ultimoAcesso || '',
       JSON.stringify(permissoes),
