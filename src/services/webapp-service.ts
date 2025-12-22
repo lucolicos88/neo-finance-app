@@ -39,6 +39,7 @@ const WEBAPP_VIEW_ALLOWLIST = new Set([
   'dre',
   'fluxo-caixa',
   'kpis',
+  'ajuda',
   'configuracoes',
 ]);
 
@@ -391,7 +392,17 @@ export function runSmokeTests(): {
   });
 
   run('views:getViewHtml', () => {
-    const views = ['dashboard', 'contas-pagar', 'contas-receber', 'conciliacao', 'dre', 'fluxo-caixa', 'kpis', 'configuracoes'];
+    const views = [
+      'dashboard',
+      'contas-pagar',
+      'contas-receber',
+      'conciliacao',
+      'dre',
+      'fluxo-caixa',
+      'kpis',
+      'ajuda',
+      'configuracoes',
+    ];
     for (const v of views) {
       const html = getViewHtml(v);
       if (!html || typeof html !== 'string') throw new Error(`view ${v} empty`);

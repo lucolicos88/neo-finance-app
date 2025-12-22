@@ -246,6 +246,7 @@ function renderUserInfo() {
   setNavVisible('dre', canSeeReports);
   setNavVisible('fluxo-caixa', canSeeReports);
   setNavVisible('kpis', canSeeReports);
+  setNavVisible('ajuda', true);
 
   // Configurações
   const canManageConfig = Boolean(permissoes.gerenciarConfig) || perfil === 'ADMIN';
