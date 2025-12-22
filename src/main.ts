@@ -7,6 +7,8 @@
 
 import { include } from './services/ui-service';
 import { backupJob, installTriggers } from './services/scheduler-service';
+import { exportToPDF } from './services/reporting-service';
+import { getCurrentPeriod, Period } from './shared/types';
 import { runCompleteSetup } from './setup-sheets';
 import { setupAllSampleData, setupBulkSampleData } from './setup-sample-data';
 import {
@@ -143,6 +145,9 @@ function onOpen(): void {
         .addItem('DRE', 'openDRE')
         .addItem('Fluxo de Caixa', 'openDFC')
         .addItem('KPIs', 'openKPI')
+        .addSeparator()
+        .addItem('Exportar PDF (mes atual)', 'exportCurrentReportPdf')
+        .addItem('Exportar PDF (YYYY-MM)', 'exportReportPdfForPeriod')
     )
     .addSeparator()
     .addSubMenu(
@@ -287,6 +292,69 @@ function openWebApp(): void {
   SpreadsheetApp.getUi().showModalDialog(html, 'URL da Web App');
 }
 
+function exportCurrentReportPdf(): void {
+  const period = getCurrentPeriod();
+  exportReportPdfForPeriodInternal(period);
+}
+
+function exportReportPdfForPeriod(): void {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    'Exportar PDF',
+    'Informe o periodo no formato YYYY-MM (ex: 2025-03)',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const input = String(response.getResponseText() || '').trim();
+  const period = parsePeriodInput(input);
+  if (!period) {
+    ui.alert('Periodo invalido', 'Use o formato YYYY-MM, ex: 2025-03.', ui.ButtonSet.OK);
+    return;
+  }
+
+  exportReportPdfForPeriodInternal(period);
+}
+
+function exportReportPdfForPeriodInternal(period: Period): void {
+  try {
+    const url = exportToPDF(period);
+    const urlHtml = String(url)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const html = HtmlService.createHtmlOutput(
+      `<html><body>
+        <h2>PDF exportado</h2>
+        <p><a href="${urlHtml}" target="_blank" rel="noopener noreferrer">${urlHtml}</a></p>
+      </body></html>`
+    ).setWidth(520).setHeight(180);
+
+    SpreadsheetApp.getUi().showModalDialog(html, 'Exportacao PDF');
+  } catch (error: any) {
+    SpreadsheetApp.getUi().alert(
+      'Erro',
+      `Erro ao exportar PDF: ${error.message}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
+}
+
+function parsePeriodInput(input: string): Period | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(input);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!year || month < 1 || month > 12) return null;
+  return { year, month };
+}
+
 function runBackupNow(): void {
   try {
     const result = backupJob();
@@ -371,6 +439,8 @@ global.setupAllSampleData = setupAllSampleData;
 global.setupBulkSampleData = setupBulkSampleData;
 global.openWebApp = openWebApp;
 global.runBackupNow = runBackupNow;
+global.exportCurrentReportPdf = exportCurrentReportPdf;
+global.exportReportPdfForPeriod = exportReportPdfForPeriod;
 
 // Web App API Functions
 global.getViewHtml = wrapApi('getViewHtml', getViewHtml);
