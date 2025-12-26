@@ -144,18 +144,21 @@ let appData = {
 let conciliacaoSnapshot = null;
 let currentComparativoTipo = 'PAGAR';
 let caixasState = { caixas: [], movimentos: [], selectedId: '' };
-const defaultMovTypes = [
-  'Dinheiro Cofre',
-  'Dinheiro Caixa',
-  'Moedas',
-  'Cortesias',
-  'Cartao de Credito',
-  'Depositos',
-  'Link',
-  'Outras Entradas',
-  'Outras Saidas',
-  'Sistema FC'
+const defaultCaixaTipos = [
+  { tipo: 'Reforco do Caixa', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: false },
+  { tipo: 'Cartao de Credito', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: false, contaReforco: false },
+  { tipo: 'Depositos', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: false, contaReforco: false },
+  { tipo: 'Dinheiro', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: false },
+  { tipo: 'Link', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: false, contaReforco: false },
+  { tipo: 'Deposito Caixa', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: false },
+  { tipo: 'Outras Entradas', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: false },
+  { tipo: 'Outras Saidas', natureza: 'SAIDA', requerArquivo: false, sistemaFc: false, contaReforco: false },
+  { tipo: 'Dinheiro Cofre', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: true },
+  { tipo: 'Dinheiro Caixa', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: true },
+  { tipo: 'Moedas', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: true },
+  { tipo: 'Sistema FC', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: true, contaReforco: false }
 ];
+const defaultMovTypes = defaultCaixaTipos.map(t => t.tipo);
 
 const correlationId = (() => {
   try {
@@ -1383,12 +1386,12 @@ function loadCaixasData() {
 function getActiveCaixaTipos() {
   const tipos = (appData.caixaTipos || []).filter(t => t.ativo !== false);
   if (!tipos.length) {
-    return defaultMovTypes.map(t => ({
-      tipo: t,
-      natureza: 'ENTRADA',
-      requerArquivo: false,
-      sistemaFc: t === 'Sistema FC',
-      contaReforco: t === 'Dinheiro Caixa' || t === 'Moedas',
+    return defaultCaixaTipos.map(t => ({
+      tipo: t.tipo,
+      natureza: t.natureza,
+      requerArquivo: t.requerArquivo,
+      sistemaFc: t.sistemaFc,
+      contaReforco: t.contaReforco,
       ativo: true
     }));
   }
@@ -1420,11 +1423,39 @@ function getOrderedCaixaTipos() {
   return ordered;
 }
 
+function getMovTotalByType(movimentos, tipo) {
+  const key = String(tipo || '').trim().toUpperCase();
+  if (!key) return 0;
+  return movimentos
+    .filter(m => String(m.tipo || '').trim().toUpperCase() === key)
+    .reduce((sum, m) => sum + Number(m.valor || 0), 0);
+}
+
+function getReportRows(resumo, movimentos) {
+  return [
+    { label: 'Reforco do caixa (saldo inicial do dia)', typeName: 'Reforco do Caixa', value: getMovTotalByType(movimentos, 'Reforco do Caixa'), type: 'mov' },
+    { label: 'Cartao de Credito / Laranjinha', typeName: 'Cartao de Credito', value: getMovTotalByType(movimentos, 'Cartao de Credito'), type: 'mov' },
+    { label: 'Deposito / Pix', typeName: 'Depositos', value: getMovTotalByType(movimentos, 'Depositos'), type: 'mov' },
+    { label: 'Dinheiro', typeName: 'Dinheiro', value: getMovTotalByType(movimentos, 'Dinheiro'), type: 'mov' },
+    { label: 'Link', typeName: 'Link', value: getMovTotalByType(movimentos, 'Link'), type: 'mov' },
+    { label: 'Deposito Caixa', typeName: 'Deposito Caixa', value: getMovTotalByType(movimentos, 'Deposito Caixa'), type: 'mov' },
+    { label: 'Outras entradas', typeName: 'Outras Entradas', value: getMovTotalByType(movimentos, 'Outras Entradas'), type: 'mov' },
+    { label: 'Outras saidas', typeName: 'Outras Saidas', value: getMovTotalByType(movimentos, 'Outras Saidas'), type: 'mov' },
+    { label: 'Saldo final do caixa', value: resumo.totalRecebido, type: 'resumo' },
+    { label: 'Formula Certa', value: resumo.sistemaFc, type: 'resumo' },
+    { label: 'Diferenca', value: resumo.diferenca, type: 'resumo' },
+    { label: 'Dinheiro em cofre', typeName: 'Dinheiro Cofre', value: getMovTotalByType(movimentos, 'Dinheiro Cofre'), type: 'mov' },
+    { label: 'Dinheiro do caixa', typeName: 'Dinheiro Caixa', value: getMovTotalByType(movimentos, 'Dinheiro Caixa'), type: 'mov' },
+    { label: 'Moeda', typeName: 'Moedas', value: getMovTotalByType(movimentos, 'Moedas'), type: 'mov' },
+    { label: 'Reforco para o dia seguinte (Dinheiro+Moeda+Cofre)', value: resumo.reforco, type: 'resumo' },
+  ];
+}
+
 function populateMovTypes() {
   const select = document.getElementById('mov-tipo');
   if (!select) return;
   const options = ['<option value=\"\">Selecionar...</option>'];
-  getActiveCaixaTipos().forEach(t => {
+  getOrderedCaixaTipos().forEach(t => {
     options.push(`<option value="${escapeHtml(t.tipo)}">${escapeHtml(t.tipo)}</option>`);
   });
   select.innerHTML = options.join('');
@@ -1440,6 +1471,9 @@ function updateMovTipoHint(tipo) {
   const fileInput = document.getElementById('mov-file');
   if (natureza && config && config.natureza) {
     natureza.value = config.natureza;
+    natureza.disabled = true;
+  } else if (natureza) {
+    natureza.disabled = false;
   }
   if (hint) {
     hint.textContent = config?.requerArquivo ? 'Comprovante obrigatorio para este tipo.' : '';
@@ -1578,7 +1612,6 @@ function computeResumoForCaixa(caixaId) {
 function updateResumo(caixaId) {
   const pendenciasEl = document.getElementById('caixa-pendencias');
   const resumoCardsEl = document.getElementById('resumo-cards');
-  const justificativaLinkEl = document.getElementById('caixa-justificativa-link');
   if (!pendenciasEl || !resumoCardsEl) return;
   const hasCaixa = Boolean(caixaId);
   const resumo = hasCaixa ? computeResumoForCaixa(caixaId) : {
@@ -1595,50 +1628,15 @@ function updateResumo(caixaId) {
   }
 
   const movimentos = hasCaixa ? caixasState.movimentos.filter(m => m.caixaId === caixaId) : [];
-  const orderedTipos = getOrderedCaixaTipos();
-  const cards = [];
-
-  orderedTipos.forEach(t => {
-    const total = movimentos
-      .filter(m => String(m.tipo).trim().toUpperCase() === String(t.tipo).trim().toUpperCase())
-      .reduce((sum, m) => sum + Number(m.valor || 0), 0);
-    cards.push({
-      title: t.tipo,
-      subtitle: t.natureza || '',
-      value: formatCurrency(total)
-    });
+  const rows = getReportRows(resumo, movimentos);
+  const cards = rows.map(row => {
+    const tipo = row.typeName ? getCaixaTipoConfig(row.typeName) : null;
+    return {
+      title: row.label,
+      subtitle: row.type === 'resumo' ? 'Resumo' : (tipo?.natureza || 'ENTRADA'),
+      value: formatCurrency(row.value || 0)
+    };
   });
-
-  cards.push(
-    {
-      title: 'Total Recebido',
-      subtitle: 'Resumo',
-      value: formatCurrency(resumo.totalRecebido)
-    },
-    {
-      title: 'Sistema Formula Certa',
-      subtitle: 'Resumo',
-      value: formatCurrency(resumo.sistemaFc)
-    },
-    {
-      title: 'Diferenca (Recebido - Sistema)',
-      subtitle: 'Resumo',
-      value: formatCurrency(resumo.diferenca)
-    },
-    {
-      title: 'Reforco para o dia seguinte',
-      subtitle: 'Resumo',
-      value: formatCurrency(resumo.reforco)
-    }
-  );
-
-  const caixa = hasCaixa ? caixasState.caixas.find(c => c.id === caixaId) : null;
-  const justificativa = caixa ? String(caixa.observacoes || '') : '';
-  if (justificativaLinkEl) {
-    justificativaLinkEl.innerHTML = justificativa
-      ? `<a href="#" onclick="openJustificativaModal();return false;">Ver justificativa atual</a>`
-      : '';
-  }
 
   resumoCardsEl.innerHTML = cards.map(card => `
     <div class="summary-card">
@@ -1654,7 +1652,9 @@ function resetCaixaForm() {
   document.getElementById('caixa-canal').value = '';
   document.getElementById('caixa-colaborador').value = '';
   document.getElementById('caixa-data').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('caixa-observacoes').value = '';
+  document.getElementById('caixa-observacoes-entradas').value = '';
+  document.getElementById('caixa-observacoes-saidas').value = '';
+  document.getElementById('caixa-ci').value = '';
   updateResumo(null);
 }
 
@@ -1668,7 +1668,9 @@ function salvarCaixaUi() {
   const canal = document.getElementById('caixa-canal').value;
   const colaborador = document.getElementById('caixa-colaborador').value;
   const dataFechamento = document.getElementById('caixa-data').value;
-  const observacoes = document.getElementById('caixa-observacoes').value;
+  const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
+  const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
+  const comunicadoInterno = document.getElementById('caixa-ci').value;
   const resumo = computeResumoForCaixa(id);
 
   if (!id) {
@@ -1679,8 +1681,8 @@ function salvarCaixaUi() {
     showToast('Existem movimentacoes sem comprovante', 'warning');
     return;
   }
-  if (Math.abs(resumo.diferenca) > 0.009 && !String(observacoes || '').trim()) {
-    showToast('Informe a justificativa da diferenca', 'warning');
+  if (Math.abs(resumo.diferenca) > 0.009 && !String(comunicadoInterno || '').trim()) {
+    showToast('Informe o Comunicado Interno (CI) quando houver diferenca', 'warning');
     return;
   }
 
@@ -1697,7 +1699,16 @@ function salvarCaixaUi() {
       }
     })
     .withFailureHandler(handleError)
-    .salvarCaixa({ id: id || undefined, canal, colaborador, dataFechamento, observacoes, finalizar: true });
+    .salvarCaixa({
+      id: id || undefined,
+      canal,
+      colaborador,
+      dataFechamento,
+      observacoesEntradas,
+      observacoesSaidas,
+      comunicadoInterno,
+      finalizar: true
+    });
 }
 
 function salvarCabecalhoUi() {
@@ -1705,6 +1716,9 @@ function salvarCabecalhoUi() {
   const canal = document.getElementById('caixa-canal').value;
   const colaborador = document.getElementById('caixa-colaborador').value;
   const dataFechamento = document.getElementById('caixa-data').value;
+  const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
+  const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
+  const comunicadoInterno = document.getElementById('caixa-ci').value;
 
   showLoading('Salvando dados...');
   window.gasRun
@@ -1719,7 +1733,16 @@ function salvarCabecalhoUi() {
       }
     })
     .withFailureHandler(handleError)
-    .salvarCaixa({ id: id || undefined, canal, colaborador, dataFechamento, finalizar: false });
+    .salvarCaixa({
+      id: id || undefined,
+      canal,
+      colaborador,
+      dataFechamento,
+      observacoesEntradas,
+      observacoesSaidas,
+      comunicadoInterno,
+      finalizar: false
+    });
 }
 
 function editarCaixa(id) {
@@ -1729,7 +1752,12 @@ function editarCaixa(id) {
   document.getElementById('caixa-canal').value = caixa.canal;
   document.getElementById('caixa-colaborador').value = caixa.colaborador || '';
   document.getElementById('caixa-data').value = caixa.dataFechamento || '';
-  document.getElementById('caixa-observacoes').value = caixa.observacoes || '';
+  const obsEnt = document.getElementById('caixa-observacoes-entradas');
+  const obsSai = document.getElementById('caixa-observacoes-saidas');
+  const ci = document.getElementById('caixa-ci');
+  if (obsEnt) obsEnt.value = caixa.observacoesEntradas || '';
+  if (obsSai) obsSai.value = caixa.observacoesSaidas || '';
+  if (ci) ci.value = caixa.comunicadoInterno || '';
   selectCaixa(caixa.id);
 }
 
@@ -1769,8 +1797,12 @@ function selectCaixa(id) {
     if (colabEl) colabEl.value = caixa.colaborador || '';
     const dataEl = document.getElementById('caixa-data');
     if (dataEl) dataEl.value = caixa.dataFechamento || '';
-    const obsEl = document.getElementById('caixa-observacoes');
-    if (obsEl && caixa.observacoes) obsEl.value = caixa.observacoes || '';
+    const obsEnt = document.getElementById('caixa-observacoes-entradas');
+    const obsSai = document.getElementById('caixa-observacoes-saidas');
+    const ci = document.getElementById('caixa-ci');
+    if (obsEnt) obsEnt.value = caixa.observacoesEntradas || '';
+    if (obsSai) obsSai.value = caixa.observacoesSaidas || '';
+    if (ci) ci.value = caixa.comunicadoInterno || '';
   }
 }
 
@@ -1806,13 +1838,16 @@ function salvarMovimentoUi() {
   const id = document.getElementById('mov-id').value;
   const caixaId = document.getElementById('mov-caixa-select').value;
   const tipo = document.getElementById('mov-tipo').value;
-  const natureza = document.getElementById('mov-natureza').value;
+  let natureza = document.getElementById('mov-natureza').value;
   const valor = document.getElementById('mov-valor').value;
   const observacoes = document.getElementById('mov-observacoes').value;
   const fileInput = document.getElementById('mov-file');
   const tipoConfig = getCaixaTipoConfig(tipo);
   const caixa = caixasState.caixas.find(c => c.id === caixaId);
   const dataMov = caixa ? caixa.dataFechamento : '';
+  if (tipoConfig && tipoConfig.natureza) {
+    natureza = tipoConfig.natureza;
+  }
 
   if (!caixa) {
     showToast('Selecione um caixa', 'warning');
@@ -1906,17 +1941,6 @@ function editarMovimento(id) {
   }
   const fileInput = document.getElementById('mov-file');
   if (fileInput) fileInput.value = '';
-}
-
-function openJustificativaModal() {
-  const caixaId = caixasState.selectedId;
-  const caixa = caixasState.caixas.find(c => c.id === caixaId);
-  const text = caixa ? String(caixa.observacoes || '') : '';
-  const body = document.getElementById('modal-justificativa-body');
-  if (body) {
-    body.textContent = text || 'Nenhuma justificativa informada.';
-  }
-  ModalManager.open('modal-caixa-justificativa');
 }
 
 function excluirMovimentoUi(id) {
@@ -2039,19 +2063,19 @@ function renderRelatorioCaixa(report) {
     porTipo.set(item.tipo, { entradas: Number(item.entradas || 0), saidas: Number(item.saidas || 0) });
   });
 
-  const orderedTipos = getOrderedCaixaTipos();
-  const orderedKeys = orderedTipos.map(t => String(t.tipo || '').trim());
-  const extras = Array.from(porTipo.keys()).filter(t => !orderedKeys.includes(t));
-  const rows = orderedKeys.concat(extras).map(tipo => {
-    const item = porTipo.get(tipo) || { entradas: 0, saidas: 0 };
-    const value = item.entradas > 0 ? item.entradas : item.saidas;
-    return `
-      <tr>
-        <td>${escapeHtml(tipo)}</td>
-        <td class="caixa-report-value">${formatCurrency(value || 0)}</td>
-      </tr>
-    `;
-  }).join('');
+  const resumo = {
+    totalRecebido: Number(report.totalRecebido || 0),
+    sistemaFc: Number(report.sistemaFc || 0),
+    diferenca: Number(report.diferenca || 0),
+    reforco: Number(report.reforco || 0)
+  };
+  const movimentos = Array.isArray(report.movimentos) ? report.movimentos : [];
+  const rows = getReportRows(resumo, movimentos).map(row => `
+    <tr>
+      <td>${escapeHtml(row.label)}</td>
+      <td class="caixa-report-value">${formatCurrency(row.value || 0)}</td>
+    </tr>
+  `).join('');
 
   container.innerHTML = `
     <div class="caixa-report">
@@ -2061,7 +2085,7 @@ function renderRelatorioCaixa(report) {
           <div id="caixa-report-logo-text" style="display:none; font-weight:700; font-size:1.1rem;">Neoformula</div>
         </div>
         <div class="caixa-report-title">
-          <div class="caixa-report-title-text">Fechamento Diario</div>
+          <div class="caixa-report-title-text">FECHAMENTO DE CAIXA</div>
         </div>
         <div class="caixa-report-actions">
           <button class="btn btn-outline" onclick="printCaixaReport()">Impressao</button>
@@ -2070,10 +2094,6 @@ function renderRelatorioCaixa(report) {
 
       <div class="caixa-report-meta">
         <div class="meta-row">
-          <span class="label">Fechamento de Caixa Unidade:</span>
-          <span class="value">${escapeHtml(canalNome)}</span>
-        </div>
-        <div class="meta-row">
           <span class="label">Colaborador:</span>
           <span class="value">${escapeHtml(caixa.colaborador || '-')}</span>
         </div>
@@ -2081,35 +2101,37 @@ function renderRelatorioCaixa(report) {
           <span class="label">Data:</span>
           <span class="value">${formatDate(caixa.dataFechamento)}</span>
         </div>
+        <div class="meta-row">
+          <span class="label">Loja:</span>
+          <span class="value">${escapeHtml(canalNome)}</span>
+        </div>
       </div>
 
       <div class="caixa-report-table">
         <table>
+          <thead>
+            <tr>
+              <th>Descricao</th>
+              <th class="caixa-report-value">Valor</th>
+            </tr>
+          </thead>
           <tbody>
             ${rows}
-            <tr class="row-total">
-              <td>Total Recebido</td>
-              <td class="caixa-report-value">${formatCurrency(report.totalRecebido || 0)}</td>
-            </tr>
-            <tr class="row-sistema">
-              <td>Sistema Formula Certa</td>
-              <td class="caixa-report-value">${formatCurrency(report.sistemaFc || 0)}</td>
-            </tr>
-            <tr class="row-diff">
-              <td>Diferenca (Recebido - Sistema)</td>
-              <td class="caixa-report-value">${formatCurrency(report.diferenca || 0)}</td>
-            </tr>
-            <tr class="row-reforco">
-              <td>Reforco para o dia seguinte</td>
-              <td class="caixa-report-value">${formatCurrency(report.reforco || 0)}</td>
-            </tr>
           </tbody>
         </table>
       </div>
 
       <div class="caixa-report-observacoes">
-        <div class="label">Observacoes:</div>
-        <div class="value">${escapeHtml(caixa.observacoes || '')}</div>
+        <div class="label">Observacoes / Outras Entradas:</div>
+        <div class="value">${escapeHtml(caixa.observacoesEntradas || '')}</div>
+      </div>
+      <div class="caixa-report-observacoes">
+        <div class="label">Observacoes / Outras Saidas:</div>
+        <div class="value">${escapeHtml(caixa.observacoesSaidas || '')}</div>
+      </div>
+      <div class="caixa-report-observacoes">
+        <div class="label">Comunicado Interno (CI):</div>
+        <div class="value">${escapeHtml(caixa.comunicadoInterno || '')}</div>
       </div>
     </div>
   `;

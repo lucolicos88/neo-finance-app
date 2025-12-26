@@ -300,11 +300,12 @@ function setupInitialData(): void {
   const tbCaixas = ss.getSheetByName(SHEET_TB_CAIXAS);
   if (tbCaixas) {
     tbCaixas.clear();
-    tbCaixas.getRange('A1:I1').setValues([[
-      'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Observacoes',
-      'Sistema Valor', 'Reforco', 'Criado Em', 'Atualizado Em'
+    tbCaixas.getRange('A1:K1').setValues([[
+      'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Comunicado Interno',
+      'Sistema Valor', 'Reforco', 'Criado Em', 'Atualizado Em',
+      'Observacoes Entradas', 'Observacoes Saidas'
     ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
-    tbCaixas.autoResizeColumns(1, 9);
+    tbCaixas.autoResizeColumns(1, 11);
   }
 
   // TB_CAIXAS_MOV - Movimentacoes de caixa

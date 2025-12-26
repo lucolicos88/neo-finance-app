@@ -4,9 +4,6 @@
   <div class="card">
     <div class="card-header">
       <h2 class="card-title">1. Dados do Fechamento</h2>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="resetCaixaForm()">Novo</button>
-      </div>
     </div>
     <div class="card-body">
       <input type="hidden" id="caixa-id" value="">
@@ -109,10 +106,17 @@
       </div>
       <div class="summary-grid" id="resumo-cards"></div>
       <div class="form-group" style="margin-top: 1rem;">
-        <label class="form-label">Justificativa (obrigatoria se houver diferenca)</label>
-        <textarea class="form-control" id="caixa-observacoes" rows="5" placeholder="Explique o motivo da diferenca"></textarea>
+        <label class="form-label">Observacoes / Outras Entradas</label>
+        <textarea class="form-control" id="caixa-observacoes-entradas" rows="3" placeholder="Detalhe as outras entradas"></textarea>
       </div>
-      <div class="text-muted" id="caixa-justificativa-link" style="margin-top: 0.35rem;"></div>
+      <div class="form-group" style="margin-top: 0.75rem;">
+        <label class="form-label">Observacoes / Outras Saidas</label>
+        <textarea class="form-control" id="caixa-observacoes-saidas" rows="3" placeholder="Detalhe as outras saidas"></textarea>
+      </div>
+      <div class="form-group" style="margin-top: 0.75rem;">
+        <label class="form-label">Comunicado Interno (CI)</label>
+        <textarea class="form-control" id="caixa-ci" rows="4" placeholder="Comunicado interno do fechamento"></textarea>
+      </div>
       <div class="text-muted" id="caixa-pendencias" style="margin-top: 0.5rem;"></div>
       <button class="btn btn-primary" onclick="salvarCaixaUi()">Fechar Caixa</button>
     </div>
@@ -162,21 +166,6 @@
         </div>
       </div>
       <div id="relatorio-caixa"></div>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="modal-caixa-justificativa">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 class="modal-title">Justificativa do Caixa</h3>
-      <button class="modal-close" onclick="ModalManager.close('modal-caixa-justificativa')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="modal-justificativa-body" style="white-space: pre-wrap;"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="ModalManager.close('modal-caixa-justificativa')">Fechar</button>
     </div>
   </div>
 </div>
@@ -357,6 +346,14 @@
   width: 100%;
   border-collapse: collapse;
   border: 1px solid #1f2937;
+}
+
+#relatorio-caixa .caixa-report-table th {
+  background: #d1d5db;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #1f2937;
 }
 
 #relatorio-caixa .caixa-report-table td {

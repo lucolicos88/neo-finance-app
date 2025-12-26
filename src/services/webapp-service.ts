@@ -178,8 +178,9 @@ function parseDriveFolderId(input: string): string {
 
 function ensureCaixasSheets(): void {
   createSheetIfNotExists(SHEET_TB_CAIXAS, [
-    'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Observacoes',
+    'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Comunicado Interno',
     'Sistema Valor', 'Reforco', 'Criado Em', 'Atualizado Em',
+    'Observacoes Entradas', 'Observacoes Saidas',
   ]);
   createSheetIfNotExists(SHEET_TB_CAIXAS_MOV, [
     'ID', 'Caixa ID', 'Tipo', 'Natureza', 'Valor', 'Data Mov', 'Arquivo URL',
@@ -188,8 +189,25 @@ function ensureCaixasSheets(): void {
   createSheetIfNotExists(SHEET_REF_CAIXA_TIPOS, [
     'Tipo', 'Natureza', 'Requer Arquivo', 'Sistema FC', 'Conta Reforco', 'Ativo',
   ]);
+  ensureCaixasSchema();
   ensureCaixasMovSchema();
   ensureCaixaTiposSchema();
+}
+
+function ensureCaixasSchema(): void {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_CAIXAS);
+  if (!sheet) return;
+  const headers = [
+    'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Comunicado Interno',
+    'Sistema Valor', 'Reforco', 'Criado Em', 'Atualizado Em',
+    'Observacoes Entradas', 'Observacoes Saidas',
+  ];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < headers.length) {
+    sheet.insertColumnsAfter(Math.max(1, lastCol), headers.length - lastCol);
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 }
 
 function ensureCaixasMovSchema(): void {
@@ -219,19 +237,30 @@ function ensureCaixaTiposSchema(): void {
     sheet.insertColumnsAfter(Math.max(1, lastCol), headers.length - lastCol);
   }
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  const defaults: Array<[string, string, string, string, string, string]> = [
+    ['Reforco do Caixa', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Cartao de Credito', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Depositos', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Dinheiro', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Link', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Deposito Caixa', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Outras Entradas', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Outras Saidas', 'SAIDA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+    ['Dinheiro Cofre', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+    ['Dinheiro Caixa', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+    ['Moedas', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+    ['Sistema FC', 'ENTRADA', 'TRUE', 'TRUE', 'FALSE', 'TRUE'],
+  ];
   if (sheet.getLastRow() <= 1) {
-    sheet.getRange(2, 1, 10, headers.length).setValues([
-      ['Dinheiro Cofre', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Dinheiro Caixa', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
-      ['Moedas', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
-      ['Cortesias', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Cartao de Credito', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Depositos', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Link', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Outras Entradas', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Outras Saidas', 'SAIDA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
-      ['Sistema FC', 'ENTRADA', 'TRUE', 'TRUE', 'FALSE', 'TRUE'],
-    ]);
+    sheet.getRange(2, 1, defaults.length, headers.length).setValues(defaults);
+    return;
+  }
+
+  const existingValues = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+  const existing = new Set(existingValues.map((r) => String(r[0] || '').trim().toUpperCase()).filter(Boolean));
+  const rowsToAppend = defaults.filter((row) => !existing.has(String(row[0]).trim().toUpperCase()));
+  if (rowsToAppend.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, headers.length).setValues(rowsToAppend);
   }
 }
 
@@ -2878,7 +2907,9 @@ type CaixaRow = {
   canal: string;
   colaborador: string;
   dataFechamento: string;
-  observacoes: string;
+  comunicadoInterno: string;
+  observacoesEntradas: string;
+  observacoesSaidas: string;
   sistemaValor: number;
   reforco: number;
   criadoEm: string;
@@ -2940,7 +2971,9 @@ function getCaixasRows(): CaixaRow[] {
       canal: String(r[TB_CAIXAS_COLS.CANAL] || ''),
       colaborador: String(r[TB_CAIXAS_COLS.COLABORADOR] || ''),
       dataFechamento: normalizeDateInput(r[TB_CAIXAS_COLS.DATA_FECHAMENTO]),
-      observacoes: String(r[TB_CAIXAS_COLS.OBSERVACOES] || ''),
+      comunicadoInterno: String(r[TB_CAIXAS_COLS.COMUNICADO_INTERNO] || ''),
+      observacoesEntradas: String(r[TB_CAIXAS_COLS.OBSERVACOES_ENTRADAS] || ''),
+      observacoesSaidas: String(r[TB_CAIXAS_COLS.OBSERVACOES_SAIDAS] || ''),
       sistemaValor: parseMoneyInput(r[TB_CAIXAS_COLS.SISTEMA_VALOR]),
       reforco: parseMoneyInput(r[TB_CAIXAS_COLS.REFORCO]),
       criadoEm: String(r[TB_CAIXAS_COLS.CRIADO_EM] || ''),
@@ -3036,7 +3069,9 @@ export function salvarCaixa(caixa: {
   canal: string;
   colaborador?: string;
   dataFechamento: string;
-  observacoes?: string;
+  observacoesEntradas?: string;
+  observacoesSaidas?: string;
+  comunicadoInterno?: string;
   sistemaValor?: number | string;
   reforco?: number | string;
   finalizar?: boolean;
@@ -3065,8 +3100,8 @@ export function salvarCaixa(caixa: {
 
   const finalizar = caixa.finalizar !== false;
   if (finalizar) {
-    if (Math.abs(resumo.diferenca) > 0.009 && !String(caixa.observacoes || '').trim()) {
-      return { success: false, message: 'Informe a justificativa da diferenca' };
+    if (Math.abs(resumo.diferenca) > 0.009 && !String(caixa.comunicadoInterno || '').trim()) {
+      return { success: false, message: 'Informe o Comunicado Interno (CI) quando houver diferenca' };
     }
     if (resumo.pendencias.length > 0) {
       return { success: false, message: 'Ha movimentacoes que exigem comprovante' };
@@ -3097,11 +3132,13 @@ export function salvarCaixa(caixa: {
     sanitizeSheetString(caixa.canal || ''),
     sanitizeSheetString(caixa.colaborador || ''),
     dataFechamento,
-    sanitizeSheetString(caixa.observacoes || ''),
+    sanitizeSheetString(caixa.comunicadoInterno || ''),
     sistemaValor,
     reforco,
     criadoEm,
     now,
+    sanitizeSheetString(caixa.observacoesEntradas || ''),
+    sanitizeSheetString(caixa.observacoesSaidas || ''),
   ];
 
   if (rowIndex) {
