@@ -27,6 +27,7 @@ export const SHEET_REF_FILIAIS = 'REF_FILIAIS';
 export const SHEET_REF_CANAIS = 'REF_CANAIS';
 export const SHEET_REF_CCUSTO = 'REF_CCUSTO';
 export const SHEET_REF_NATUREZAS = 'REF_NATUREZAS';
+export const SHEET_REF_CAIXA_TIPOS = 'REF_CAIXA_TIPOS';
 
 // ============================================================================
 // ABAS TRANSACIONAIS (prefixo TB_)
@@ -34,6 +35,11 @@ export const SHEET_REF_NATUREZAS = 'REF_NATUREZAS';
 
 export const SHEET_TB_LANCAMENTOS = 'TB_LANCAMENTOS';
 export const SHEET_TB_EXTRATOS = 'TB_EXTRATOS';
+export const SHEET_TB_IMPORT_FC = 'TB_IMPORT_FC';
+export const SHEET_TB_IMPORT_ITAU = 'TB_IMPORT_ITAU';
+export const SHEET_TB_IMPORT_SIEG = 'TB_IMPORT_SIEG';
+export const SHEET_TB_CAIXAS = 'TB_CAIXAS';
+export const SHEET_TB_CAIXAS_MOV = 'TB_CAIXAS_MOV';
 export const SHEET_TB_DRE_MENSAL = 'TB_DRE_MENSAL';
 export const SHEET_TB_DRE_RESUMO = 'TB_DRE_RESUMO';
 export const SHEET_TB_DFC_REAL = 'TB_DFC_REAL';
@@ -69,10 +75,16 @@ export const Sheets = {
   REF_CANAIS: SHEET_REF_CANAIS,
   REF_CCUSTO: SHEET_REF_CCUSTO,
   REF_NATUREZAS: SHEET_REF_NATUREZAS,
+  REF_CAIXA_TIPOS: SHEET_REF_CAIXA_TIPOS,
 
   // Transacional
   TB_LANCAMENTOS: SHEET_TB_LANCAMENTOS,
   TB_EXTRATOS: SHEET_TB_EXTRATOS,
+  TB_IMPORT_FC: SHEET_TB_IMPORT_FC,
+  TB_IMPORT_ITAU: SHEET_TB_IMPORT_ITAU,
+  TB_IMPORT_SIEG: SHEET_TB_IMPORT_SIEG,
+  TB_CAIXAS: SHEET_TB_CAIXAS,
+  TB_CAIXAS_MOV: SHEET_TB_CAIXAS_MOV,
   TB_DRE_MENSAL: SHEET_TB_DRE_MENSAL,
   TB_DRE_RESUMO: SHEET_TB_DRE_RESUMO,
   TB_DFC_REAL: SHEET_TB_DFC_REAL,
@@ -144,6 +156,112 @@ export const TB_EXTRATOS_COLS = {
   ID_LANCAMENTO: 8,
   OBSERVACOES: 9,
   IMPORTADO_EM: 10,
+} as const;
+
+/**
+ * Indices de colunas da aba TB_IMPORT_FC
+ */
+export const TB_IMPORT_FC_COLS = {
+  DATA_EMISSAO: 0,
+  NUM_DOCUMENTO: 1,
+  COD_CONTA: 2,
+  FILIAL_FC: 3,
+  HISTORICO: 4,
+  FORNECEDOR: 5,
+  VALOR: 6,
+  DESCRICAO: 7,
+  DATA_BAIXA: 8,
+  FLAG_BAIXA: 9,
+  DATA_VENCIMENTO: 10,
+  TIPO: 11,
+  IMPORTADO_EM: 12,
+} as const;
+
+/**
+ * Indices de colunas da aba TB_IMPORT_ITAU
+ */
+export const TB_IMPORT_ITAU_COLS = {
+  DATA: 0,
+  LANCAMENTO: 1,
+  AGENCIA_ORIGEM: 2,
+  RAZAO_SOCIAL: 3,
+  CPF_CNPJ: 4,
+  VALOR: 5,
+  SALDO: 6,
+  CONTA: 7,
+  FILIAL_FC: 8,
+  MODELO: 9,
+  IMPORTADO_EM: 10,
+} as const;
+
+/**
+ * Indices de colunas da aba TB_IMPORT_SIEG
+ */
+export const TB_IMPORT_SIEG_COLS = {
+  NUM_NFE: 0,
+  VALOR: 1,
+  DATA_EMISSAO: 2,
+  CNPJ_EMIT: 3,
+  NOME_FANT_EMIT: 4,
+  RAZAO_EMIT: 5,
+  CNPJ_DEST: 6,
+  NOME_FANT_DEST: 7,
+  RAZAO_DEST: 8,
+  DATA_ENVIO_COFRE: 9,
+  CHAVE_NFE: 10,
+  TAGS: 11,
+  CODIGO_EVENTO: 12,
+  TIPO_EVENTO: 13,
+  STATUS: 14,
+  DANFE: 15,
+  XML: 16,
+  CODIGO_FILIAL_SIEG: 17,
+  FILIAL_FC: 18,
+  IMPORTADO_EM: 19,
+} as const;
+
+/**
+ * Indices de colunas da aba TB_CAIXAS
+ */
+export const TB_CAIXAS_COLS = {
+  ID: 0,
+  CANAL: 1,
+  COLABORADOR: 2,
+  DATA_FECHAMENTO: 3,
+  OBSERVACOES: 4,
+  SISTEMA_VALOR: 5,
+  REFORCO: 6,
+  CRIADO_EM: 7,
+  ATUALIZADO_EM: 8,
+} as const;
+
+/**
+ * Indices de colunas da aba TB_CAIXAS_MOV
+ */
+export const TB_CAIXAS_MOV_COLS = {
+  ID: 0,
+  CAIXA_ID: 1,
+  TIPO: 2,
+  NATUREZA: 3,
+  VALOR: 4,
+  DATA_MOV: 5,
+  ARQUIVO_URL: 6,
+  ARQUIVO_NOME: 7,
+  CRIADO_EM: 8,
+  ATUALIZADO_EM: 9,
+  OBSERVACOES: 10,
+} as const;
+
+/**
+ * Indices de colunas da aba REF_CAIXA_TIPOS
+ */
+export const REF_CAIXA_TIPOS_COLS = {
+  TIPO: 0,
+  NATUREZA: 1,
+  REQUER_ARQUIVO: 2,
+  SISTEMA_FC: 3,
+  CONTA_REFORCO: 4,
+  ATIVO: 5,
 } as const;
 
 /**

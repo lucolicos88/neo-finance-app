@@ -27,9 +27,14 @@ import {
   atualizarLancamento,
   getLancamentoDetalhes,
   getConciliacaoData,
+  getComparativoData,
   conciliarItens,
   desfazerConciliacao,
   conciliarAutomatico,
+  importarFc,
+  importarItau,
+  importarSieg,
+  getSheetData,
   toggleCentroCusto,
   seedPlanoContasFromList,
   salvarCentroCusto,
@@ -48,6 +53,19 @@ import {
   getFluxoCaixaMensal,
   getFluxoCaixaProjecao,
   getKPIsMensal,
+  getCaixasConfig,
+  salvarCaixasConfig,
+  getCaixasData,
+  getCaixaMovimentos,
+  salvarCaixa,
+  excluirCaixa,
+  salvarCaixaMovimento,
+  excluirCaixaMovimento,
+  getCaixaRelatorio,
+  uploadCaixaArquivo,
+  salvarCaixaTipo,
+  excluirCaixaTipo,
+  toggleCaixaTipo,
   getUsuarios,
   getCurrentUserInfo,
   logClientError,
@@ -458,9 +476,14 @@ global.salvarLancamento = wrapApi('salvarLancamento', salvarLancamento);
 global.atualizarLancamento = wrapApi('atualizarLancamento', atualizarLancamento);
 global.getLancamentoDetalhes = wrapApi('getLancamentoDetalhes', getLancamentoDetalhes);
 global.getConciliacaoData = wrapApi('getConciliacaoData', getConciliacaoData);
+global.getComparativoData = wrapApi('getComparativoData', getComparativoData);
 global.conciliarItens = wrapApi('conciliarItens', conciliarItens);
 global.desfazerConciliacao = wrapApi('desfazerConciliacao', desfazerConciliacao);
 global.conciliarAutomatico = wrapApi('conciliarAutomatico', conciliarAutomatico);
+global.importarFc = wrapApi('importarFc', importarFc);
+global.importarItau = wrapApi('importarItau', importarItau);
+global.importarSieg = wrapApi('importarSieg', importarSieg);
+global.getSheetData = wrapApi('getSheetData', getSheetData);
 global.toggleCentroCusto = wrapApi('toggleCentroCusto', toggleCentroCusto);
 global.seedPlanoContasFromList = wrapApi('seedPlanoContasFromList', seedPlanoContasFromList);
 
@@ -487,6 +510,21 @@ global.getFluxoCaixaProjecao = wrapApi('getFluxoCaixaProjecao', getFluxoCaixaPro
 
 // KPIs Functions
 global.getKPIsMensal = wrapApi('getKPIsMensal', getKPIsMensal);
+
+// Caixas Functions
+global.getCaixasConfig = wrapApi('getCaixasConfig', getCaixasConfig);
+global.salvarCaixasConfig = wrapApi('salvarCaixasConfig', salvarCaixasConfig);
+global.getCaixasData = wrapApi('getCaixasData', getCaixasData);
+global.getCaixaMovimentos = wrapApi('getCaixaMovimentos', getCaixaMovimentos);
+global.salvarCaixa = wrapApi('salvarCaixa', salvarCaixa);
+global.excluirCaixa = wrapApi('excluirCaixa', excluirCaixa);
+global.salvarCaixaMovimento = wrapApi('salvarCaixaMovimento', salvarCaixaMovimento);
+global.excluirCaixaMovimento = wrapApi('excluirCaixaMovimento', excluirCaixaMovimento);
+global.getCaixaRelatorio = wrapApi('getCaixaRelatorio', getCaixaRelatorio);
+global.uploadCaixaArquivo = wrapApi('uploadCaixaArquivo', uploadCaixaArquivo);
+global.salvarCaixaTipo = wrapApi('salvarCaixaTipo', salvarCaixaTipo);
+global.excluirCaixaTipo = wrapApi('excluirCaixaTipo', excluirCaixaTipo);
+global.toggleCaixaTipo = wrapApi('toggleCaixaTipo', toggleCaixaTipo);
 
 // Usuários Functions
 global.getUsuarios = wrapApi('getUsuarios', getUsuarios);

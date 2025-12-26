@@ -77,6 +77,9 @@ export function getSheetValues(
       const numRows = options.limit
         ? Math.min(options.limit, lastRow - startRow + 1)
         : lastRow - startRow + 1;
+      if (numRows <= 0) {
+        return [];
+      }
       range = sheet.getRange(startRow, 1, numRows, lastCol);
     }
 

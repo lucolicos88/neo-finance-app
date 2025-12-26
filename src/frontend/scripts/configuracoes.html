@@ -3,79 +3,6 @@
 let usuariosData = [];
 var gasRun = (window && window.gasRun) ? window.gasRun : google.script.run;
 
-const PERFIL_DEFAULTS = {
-  ADMIN: {
-    criarLancamentos: true,
-    editarLancamentos: true,
-    excluirLancamentos: true,
-    aprovarPagamentos: true,
-    visualizarRelatorios: true,
-    gerenciarConfig: true
-  },
-  GESTOR: {
-    criarLancamentos: true,
-    editarLancamentos: true,
-    excluirLancamentos: false,
-    aprovarPagamentos: true,
-    visualizarRelatorios: true,
-    gerenciarConfig: false
-  },
-  OPERACIONAL: {
-    criarLancamentos: true,
-    editarLancamentos: true,
-    excluirLancamentos: false,
-    aprovarPagamentos: false,
-    visualizarRelatorios: true,
-    gerenciarConfig: false
-  },
-  VISUALIZADOR: {
-    criarLancamentos: false,
-    editarLancamentos: false,
-    excluirLancamentos: false,
-    aprovarPagamentos: false,
-    visualizarRelatorios: true,
-    gerenciarConfig: false
-  }
-};
-
-let usuarioPermissoesDirty = false;
-
-function applyPermissoesFromPerfil(perfil) {
-  const perms = PERFIL_DEFAULTS[String(perfil || '').toUpperCase()] || PERFIL_DEFAULTS.VISUALIZADOR;
-  document.getElementById('perm-criar-lancamentos').checked = !!perms.criarLancamentos;
-  document.getElementById('perm-editar-lancamentos').checked = !!perms.editarLancamentos;
-  document.getElementById('perm-excluir-lancamentos').checked = !!perms.excluirLancamentos;
-  document.getElementById('perm-aprovar-pagamentos').checked = !!perms.aprovarPagamentos;
-  document.getElementById('perm-visualizar-relatorios').checked = !!perms.visualizarRelatorios;
-  document.getElementById('perm-gerenciar-config').checked = !!perms.gerenciarConfig;
-  usuarioPermissoesDirty = false;
-}
-
-function initUsuarioPermissoesListeners() {
-  const perfilSelect = document.getElementById('usuario-perfil');
-  if (perfilSelect) {
-    perfilSelect.addEventListener('change', function() {
-      applyPermissoesFromPerfil(this.value);
-    });
-  }
-  const permIds = [
-    'perm-criar-lancamentos',
-    'perm-editar-lancamentos',
-    'perm-excluir-lancamentos',
-    'perm-aprovar-pagamentos',
-    'perm-visualizar-relatorios',
-    'perm-gerenciar-config'
-  ];
-  permIds.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('change', function() {
-        usuarioPermissoesDirty = true;
-      });
-    }
-  });
-}
-
 function loadConfiguracoesData() {
   setupConfigTabs();
   initLogsTabAccess();
@@ -83,6 +10,8 @@ function loadConfiguracoesData() {
   loadPlanoContas();
   loadCanais();
   loadFiliais();
+  loadCaixasConfig();
+  loadCaixaTipos();
   loadUsuarios();
 }
 
@@ -301,6 +230,52 @@ function exportLogsCsv() {
 }
 
 // ---------------------------------------------------------------------------
+// Caixas (Configuracao pasta)
+// ---------------------------------------------------------------------------
+function loadCaixasConfig() {
+  const input = document.getElementById('caixas-pasta-id');
+  const hint = document.getElementById('caixas-pasta-atual');
+  if (!input) return;
+
+  gasRun
+    .withSuccessHandler(data => {
+      if (!data) return;
+      input.value = data.pastaId || '';
+      if (hint) {
+        if (data.pastaNome && data.pastaUrl) {
+          hint.innerHTML = `Pasta atual: <a href="${data.pastaUrl}" target="_blank">${escapeHtml(data.pastaNome)}</a>`;
+        } else if (data.pastaId) {
+          hint.textContent = 'Pasta atual configurada';
+        } else {
+          hint.textContent = 'Nenhuma pasta configurada';
+        }
+      }
+    })
+    .withFailureHandler(handleError)
+    .getCaixasConfig();
+}
+
+function salvarCaixasConfig() {
+  const input = document.getElementById('caixas-pasta-id');
+  if (!input) return;
+  const value = String(input.value || '').trim();
+  showLoading('Salvando pasta de caixas...');
+  gasRun
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result && result.success) {
+        showToast(result.message || 'Pasta atualizada', 'success');
+        loadCaixasConfig();
+      } else {
+        showToast(result?.message || 'Erro ao salvar pasta', 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarCaixasConfig(value);
+}
+
+
+// ---------------------------------------------------------------------------
 // Diagnósticos (Smoke tests)
 // ---------------------------------------------------------------------------
 let lastSmokeTestsResult = null;
@@ -506,11 +481,11 @@ function loadCentrosCusto() {
         </span>
       </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarCentroCusto(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm btn-secondary" onclick="editarCentroCusto(${index})" title="Editar">Editar</button>
         <button class="btn btn-sm ${cc.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCentroCusto(${index}, ${cc.ativo === false})" title="${cc.ativo === false ? 'Ativar' : 'Inativar'}">
           ${cc.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirCentroCusto(${index})" title="Excluir">🗑</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCentroCusto(${index})" title="Excluir">Excluir</button>
       </td>
     </tr>
   `).join('');
@@ -636,9 +611,11 @@ function loadPlanoContas() {
       <td>${escapeHtml(conta.grupoDFC || '-')}</td>
       <td>${escapeHtml(conta.variavelFixa || '-')}</td>
       <td>${escapeHtml(conta.cmaCmv || '-')}</td>
-      <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">✎</button>
-        <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">🗑</button>
+      <td class="text-right" style="white-space: nowrap;">
+        <div class="table-actions" style="display:inline-flex; gap:8px; white-space:nowrap;">
+          <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">Editar</button>
+          <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">Excluir</button>
+        </div>
       </td>
     </tr>
   `).join('');
@@ -762,11 +739,11 @@ function loadCanais() {
         </span>
       </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarCanal(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm btn-secondary" onclick="editarCanal(${index})" title="Editar">Editar</button>
         <button class="btn btn-sm ${canal.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCanal(${index}, ${canal.ativo === false})" title="${canal.ativo === false ? 'Ativar' : 'Inativar'}">
           ${canal.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirCanal(${index})" title="Excluir">🗑</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCanal(${index})" title="Excluir">Excluir</button>
       </td>
     </tr>
   `).join('');
@@ -878,7 +855,7 @@ function loadFiliais() {
   if (!tbody) return;
 
   if (!appData.filiais || appData.filiais.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhuma filial cadastrada</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhuma filial cadastrada</td></tr>';
     return;
   }
 
@@ -886,17 +863,19 @@ function loadFiliais() {
     <tr>
       <td><strong>${escapeHtml(filial.codigo)}</strong></td>
       <td>${escapeHtml(filial.nome)}</td>
+      <td>${escapeHtml(filial.siegRelatorio || '-')}</td>
+      <td>${escapeHtml(filial.siegContabilidade || '-')}</td>
       <td>
         <span class="badge badge-${filial.ativo === false ? 'secondary' : 'success'}">
           ${filial.ativo === false ? 'Inativo' : 'Ativo'}
         </span>
       </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarFilial(${index})" title="Editar">✎</button>
+        <button class="btn btn-sm btn-secondary" onclick="editarFilial(${index})" title="Editar">Editar</button>
         <button class="btn btn-sm ${filial.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarFilial(${index}, ${filial.ativo === false})" title="${filial.ativo === false ? 'Ativar' : 'Inativar'}">
           ${filial.ativo === false ? 'Ativar' : 'Inativar'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirFilial(${index})" title="Excluir">🗑</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirFilial(${index})" title="Excluir">Excluir</button>
       </td>
     </tr>
   `).join('');
@@ -906,6 +885,8 @@ function openModalNovaFilial() {
   document.getElementById('titulo-filial').textContent = 'Nova Filial';
   document.getElementById('filial-edit-index').value = '';
   document.getElementById('form-filial').reset();
+  document.getElementById('filial-sieg-relatorio').value = '';
+  document.getElementById('filial-sieg-contabilidade').value = '';
   const ativo = document.getElementById('filial-ativo');
   if (ativo) ativo.checked = true;
   ModalManager.open('modal-filial');
@@ -917,6 +898,8 @@ function editarFilial(index) {
   document.getElementById('filial-edit-index').value = index;
   document.getElementById('filial-codigo').value = filial.codigo;
   document.getElementById('filial-nome').value = filial.nome;
+  document.getElementById('filial-sieg-relatorio').value = filial.siegRelatorio || '';
+  document.getElementById('filial-sieg-contabilidade').value = filial.siegContabilidade || '';
   const ativo = document.getElementById('filial-ativo');
   if (ativo) ativo.checked = filial.ativo !== false;
   ModalManager.open('modal-filial');
@@ -925,6 +908,8 @@ function editarFilial(index) {
 function salvarFilial() {
   const codigo = document.getElementById('filial-codigo').value.trim().toUpperCase();
   const nome = document.getElementById('filial-nome').value.trim();
+  const siegRelatorio = document.getElementById('filial-sieg-relatorio').value.trim();
+  const siegContabilidade = document.getElementById('filial-sieg-contabilidade').value.trim();
   const ativo = document.getElementById('filial-ativo').checked;
   const editIndex = document.getElementById('filial-edit-index').value;
 
@@ -934,7 +919,7 @@ function salvarFilial() {
   }
 
   showLoading('Salvando filial...');
-  const filial = { codigo, nome, ativo };
+  const filial = { codigo, nome, siegRelatorio, siegContabilidade, ativo };
 
   gasRun
     .withSuccessHandler(result => {
@@ -1032,15 +1017,15 @@ function renderUsuarios() {
       <td><span class="badge badge-${user.status === 'ATIVO' ? 'success' : 'secondary'}">${escapeHtml(user.status)}</span></td>
       <td>${user.ultimoAcesso ? formatDate(user.ultimoAcesso) : 'Nunca'}</td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarUsuario(${index})" title="Editar">✎</button>
-        <button class="btn btn-sm btn-danger" onclick="excluirUsuario(${index})" title="Excluir">🗑</button>
+        <button class="btn btn-sm btn-secondary" onclick="editarUsuario(${index})" title="Editar">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirUsuario(${index})" title="Excluir">Excluir</button>
       </td>
     </tr>
   `).join('');
 }
 
 function getPerfilBadge(perfil) {
-  const badges = { 'ADMIN': 'danger', 'GESTOR': 'warning', 'OPERACIONAL': 'info', 'VISUALIZADOR': 'secondary' };
+  const badges = { 'ADMIN': 'danger', 'GESTOR': 'warning', 'OPERACIONAL': 'info', 'CAIXA': 'primary', 'VISUALIZADOR': 'secondary' };
   return badges[perfil] || 'secondary';
 }
 
@@ -1049,6 +1034,7 @@ function getPerfilLabel(perfil) {
     'ADMIN': 'Administrador',
     'GESTOR': 'Gestor',
     'OPERACIONAL': 'Operacional',
+    'CAIXA': 'Caixa',
     'VISUALIZADOR': 'Visualizador'
   };
   return labels[perfil] || perfil;
@@ -1059,8 +1045,6 @@ function openModalNovoUsuario() {
   document.getElementById('form-usuario').reset();
   document.getElementById('usuario-id').value = '';
   document.getElementById('usuario-status').value = 'ATIVO';
-  const perfilSelect = document.getElementById('usuario-perfil');
-  applyPermissoesFromPerfil(perfilSelect ? perfilSelect.value : 'VISUALIZADOR');
   document.getElementById('modal-usuario').style.display = 'flex';
 }
 
@@ -1072,16 +1056,6 @@ function editarUsuario(index) {
   document.getElementById('usuario-nome').value = user.nome;
   document.getElementById('usuario-perfil').value = user.perfil;
   document.getElementById('usuario-status').value = user.status;
-
-  // Permissões
-  const perms = user.permissoes || {};
-  document.getElementById('perm-criar-lancamentos').checked = !!perms.criarLancamentos;
-  document.getElementById('perm-editar-lancamentos').checked = !!perms.editarLancamentos;
-  document.getElementById('perm-excluir-lancamentos').checked = !!perms.excluirLancamentos;
-  document.getElementById('perm-aprovar-pagamentos').checked = !!perms.aprovarPagamentos;
-  document.getElementById('perm-visualizar-relatorios').checked = !!perms.visualizarRelatorios;
-  document.getElementById('perm-gerenciar-config').checked = !!perms.gerenciarConfig;
-  usuarioPermissoesDirty = false;
 
   document.getElementById('modal-usuario').style.display = 'flex';
 }
@@ -1096,15 +1070,7 @@ function salvarUsuario() {
     email: document.getElementById('usuario-email').value,
     nome: document.getElementById('usuario-nome').value,
     perfil: document.getElementById('usuario-perfil').value,
-    status: document.getElementById('usuario-status').value,
-    permissoes: usuarioPermissoesDirty ? {
-      criarLancamentos: document.getElementById('perm-criar-lancamentos').checked,
-      editarLancamentos: document.getElementById('perm-editar-lancamentos').checked,
-      excluirLancamentos: document.getElementById('perm-excluir-lancamentos').checked,
-      aprovarPagamentos: document.getElementById('perm-aprovar-pagamentos').checked,
-      visualizarRelatorios: document.getElementById('perm-visualizar-relatorios').checked,
-      gerenciarConfig: document.getElementById('perm-gerenciar-config').checked
-    } : null
+    status: document.getElementById('usuario-status').value
   };
 
   showLoading();
@@ -1158,7 +1124,6 @@ function confirmExcluirUsuario() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  initUsuarioPermissoesListeners();
   const form = document.getElementById('form-usuario');
   if (form) {
     form.addEventListener('submit', function(e) {
@@ -1174,4 +1139,138 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Tipos de Movimentacao do Caixa
+// ---------------------------------------------------------------------------
+let caixaTipoIndexParaExcluir = null;
+
+function loadCaixaTipos() {
+  renderCaixaTipos();
+}
+
+function renderCaixaTipos() {
+  const tbody = document.getElementById('table-caixa-tipos');
+  if (!tbody) return;
+  const tipos = appData.caixaTipos || [];
+  if (!tipos.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum tipo cadastrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = tipos.map((tipo, index) => `
+    <tr>
+      <td><strong>${escapeHtml(tipo.tipo)}</strong></td>
+      <td>${escapeHtml(tipo.natureza || '')}</td>
+      <td>${tipo.requerArquivo ? 'Sim' : 'Nao'}</td>
+      <td>${tipo.sistemaFc ? 'Sim' : 'Nao'}</td>
+      <td>${tipo.contaReforco ? 'Sim' : 'Nao'}</td>
+      <td>
+        <span class="badge badge-${tipo.ativo === false ? 'secondary' : 'success'}">
+          ${tipo.ativo === false ? 'Inativo' : 'Ativo'}
+        </span>
+      </td>
+      <td class="text-right">
+        <button class="btn btn-sm btn-secondary" onclick="editarCaixaTipo(${index})" title="Editar">Editar</button>
+        <button class="btn btn-sm ${tipo.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCaixaTipo(${index}, ${tipo.ativo === false})" title="${tipo.ativo === false ? 'Ativar' : 'Inativar'}">
+          ${tipo.ativo === false ? 'Ativar' : 'Inativar'}
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="excluirCaixaTipo(${index})" title="Excluir">Excluir</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openModalNovoCaixaTipo() {
+  document.getElementById('titulo-caixa-tipo').textContent = 'Novo Tipo de Movimentacao';
+  document.getElementById('caixa-tipo-edit-index').value = '';
+  document.getElementById('form-caixa-tipo').reset();
+  document.getElementById('caixa-tipo-ativo').checked = true;
+  ModalManager.open('modal-caixa-tipo');
+}
+
+function editarCaixaTipo(index) {
+  const tipo = appData.caixaTipos[index];
+  document.getElementById('titulo-caixa-tipo').textContent = 'Editar Tipo de Movimentacao';
+  document.getElementById('caixa-tipo-edit-index').value = index;
+  document.getElementById('caixa-tipo-nome').value = tipo.tipo;
+  document.getElementById('caixa-tipo-natureza').value = tipo.natureza || 'ENTRADA';
+  document.getElementById('caixa-tipo-requer-arquivo').checked = !!tipo.requerArquivo;
+  document.getElementById('caixa-tipo-sistema-fc').checked = !!tipo.sistemaFc;
+  document.getElementById('caixa-tipo-conta-reforco').checked = !!tipo.contaReforco;
+  document.getElementById('caixa-tipo-ativo').checked = tipo.ativo !== false;
+  ModalManager.open('modal-caixa-tipo');
+}
+
+function salvarCaixaTipo() {
+  const tipoNome = document.getElementById('caixa-tipo-nome').value.trim();
+  const natureza = document.getElementById('caixa-tipo-natureza').value;
+  const requerArquivo = document.getElementById('caixa-tipo-requer-arquivo').checked;
+  const sistemaFc = document.getElementById('caixa-tipo-sistema-fc').checked;
+  const contaReforco = document.getElementById('caixa-tipo-conta-reforco').checked;
+  const ativo = document.getElementById('caixa-tipo-ativo').checked;
+  const editIndex = document.getElementById('caixa-tipo-edit-index').value;
+
+  if (!tipoNome) {
+    showToast('Preencha o tipo', 'warning');
+    return;
+  }
+
+  showLoading('Salvando tipo...');
+  gasRun
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        ModalManager.close('modal-caixa-tipo');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarCaixaTipo({ tipo: tipoNome, natureza, requerArquivo, sistemaFc, contaReforco, ativo }, editIndex !== '' ? parseInt(editIndex) : -1);
+}
+
+function excluirCaixaTipo(index) {
+  caixaTipoIndexParaExcluir = index;
+  ModalManager.open('modal-confirm-caixa-tipo');
+}
+
+function confirmExcluirCaixaTipo() {
+  if (caixaTipoIndexParaExcluir === null) return;
+  const index = caixaTipoIndexParaExcluir;
+  caixaTipoIndexParaExcluir = null;
+  ModalManager.close('modal-confirm-caixa-tipo');
+  showLoading('Excluindo...');
+  gasRun
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .excluirCaixaTipo(index);
+}
+
+function alternarCaixaTipo(index, ativar) {
+  showLoading(ativar ? 'Ativando tipo...' : 'Inativando tipo...');
+  gasRun
+    .withSuccessHandler(result => {
+      hideLoading();
+      if (result.success) {
+        showToast(result.message, 'success');
+        loadReferenceData();
+      } else {
+        showToast(result.message, 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .toggleCaixaTipo(index, ativar);
+}
 </script>

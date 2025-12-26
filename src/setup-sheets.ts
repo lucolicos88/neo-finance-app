@@ -18,6 +18,12 @@ import {
   SHEET_REF_NATUREZAS,
   SHEET_TB_LANCAMENTOS,
   SHEET_TB_EXTRATOS,
+  SHEET_TB_IMPORT_FC,
+  SHEET_TB_IMPORT_ITAU,
+  SHEET_TB_IMPORT_SIEG,
+  SHEET_TB_CAIXAS,
+  SHEET_TB_CAIXAS_MOV,
+  SHEET_REF_CAIXA_TIPOS,
   SHEET_TB_DRE_MENSAL,
   SHEET_TB_DRE_RESUMO,
   SHEET_TB_DFC_REAL,
@@ -48,13 +54,19 @@ function setupAllSheets(): void {
     // Referência
     SHEET_REF_PLANO_CONTAS,
     SHEET_REF_FILIAIS,
-    SHEET_REF_CANAIS,
+      SHEET_REF_CANAIS,
     SHEET_REF_CCUSTO,
     SHEET_REF_NATUREZAS,
 
     // Transacional
     SHEET_TB_LANCAMENTOS,
     SHEET_TB_EXTRATOS,
+    SHEET_TB_IMPORT_FC,
+    SHEET_TB_IMPORT_ITAU,
+    SHEET_TB_IMPORT_SIEG,
+    SHEET_TB_CAIXAS,
+    SHEET_TB_CAIXAS_MOV,
+    SHEET_REF_CAIXA_TIPOS,
     SHEET_TB_DRE_MENSAL,
     SHEET_TB_DRE_RESUMO,
     SHEET_TB_DFC_REAL,
@@ -103,7 +115,7 @@ function setupInitialData(): void {
       'Chave', 'Valor', 'Tipo', 'Descrição', 'Ativo'
     ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
 
-    cfgConfig.getRange('A2:E10').setValues([
+    cfgConfig.getRange('A2:E11').setValues([
       ['EMPRESA_NOME', 'Neoformula', 'TEXT', 'Nome da empresa', 'TRUE'],
       ['MOEDA_PADRAO', 'BRL', 'TEXT', 'Moeda padrão', 'TRUE'],
       ['TIMEZONE', 'America/Sao_Paulo', 'TEXT', 'Fuso horário', 'TRUE'],
@@ -113,6 +125,7 @@ function setupInitialData(): void {
       ['DIAS_AVISO_VENCIMENTO', '3', 'NUMBER', 'Dias de aviso antes do vencimento', 'TRUE'],
       ['EMAIL_NOTIFICACOES', 'financeiro@neoformula.com', 'TEXT', 'Email para notificações', 'TRUE'],
       ['APROVACAO_NECESSARIA', 'TRUE', 'BOOLEAN', 'Lançamentos precisam aprovação', 'TRUE'],
+      ['CAIXAS_PASTA_ID', '', 'TEXT', 'Pasta raiz para uploads de caixas', 'TRUE'],
     ]);
 
     cfgConfig.autoResizeColumns(1, 5);
@@ -122,18 +135,18 @@ function setupInitialData(): void {
   const refFiliais = ss.getSheetByName(SHEET_REF_FILIAIS);
   if (refFiliais) {
     refFiliais.clear();
-    refFiliais.getRange('A1:D1').setValues([[
-      'Código', 'Nome', 'CNPJ', 'Ativa'
+    refFiliais.getRange('A1:F1').setValues([[
+      'C??digo', 'Nome', 'CNPJ', 'Ativa', 'Filial SIEG Relatorio', 'Filial SIEG Contabilidade'
     ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
 
-    refFiliais.getRange('A2:D5').setValues([
-      ['MATRIZ', 'Matriz São Paulo', '00.000.000/0001-00', 'TRUE'],
-      ['FILIAL_RJ', 'Filial Rio de Janeiro', '00.000.000/0002-00', 'TRUE'],
-      ['FILIAL_BH', 'Filial Belo Horizonte', '00.000.000/0003-00', 'TRUE'],
-      ['FILIAL_DF', 'Filial Brasília', '00.000.000/0004-00', 'TRUE'],
+    refFiliais.getRange('A2:F5').setValues([
+      ['MATRIZ', 'Matriz S??o Paulo', '00.000.000/0001-00', 'TRUE', '', ''],
+      ['FILIAL_RJ', 'Filial Rio de Janeiro', '00.000.000/0002-00', 'TRUE', '', ''],
+      ['FILIAL_BH', 'Filial Belo Horizonte', '00.000.000/0003-00', 'TRUE', '', ''],
+      ['FILIAL_DF', 'Filial Bras??lia', '00.000.000/0004-00', 'TRUE', '', ''],
     ]);
 
-    refFiliais.autoResizeColumns(1, 4);
+    refFiliais.autoResizeColumns(1, 6);
   }
 
   // REF_PLANO_CONTAS - Plano de contas simplificado
@@ -246,6 +259,87 @@ function setupInitialData(): void {
       'Conta', 'Status Conciliação', 'ID Lançamento', 'Observações', 'Importado Em'
     ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
     tbExtratos.autoResizeColumns(1, 11);
+  }
+
+  // TB_IMPORT_FC - Importacao contas FC
+  const tbImportFc = ss.getSheetByName(SHEET_TB_IMPORT_FC);
+  if (tbImportFc) {
+    tbImportFc.clear();
+    tbImportFc.getRange('A1:M1').setValues([[
+      'Data Emissao', 'Num Documento', 'Cod Conta', 'Filial FC', 'Historico', 'Fornecedor',
+      'Valor', 'Descricao', 'Data Baixa', 'Flag Baixa', 'Data Vencimento', 'Tipo', 'Importado Em'
+    ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
+    tbImportFc.autoResizeColumns(1, 13);
+  }
+
+  // TB_IMPORT_ITAU - Importacao extrato Itau
+  const tbImportItau = ss.getSheetByName(SHEET_TB_IMPORT_ITAU);
+  if (tbImportItau) {
+    tbImportItau.clear();
+    tbImportItau.getRange('A1:K1').setValues([[
+      'Data', 'Lancamento', 'Agencia/Origem', 'Razao Social', 'CPF/CNPJ', 'Valor',
+      'Saldo', 'Conta', 'Filial FC', 'Modelo', 'Importado Em'
+    ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
+    tbImportItau.autoResizeColumns(1, 11);
+  }
+
+  // TB_IMPORT_SIEG - Importacao extrato SIEG (NF-e)
+  const tbImportSieg = ss.getSheetByName(SHEET_TB_IMPORT_SIEG);
+  if (tbImportSieg) {
+    tbImportSieg.clear();
+    tbImportSieg.getRange('A1:T1').setValues([[
+      'Num NFe', 'Valor', 'Data Emissao', 'CNPJ Emit', 'Nome Fant Emit', 'Razao Soc Emit',
+      'CNPJ Dest', 'Nome Fant Dest', 'Razao Soc Dest', 'Data Envio Cofre', 'Chave NFe',
+      'Tags', 'Codigo Evento', 'Tipo Evento', 'Status', 'Danfe', 'Xml', 'Codigo Filial',
+      'Filial FC', 'Importado Em'
+    ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
+    tbImportSieg.autoResizeColumns(1, 20);
+  }
+
+  // TB_CAIXAS - Fechamentos de caixa
+  const tbCaixas = ss.getSheetByName(SHEET_TB_CAIXAS);
+  if (tbCaixas) {
+    tbCaixas.clear();
+    tbCaixas.getRange('A1:I1').setValues([[
+      'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Observacoes',
+      'Sistema Valor', 'Reforco', 'Criado Em', 'Atualizado Em'
+    ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
+    tbCaixas.autoResizeColumns(1, 9);
+  }
+
+  // TB_CAIXAS_MOV - Movimentacoes de caixa
+  const tbCaixasMov = ss.getSheetByName(SHEET_TB_CAIXAS_MOV);
+  if (tbCaixasMov) {
+    tbCaixasMov.clear();
+    tbCaixasMov.getRange('A1:K1').setValues([[
+      'ID', 'Caixa ID', 'Tipo', 'Natureza', 'Valor', 'Data Mov',
+      'Arquivo URL', 'Arquivo Nome', 'Criado Em', 'Atualizado Em', 'Observacoes'
+    ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
+    tbCaixasMov.autoResizeColumns(1, 11);
+  }
+
+  // REF_CAIXA_TIPOS - Tipos de movimentacao do caixa
+  const refCaixaTipos = ss.getSheetByName(SHEET_REF_CAIXA_TIPOS);
+  if (refCaixaTipos) {
+    refCaixaTipos.clear();
+    refCaixaTipos.getRange('A1:F1').setValues([[
+      'Tipo', 'Natureza', 'Requer Arquivo', 'Sistema FC', 'Conta Reforco', 'Ativo'
+    ]]).setFontWeight('bold').setBackground('#4285F4').setFontColor('#FFFFFF');
+
+    refCaixaTipos.getRange('A2:F11').setValues([
+      ['Dinheiro Cofre', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Dinheiro Caixa', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+      ['Moedas', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+      ['Cortesias', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Cartao de Credito', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Depositos', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Link', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Outras Entradas', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Outras Saidas', 'SAIDA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Sistema FC', 'ENTRADA', 'TRUE', 'TRUE', 'FALSE', 'TRUE'],
+    ]);
+
+    refCaixaTipos.autoResizeColumns(1, 6);
   }
 
   // TB_DRE_MENSAL - DRE mensal

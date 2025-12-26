@@ -1,0 +1,470 @@
+<div class="view-container" id="caixas-view">
+  <h1 class="view-title">Caixas</h1>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. Dados do Fechamento</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="resetCaixaForm()">Novo</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <input type="hidden" id="caixa-id" value="">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Canal</label>
+          <select class="form-control" id="caixa-canal">
+            <option value="">Selecionar...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Colaborador</label>
+          <input type="text" class="form-control" id="caixa-colaborador" placeholder="Nome do colaborador">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data Fechamento</label>
+          <input type="date" class="form-control" id="caixa-data">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="salvarCabecalhoUi()">Salvar Dados</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">2. Movimentacoes do Dia</h2>
+    </div>
+    <div class="card-body">
+      <input type="hidden" id="mov-id" value="">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Caixa</label>
+          <select class="form-control" id="mov-caixa-select">
+            <option value="">Selecionar...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select class="form-control" id="mov-tipo"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Natureza</label>
+          <select class="form-control" id="mov-natureza">
+            <option value="ENTRADA">Entrada</option>
+            <option value="SAIDA">Saida</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor</label>
+          <input type="number" class="form-control" id="mov-valor" step="0.01" placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observacoes</label>
+          <textarea class="form-control" id="mov-observacoes" rows="2" placeholder="Observacoes da movimentacao"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Comprovante (quando necessario)</label>
+          <div class="dropzone" id="mov-file-drop">
+            <div class="dropzone-text">Arraste o arquivo aqui ou clique para selecionar</div>
+            <div class="dropzone-name" id="mov-file-name">Nenhum arquivo selecionado</div>
+            <input type="file" class="form-control" id="mov-file" style="display:none;">
+          </div>
+          <div class="text-muted" id="mov-file-hint" style="margin-top: 0.35rem; font-size: 0.85rem;"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="salvarMovimentoUi()">Salvar Movimentacao</button>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Natureza</th>
+            <th>Valor</th>
+            <th>Observacoes</th>
+            <th>Comprovante</th>
+            <th>Status</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="table-movimentos">
+          <tr><td colspan="7" class="text-center text-muted">Selecione um caixa</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">3. Resumo e Fechamento</h2>
+    </div>
+    <div class="card-body">
+      <div class="form-row" style="margin-bottom: 1rem;">
+        <div class="form-group">
+          <label class="form-label">Caixa para fechar</label>
+          <select class="form-control" id="caixa-fechar-select">
+            <option value="">Selecionar...</option>
+          </select>
+        </div>
+      </div>
+      <div class="summary-grid" id="resumo-cards"></div>
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="form-label">Justificativa (obrigatoria se houver diferenca)</label>
+        <textarea class="form-control" id="caixa-observacoes" rows="5" placeholder="Explique o motivo da diferenca"></textarea>
+      </div>
+      <div class="text-muted" id="caixa-justificativa-link" style="margin-top: 0.35rem;"></div>
+      <div class="text-muted" id="caixa-pendencias" style="margin-top: 0.5rem;"></div>
+      <button class="btn btn-primary" onclick="salvarCaixaUi()">Fechar Caixa</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Fechamentos Registrados</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="loadCaixasData()">Atualizar</button>
+      </div>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Canal</th>
+            <th>Colaborador</th>
+            <th>Data Fechamento</th>
+            <th>Total Recebido</th>
+            <th>Sistema FC</th>
+            <th>Diferenca</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="table-caixas">
+          <tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Relatorio de Caixa</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="gerarRelatorioCaixa()">Gerar</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Caixa</label>
+          <select class="form-control" id="relatorio-caixa-select">
+            <option value="">Selecionar...</option>
+          </select>
+        </div>
+      </div>
+      <div id="relatorio-caixa"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-caixa-justificativa">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Justificativa do Caixa</h3>
+      <button class="modal-close" onclick="ModalManager.close('modal-caixa-justificativa')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-justificativa-body" style="white-space: pre-wrap;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-caixa-justificativa')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<style id="caixa-report-styles">
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.summary-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+}
+
+.summary-item span {
+  display: block;
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+}
+
+.summary-item strong {
+  font-size: 1.1rem;
+}
+
+#resumo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  grid-auto-rows: 1fr;
+}
+
+.summary-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 110px;
+}
+
+.summary-card .summary-title {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.summary-card .summary-subtitle {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+}
+
+.summary-card .summary-value {
+  font-weight: 700;
+  color: #111827;
+}
+
+.summary-card .summary-value a {
+  color: #0f766e;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+#mov-file {
+  padding: 0.45rem;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+}
+
+.dropzone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #f8fafc;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.dropzone.drag {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+
+.dropzone-text {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.dropzone-name {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+#relatorio-caixa .caixa-report {
+  border: 2px solid #1f2937;
+  padding: 1.25rem;
+  background: #ffffff;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+#relatorio-caixa .caixa-report,
+#relatorio-caixa .caixa-report * {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#relatorio-caixa .caixa-report-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+#relatorio-caixa .caixa-report-logo img {
+  max-width: 180px;
+  height: auto;
+  display: block;
+}
+
+#relatorio-caixa .caixa-report-logo div {
+  font-weight: 700;
+}
+
+#relatorio-caixa .caixa-report-title {
+  text-align: center;
+  border: 1px solid #1f2937;
+  padding: 0.75rem;
+}
+
+#relatorio-caixa .caixa-report-title-text {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#relatorio-caixa .caixa-report-actions {
+  text-align: right;
+}
+
+#relatorio-caixa .caixa-report-meta {
+  border: 1px solid #1f2937;
+  margin-bottom: 1rem;
+}
+
+#relatorio-caixa .caixa-report-meta .meta-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #1f2937;
+}
+
+#relatorio-caixa .caixa-report-meta .meta-row:last-child {
+  border-bottom: 0;
+}
+
+#relatorio-caixa .caixa-report-meta .label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+#relatorio-caixa .caixa-report-table table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #1f2937;
+}
+
+#relatorio-caixa .caixa-report-table td {
+  border-bottom: 1px solid #1f2937;
+  padding: 0.45rem 0.6rem;
+}
+
+#relatorio-caixa .caixa-report-table tr:last-child td {
+  border-bottom: 0;
+}
+
+#relatorio-caixa .caixa-report-table .caixa-report-value {
+  text-align: right;
+  font-weight: 600;
+}
+
+#relatorio-caixa .row-sistema td {
+  background: #d1fae5;
+}
+
+#relatorio-caixa .row-diff td {
+  background: #dbeafe;
+}
+
+#relatorio-caixa .row-total td,
+#relatorio-caixa .row-reforco td {
+  font-weight: 700;
+}
+
+#relatorio-caixa .caixa-report-observacoes {
+  border: 1px solid #1f2937;
+  padding: 0.6rem;
+  margin-top: 1rem;
+  min-height: 80px;
+}
+
+#relatorio-caixa .caixa-report-observacoes .label {
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+  display: block;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body {
+    background: #ffffff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    margin: 0;
+  }
+
+  .caixa-report-actions {
+    display: none !important;
+  }
+
+  .caixa-report {
+    box-shadow: none;
+    margin: 0;
+  }
+}
+
+#relatorio-caixa .caixa-report-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#relatorio-caixa .caixa-report-table td {
+  border: 1px solid #1f2937;
+  padding: 0.45rem 0.6rem;
+}
+
+#relatorio-caixa .caixa-report-value {
+  text-align: right;
+  font-weight: 600;
+}
+
+#relatorio-caixa .row-total td {
+  font-weight: 700;
+}
+
+#relatorio-caixa .row-sistema td {
+  background: #d1fae5;
+  font-weight: 700;
+}
+
+#relatorio-caixa .row-diff td {
+  background: #e0f2fe;
+  font-weight: 700;
+}
+
+#relatorio-caixa .row-reforco td {
+  font-weight: 700;
+}
+
+#relatorio-caixa .caixa-report-observacoes {
+  border: 1px solid #1f2937;
+  min-height: 80px;
+  margin-top: 1rem;
+  padding: 0.6rem;
+}
+
+#relatorio-caixa .caixa-report-observacoes .label {
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+</style>

@@ -34,6 +34,39 @@ const ModalManager = {
   }
 };
 
+const ConfirmModal = {
+  pending: null,
+  open({ title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar' }) {
+    const modal = document.getElementById('modal-confirm');
+    if (!modal) return Promise.resolve(false);
+    const titleEl = modal.querySelector('[data-confirm-title]');
+    const messageEl = modal.querySelector('[data-confirm-message]');
+    const btnConfirm = modal.querySelector('[data-confirm-ok]');
+    const btnCancel = modal.querySelector('[data-confirm-cancel]');
+    if (titleEl) titleEl.textContent = title || 'Confirmar';
+    if (messageEl) messageEl.textContent = message || '';
+    if (btnConfirm) btnConfirm.textContent = confirmLabel;
+    if (btnCancel) btnCancel.textContent = cancelLabel;
+
+    return new Promise(resolve => {
+      ConfirmModal.pending = resolve;
+      ModalManager.open('modal-confirm');
+    });
+  },
+  close(result) {
+    if (ConfirmModal.pending) {
+      ConfirmModal.pending(result);
+      ConfirmModal.pending = null;
+    }
+    ModalManager.close('modal-confirm');
+  }
+};
+
+function openConfirmModal(options) {
+  return ConfirmModal.open(options);
+}
+
+
 // Fecha modal ao clicar fora
 document.addEventListener('click', function(e) {
   if (e.target.classList && e.target.classList.contains('modal-overlay')) {
@@ -63,7 +96,8 @@ let currentUserInfo = {
     excluirLancamentos: false,
     aprovarPagamentos: false,
     visualizarRelatorios: false,
-    gerenciarConfig: false
+    gerenciarConfig: false,
+    importarArquivos: false
   }
 };
 
@@ -104,9 +138,24 @@ let appData = {
   filiais: [],
   canais: [],
   contas: [],
-  centrosCusto: []
+  centrosCusto: [],
+  caixaTipos: []
 };
 let conciliacaoSnapshot = null;
+let currentComparativoTipo = 'PAGAR';
+let caixasState = { caixas: [], movimentos: [], selectedId: '' };
+const defaultMovTypes = [
+  'Dinheiro Cofre',
+  'Dinheiro Caixa',
+  'Moedas',
+  'Cortesias',
+  'Cartao de Credito',
+  'Depositos',
+  'Link',
+  'Outras Entradas',
+  'Outras Saidas',
+  'Sistema FC'
+];
 
 const correlationId = (() => {
   try {
@@ -168,8 +217,13 @@ function initializeApp() {
   Promise.allSettled([loadCurrentUserInfo(), loadReferenceData()]).finally(() => {
     renderUserInfo();
     const canSeeReports = Boolean(currentUserInfo.permissoes?.visualizarRelatorios);
+    const canImport = Boolean(currentUserInfo.permissoes?.importarArquivos);
     if (canSeeReports) {
       navigateTo('dashboard');
+    } else if (canImport && currentUserInfo.perfil === 'CAIXA') {
+      navigateTo('caixas');
+    } else if (canImport) {
+      navigateTo('conciliacao');
     } else {
       navigateTo('ajuda');
       showToast('Sem permissao para acessar o sistema', 'error');
@@ -183,9 +237,15 @@ function bootStandaloneView(view) {
     hideLoading();
     renderUserInfo();
     const canSeeReports = Boolean(currentUserInfo.permissoes?.visualizarRelatorios);
+    const canImport = Boolean(currentUserInfo.permissoes?.importarArquivos);
     const canManageConfig = Boolean(currentUserInfo.permissoes?.gerenciarConfig) || currentUserInfo.perfil === 'ADMIN';
-    const reportViews = ['dashboard', 'contas-pagar', 'contas-receber', 'conciliacao', 'dre', 'fluxo-caixa', 'kpis', 'relatorios'];
-    if ((reportViews.includes(view) && !canSeeReports) || (view === 'configuracoes' && !canManageConfig)) {
+    const isCaixa = currentUserInfo.perfil === 'CAIXA';
+    const reportViews = ['dashboard', 'contas-pagar', 'contas-receber', 'caixas', 'conciliacao', 'dre', 'fluxo-caixa', 'kpis', 'relatorios'];
+    const blockedReport = reportViews.includes(view) && !canSeeReports && !(
+      (view === 'conciliacao' && canImport && !isCaixa) ||
+      (view === 'caixas' && canImport)
+    );
+    if (blockedReport || (view === 'configuracoes' && !canManageConfig)) {
       const host = document.querySelector('.app-main') || document.body;
       if (host) {
         host.innerHTML = '<div class="empty-state"><div class="empty-state-message">Sem permissao para acessar o sistema</div><div class="empty-state-hint">Solicite acesso ao administrador.</div></div>';
@@ -203,6 +263,9 @@ function bootStandaloneView(view) {
         break;
       case 'contas-receber':
         loadContasReceberData();
+        break;
+      case 'caixas':
+        loadCaixasData();
         break;
       case 'conciliacao':
         loadConciliacaoData();
@@ -233,6 +296,7 @@ function renderUserInfo() {
   const email = currentUserInfo.email || 'usuario@empresa.com';
   const perfil = currentUserInfo.perfil || 'USUARIO';
   const permissoes = currentUserInfo.permissoes || {};
+  const isCaixa = perfil === 'CAIXA';
 
   if (userEmail) userEmail.textContent = email;
   if (userRole) userRole.textContent = perfil;
@@ -249,10 +313,12 @@ function renderUserInfo() {
 
   // Relatórios e visão geral
   const canSeeReports = Boolean(permissoes.visualizarRelatorios);
+  const canImport = Boolean(permissoes.importarArquivos);
   setNavVisible('dashboard', canSeeReports);
   setNavVisible('contas-pagar', canSeeReports);
   setNavVisible('contas-receber', canSeeReports);
-  setNavVisible('conciliacao', canSeeReports);
+  setNavVisible('caixas', canSeeReports || canImport);
+  setNavVisible('conciliacao', canSeeReports || (canImport && !isCaixa));
   setNavVisible('dre', canSeeReports);
   setNavVisible('fluxo-caixa', canSeeReports);
   setNavVisible('kpis', canSeeReports);
@@ -301,9 +367,16 @@ function setupNavigation() {
 function navigateTo(view) {
   const perms = currentUserInfo.permissoes || {};
   const canSeeReports = Boolean(perms.visualizarRelatorios);
+  const canImport = Boolean(perms.importarArquivos);
   const canManageConfig = Boolean(perms.gerenciarConfig) || currentUserInfo.perfil === 'ADMIN';
+  const isCaixa = currentUserInfo.perfil === 'CAIXA';
 
-  if (['dashboard','contas-pagar','contas-receber','conciliacao','dre','fluxo-caixa','kpis','relatorios'].includes(view) && !canSeeReports) {
+  if (isCaixa && !['caixas', 'ajuda'].includes(view)) {
+    showToast('Sem permissao para acessar este modulo', 'error');
+    return;
+  }
+
+  if (['dashboard','contas-pagar','contas-receber','caixas','conciliacao','dre','fluxo-caixa','kpis','relatorios'].includes(view) && !canSeeReports && !canImport) {
     showToast('Sem permissão para acessar relatórios', 'error');
     return;
   }
@@ -345,6 +418,9 @@ function loadView(view) {
         case 'contas-receber':
           loadContasReceberData();
           break;
+        case 'caixas':
+          loadCaixasData();
+          break;
         case 'conciliacao':
           loadConciliacaoData();
           break;
@@ -384,6 +460,7 @@ function loadReferenceData() {
           appData.canais = data.canais || [];
           appData.contas = data.contas || [];
           appData.centrosCusto = data.centrosCusto || [];
+          appData.caixaTipos = data.caixaTipos || [];
           populateFilters();
 
           if (currentView === 'configuracoes') {
@@ -803,238 +880,1282 @@ function cancelarReceberEmLote() {
 }
 
 // ============================================================================
-// CONCILIAÇÃO
+// CONCILIACAO (IMPORTACOES)
 // ============================================================================
 
 function loadConciliacaoData() {
-  showLoading();
+  populateImportFiliais();
+  loadComparativo(currentComparativoTipo);
+}
 
+function populateImportFiliais() {
+  const selectIds = ['fc-filial', 'itau-filial', 'sieg-filial'];
+  selectIds.forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const options = ['<option value="">Selecionar...</option>'];
+    appData.filiais.forEach(f => {
+      options.push(`<option value="${escapeHtml(f.codigo)}">${escapeHtml(f.nome)}</option>`);
+    });
+    select.innerHTML = options.join('');
+  });
+}
+
+function refreshComparativo() {
+  loadComparativo(currentComparativoTipo);
+}
+
+function loadComparativo(tipo) {
+  const t = String(tipo || 'PAGAR').toUpperCase();
+  currentComparativoTipo = t;
+  showLoading('Carregando comparativo...');
   window.gasRun
     .withSuccessHandler(function(data) {
       hideLoading();
-      if (!data) {
-        handleError({ message: 'getConciliacaoData retornou vazio' });
+      if (!data || !data.success) {
+        showToast(data?.message || 'Erro ao carregar comparativo', 'error');
         return;
       }
-      conciliacaoSnapshot = data;
-      appData.extratos = data.extratos || [];
-      appData.lancamentos = data.lancamentos || [];
-
-      // Update stats
-      updateElement('conc-extratos-pendentes', data.stats.extratosPendentes);
-      updateElement('conc-extratos-valor', formatCurrency(data.stats.extratosValor));
-      updateElement('conc-lancamentos-pendentes', data.stats.lancamentosPendentes);
-      updateElement('conc-lancamentos-valor', formatCurrency(data.stats.lancamentosValor));
-      updateElement('conc-hoje', data.stats.conciliadosHoje);
-      updateElement('conc-hoje-valor', formatCurrency(data.stats.conciliadosHojeValor));
-      updateElement('conc-taxa', `${data.stats.taxaConciliacao}%`);
-
-      // Render lists
-      renderExtratosList(data.extratos);
-      renderLancamentosList(data.lancamentos);
-      renderHistoricoConciliacao(data.historico);
+      updateElement('comp-total', String(data.stats?.total || 0));
+      updateElement('comp-auto', String(data.stats?.auto || 0));
+      updateElement('comp-pendente', String(data.stats?.pendente || 0));
+      updateElement('comp-sem-match', String(data.stats?.semMatch || 0));
+      updateElement('comp-duplicado', String(data.stats?.duplicado || 0));
+      renderComparativo(data.items || [], t, data.counts || null);
     })
     .withFailureHandler(handleError)
-    .getConciliacaoData();
+    .getComparativoData(t);
 }
 
-function renderExtratosList(extratos) {
-  const container = document.getElementById('extratos-list');
-  if (!container) return;
-
-  if (!extratos || extratos.length === 0) {
-    container.innerHTML = '<p class="text-muted text-center">Nenhum extrato pendente</p>';
+function renderComparativo(items, tipo, counts) {
+  const tbody = document.getElementById('table-comparativo');
+  if (!tbody) return;
+  if (!items || items.length === 0) {
+    const fcTotal = counts?.fcTotal || 0;
+    const itauTotal = counts?.itauTotal || 0;
+    const siegTotal = counts?.siegTotal || 0;
+    if (fcTotal === 0 && (itauTotal > 0 || siegTotal > 0)) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Importe o Relatorio FC para comparar com banco/SIEG.</td></tr>';
+    } else {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhum dado importado</td></tr>';
+    }
     return;
   }
 
-  container.innerHTML = extratos.map(e => `
-    <div class="extrato-item" data-id="${escapeHtml(e.id)}" onclick="selectExtrato(${JSON.stringify(String(e.id))})">
-      <div class="item-header">
-        <span class="item-date">${formatDate(e.data)}</span>
-        <span class="item-value ${e.valor >= 0 ? 'positive' : 'negative'}">${formatCurrency(e.valor)}</span>
+  const renderCandidates = (candidates, label) => {
+    if (!candidates || candidates.length === 0) return '';
+    const rows = candidates.map(c => {
+      const date = formatDate(c.data || c.dataEmissao || '');
+      const value = formatCurrency(c.valor || 0);
+      const ref = escapeHtml(c.numNfe || c.lancamento || c.razaoSocial || '');
+      return `<div class="comp-muted">${date} | ${value} | ${ref}</div>`;
+    }).join('');
+    return `<details><summary>${label}</summary>${rows}</details>`;
+  };
+
+  const statusClass = (status) => {
+    if (status === 'AUTO') return 'status-auto';
+    if (status === 'PENDENTE') return 'status-pendente';
+    if (status === 'SEM_MATCH') return 'status-sem-match';
+    if (status === 'DUPLICADO') return 'status-duplicado';
+    return 'status-pendente';
+  };
+
+  tbody.innerHTML = items.map(item => {
+    const fc = item.fc || {};
+    const nfe = item.nfe || null;
+    const banco = item.banco || null;
+    const diffs = item.diffs || {};
+
+    const fcCell = `
+      <div class="comp-cell">
+        <strong>${escapeHtml(fc.numDocumento || '-') }</strong>
+        <span>${escapeHtml(fc.fornecedor || fc.descricao || '')}</span>
+        <span>${formatDate(fc.dataEmissao)}</span>
+        <span>${formatCurrency(fc.valor || 0)}</span>
+        <span class="comp-muted">${escapeHtml(fc.filialFc || '')}</span>
       </div>
-      <div class="item-description">${escapeHtml(e.descricao)}</div>
-      <div class="item-meta">
-        <span>🏦 ${escapeHtml(e.banco)}</span>
-        <span>📄 ${escapeHtml(e.id)}</span>
-      </div>
-    </div>
-  `).join('');
+    `;
+
+    let nfeCell = '<div class="comp-muted">N/A</div>';
+    if (tipo === 'PAGAR') {
+      if (nfe) {
+        nfeCell = `
+          <div class="comp-cell">
+            <strong>${escapeHtml(nfe.numNfe || '-') }</strong>
+            <span class="${diffs.nfeData ? 'diff' : ''}">${formatDate(nfe.dataEmissao)}</span>
+            <span class="${diffs.nfeValor ? 'diff' : ''}">${formatCurrency(nfe.valor || 0)}</span>
+            <span class="comp-muted">${escapeHtml(nfe.cnpjEmit || '')}</span>
+          </div>
+        `;
+      } else if (item.nfeMatches > 1) {
+        nfeCell = `<div class="comp-muted">Duplicado (${item.nfeMatches})</div>${renderCandidates(item.nfeCandidates, 'Ver candidatos')}`;
+      } else {
+        nfeCell = '<div class="comp-muted">Sem match</div>';
+      }
+    }
+
+    let bancoCell = '<div class="comp-muted">Sem match</div>';
+    if (banco) {
+      bancoCell = `
+        <div class="comp-cell">
+          <strong>${escapeHtml(banco.lancamento || '-') }</strong>
+          <span class="${diffs.bancoData ? 'diff' : ''}">${formatDate(banco.data)}</span>
+          <span class="${diffs.bancoValor ? 'diff' : ''}">${formatCurrency(banco.valor || 0)}</span>
+          <span class="comp-muted">${escapeHtml(banco.conta || '')}</span>
+        </div>
+      `;
+    } else if (item.bancoMatches > 1) {
+      bancoCell = `<div class="comp-muted">Duplicado (${item.bancoMatches})</div>${renderCandidates(item.bancoCandidates, 'Ver candidatos')}`;
+    }
+
+    return `
+      <tr>
+        <td>${fcCell}</td>
+        <td>${nfeCell}</td>
+        <td>${bancoCell}</td>
+        <td><span class="status-pill ${statusClass(item.status)}">${escapeHtml(item.status || '')}</span></td>
+      </tr>
+    `;
+  }).join('');
 }
 
-function renderLancamentosList(lancamentos) {
-  const container = document.getElementById('lancamentos-list');
-  if (!container) return;
+function importarFc() {
+  const tipo = document.getElementById('fc-tipo')?.value || 'PAGAR';
+  const filialFc = document.getElementById('fc-filial')?.value || '';
+  const fileInput = document.getElementById('fc-file');
+  const sheetInput = document.getElementById('fc-sheet');
+  const sheetValue = sheetInput ? String(sheetInput.value || '').trim() : '';
+  const fileName = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
+  const detail = sheetValue ? `Planilha: ${sheetValue}` : `Arquivo: ${fileName || 'N/A'}`;
+  openConfirmModal({ title: `Importar Relatorio FC (${tipo})`, message: detail }).then(ok => {
+    if (!ok) return;
+    readRowsFromSource('fc-file', 'fc-sheet').then(rows => {
+      if (!rows) return;
+      const mapped = mapRowsByHeader(rows, fcHeaderMap());
+      if (!mapped.length) {
+        showToast('Nenhuma linha valida para importar', 'warning');
+        return;
+      }
+      showLoading('Importando FC...');
+      window.gasRun
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result && result.success) {
+            showToast(result.message || 'Importacao FC concluida', 'success');
+            clearImportInputs('fc');
+            loadComparativo(tipo);
+          } else {
+            showToast(result?.message || 'Erro ao importar FC', 'error');
+          }
+        })
+        .withFailureHandler(handleError)
+        .importarFc(mapped, { tipo, filialFc });
+    });
+  });
+}
 
-  if (!lancamentos || lancamentos.length === 0) {
-    container.innerHTML = '<p class="text-muted text-center">Nenhum lançamento pendente</p>';
-    return;
+function importarItau() {
+  const filialFc = document.getElementById('itau-filial')?.value || '';
+  const conta = document.getElementById('itau-conta')?.value || '';
+  const fileInput = document.getElementById('itau-file');
+  const sheetInput = document.getElementById('itau-sheet');
+  const sheetValue = sheetInput ? String(sheetInput.value || '').trim() : '';
+  const fileName = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
+  const detail = sheetValue ? `Planilha: ${sheetValue}` : `Arquivo: ${fileName || 'N/A'}`;
+  openConfirmModal({ title: 'Importar Itau', message: detail }).then(ok => {
+    if (!ok) return;
+    readRowsFromSource('itau-file', 'itau-sheet').then(rows => {
+      if (!rows) return;
+      const modelo = detectItauModel(rows) || 'A';
+      const mapped = mapRowsByHeader(rows, itauHeaderMap(modelo));
+      if (!mapped.length) {
+        showToast('Nenhuma linha valida para importar', 'warning');
+        return;
+      }
+      showLoading('Importando Itau...');
+      window.gasRun
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result && result.success) {
+            showToast(result.message || 'Importacao Itau concluida', 'success');
+            clearImportInputs('itau');
+            loadComparativo(currentComparativoTipo);
+          } else {
+            showToast(result?.message || 'Erro ao importar Itau', 'error');
+          }
+        })
+        .withFailureHandler(handleError)
+        .importarItau(mapped, { modelo, filialFc, conta });
+    });
+  });
+}
+
+function importarSieg() {
+  const fileInput = document.getElementById('sieg-file');
+  const sheetInput = document.getElementById('sieg-sheet');
+  let filialFc = document.getElementById('sieg-filial')?.value || '';
+  const sheetValue = sheetInput ? String(sheetInput.value || '').trim() : '';
+  const fileName = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
+  const detail = sheetValue ? `Planilha: ${sheetValue}` : `Arquivo: ${fileName || 'N/A'}`;
+  openConfirmModal({ title: 'Importar SIEG', message: detail }).then(ok => {
+    if (!ok) return;
+    if (!filialFc && fileName) {
+      filialFc = inferFilialFcFromFilename(fileName);
+    }
+    readRowsFromSource('sieg-file', 'sieg-sheet').then(rows => {
+      if (!rows) return;
+      const mapped = mapRowsByHeader(rows, siegHeaderMap());
+      if (!mapped.length) {
+        showToast('Nenhuma linha valida para importar', 'warning');
+        return;
+      }
+      showLoading('Importando SIEG...');
+      window.gasRun
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result && result.success) {
+            showToast(result.message || 'Importacao SIEG concluida', 'success');
+            clearImportInputs('sieg');
+            loadComparativo('PAGAR');
+          } else {
+            showToast(result?.message || 'Erro ao importar SIEG', 'error');
+          }
+        })
+        .withFailureHandler(handleError)
+        .importarSieg(mapped, { filialFc });
+    });
+  });
+}
+
+function readRowsFromSource(fileInputId, sheetInputId) {
+  const fileInput = document.getElementById(fileInputId);
+  const sheetInput = document.getElementById(sheetInputId);
+  const sheetValue = sheetInput ? String(sheetInput.value || '').trim() : '';
+  if (sheetValue) {
+    return fetchSheetData(sheetValue);
   }
-
-  container.innerHTML = lancamentos.map(l => `
-    <div class="lancamento-item" data-id="${escapeHtml(l.id)}" onclick="selectLancamento(${JSON.stringify(String(l.id))})">
-      <div class="item-header">
-        <span class="item-date">${formatDate(l.data)}</span>
-        <span class="item-value ${l.tipo === 'RECEITA' ? 'positive' : 'negative'}">${formatCurrency(l.valor)}</span>
-      </div>
-      <div class="item-description">${escapeHtml(l.descricao)}</div>
-      <div class="item-meta">
-        <span>📊 ${escapeHtml(l.tipo)}</span>
-        <span>📄 ${escapeHtml(l.id)}</span>
-      </div>
-    </div>
-  `).join('');
+  const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+  if (!file) {
+    showToast('Selecione um arquivo ou informe uma planilha', 'warning');
+    return Promise.resolve(null);
+  }
+  return readFileRows(file);
 }
 
-let selectedExtrato = null;
-let selectedLancamento = null;
-
-function selectExtrato(id) {
-  document.querySelectorAll('.extrato-item').forEach(item => item.classList.remove('selected'));
-  const selectedId = String(id);
-  document.querySelectorAll('.extrato-item').forEach(item => {
-    item.classList.toggle('selected', item.dataset.id === selectedId);
+function fetchSheetData(sheetIdOrUrl) {
+  return new Promise(resolve => {
+    showLoading('Lendo planilha...');
+    window.gasRun
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (!result || !result.success) {
+          showToast(result?.message || 'Erro ao ler planilha', 'error');
+          resolve(null);
+          return;
+        }
+        resolve(result.values || []);
+      })
+      .withFailureHandler(function(error) {
+        hideLoading();
+        handleError(error);
+        resolve(null);
+      })
+      .getSheetData(sheetIdOrUrl);
   });
-  selectedExtrato = selectedId;
-  checkConciliacaoPossivel();
 }
 
-function selectLancamento(id) {
-  document.querySelectorAll('.lancamento-item').forEach(item => item.classList.remove('selected'));
-  const selectedId = String(id);
-  document.querySelectorAll('.lancamento-item').forEach(item => {
-    item.classList.toggle('selected', item.dataset.id === selectedId);
+function readFileRows(file) {
+  const ext = String(file.name || '').split('.').pop().toLowerCase();
+  if (ext === 'csv') {
+    return new Promise(resolve => {
+      Papa.parse(file, {
+        skipEmptyLines: true,
+        complete: function(results) {
+          resolve(results.data || []);
+        },
+        error: function() {
+          showToast('Erro ao ler CSV', 'error');
+          resolve(null);
+        }
+      });
+    });
+  }
+  if (ext === 'xlsx') {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+        resolve(rows || []);
+      };
+      reader.onerror = function() {
+        showToast('Erro ao ler XLSX', 'error');
+        resolve(null);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+  showToast('Formato de arquivo nao suportado', 'warning');
+  return Promise.resolve(null);
+}
+
+function normalizeHeader(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getHeaderScore(rows, headerMap) {
+  const maxScan = Math.min(rows.length, 30);
+  let headerRowIndex = 0;
+  let bestScore = -1;
+
+  const aliasMap = {};
+  Object.keys(headerMap).forEach(key => {
+    aliasMap[key] = headerMap[key].map(normalizeHeader);
   });
-  selectedLancamento = selectedId;
-  checkConciliacaoPossivel();
-}
 
-function checkConciliacaoPossivel() {
-  if (selectedExtrato && selectedLancamento) {
-    if (confirm('Deseja conciliar os itens selecionados?')) {
-      conciliar(selectedExtrato, selectedLancamento);
+  for (let i = 0; i < maxScan; i++) {
+    const row = rows[i] || [];
+    const normalized = row.map(normalizeHeader);
+    let score = 0;
+    Object.keys(aliasMap).forEach(key => {
+      if (normalized.some(h => aliasMap[key].includes(h))) score++;
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      headerRowIndex = i;
     }
   }
+
+  return { score: bestScore, headerRowIndex, aliasMap };
 }
 
-function conciliar(extratoId, lancamentoId) {
-  showLoading();
+function mapRowsByHeader(rows, headerMap) {
+  if (!rows || rows.length === 0) return [];
+  const { aliasMap, headerRowIndex } = getHeaderScore(rows, headerMap);
+  const headerRow = (rows[headerRowIndex] || []).map(normalizeHeader);
+  const indexMap = {};
+  Object.keys(aliasMap).forEach(key => {
+    indexMap[key] = headerRow.findIndex(h => aliasMap[key].includes(h));
+  });
 
+  return rows.slice(headerRowIndex + 1).map(r => {
+    const obj = {};
+    Object.keys(indexMap).forEach(key => {
+      const idx = indexMap[key];
+      obj[key] = idx >= 0 ? r[idx] : '';
+    });
+    return obj;
+  }).filter(r => Object.values(r).some(v => String(v || '').trim() !== ''));
+}
+
+function clearImportInputs(prefix) {
+  const fileInput = document.getElementById(`${prefix}-file`);
+  const sheetInput = document.getElementById(`${prefix}-sheet`);
+  if (fileInput) fileInput.value = '';
+  if (sheetInput) sheetInput.value = '';
+}
+
+function fcHeaderMap() {
+  return {
+    dataEmissao: ['data emissao', 'dataemissao', 'data emiss?o', 'dataemissao'],
+    numDocumento: ['n documento', 'num documento', 'numero documento', 'n? documento', 'n?documento', 'documento'],
+    codConta: ['cod conta', 'codconta', 'codigo conta'],
+    filialFc: ['filial fc', 'filialfc', 'filial'],
+    historico: ['historico', 'hist?rico'],
+    fornecedor: ['fornecedor'],
+    valor: ['valor'],
+    descricao: ['descricao', 'descri??o'],
+    dataBaixa: ['dt_baixa', 'data baixa', 'dt baixa'],
+    flagBaixa: ['flagbxa', 'flag baixa', 'flag bxa'],
+    dataVencimento: ['dt_vencimento', 'data vencimento', 'dt vencimento'],
+  };
+}
+
+function itauHeaderMap(modelo) {
+  if (String(modelo || 'A').toUpperCase() === 'B') {
+    return {
+      data: ['data'],
+      lancamento: ['lancamento', 'lan?amento'],
+      razaoSocial: ['razao social', 'raz?o social'],
+      cpfCnpj: ['cpf/cnpj', 'cpf cnpj'],
+      valor: ['valor', 'valor r$', 'valor (r$)'],
+      saldo: ['saldo', 'saldo r$', 'saldo (r$)'],
+    };
+  }
+  return {
+    data: ['data'],
+    lancamento: ['lancamento', 'lan?amento'],
+    agenciaOrigem: ['ag/origem', 'agencia origem', 'agencia/origem', 'ag/origem'],
+    valor: ['valor', 'valor r$', 'valor (r$)'],
+    saldo: ['saldo', 'saldo r$', 'saldo (r$)'],
+  };
+}
+
+function detectItauModel(rows) {
+  if (!rows || rows.length === 0) return '';
+  const scoreA = getHeaderScore(rows, itauHeaderMap('A')).score;
+  const scoreB = getHeaderScore(rows, itauHeaderMap('B')).score;
+  if (scoreA <= 0 && scoreB <= 0) return '';
+  return scoreB > scoreA ? 'B' : 'A';
+}
+
+function siegHeaderMap() {
+  return {
+    numNfe: ['num nfe', 'nfe', 'numero nfe', 'num nf-e'],
+    valor: ['valor'],
+    dataEmissao: ['data emissao'],
+    cnpjEmit: ['cnpj emit'],
+    nomeFantEmit: ['nome fant emit', 'nome fantasia emit'],
+    razaoEmit: ['razao soc emit', 'razao social emit'],
+    cnpjDest: ['cnpj dest'],
+    nomeFantDest: ['nome fant dest', 'nome fantasia dest'],
+    razaoDest: ['razao soc dest', 'razao social dest'],
+    dataEnvioCofre: ['data de envio ao cofre', 'data envio cofre'],
+    chaveNfe: ['chave da nfe', 'chave nfe'],
+    tags: ['tags'],
+    codigoEvento: ['codigo do evento', 'codigo evento'],
+    tipoEvento: ['tipo do evento', 'tipo evento'],
+    status: ['status'],
+    danfe: ['danfe'],
+    xml: ['xml'],
+    codigoFilial: ['codigo_filial', 'codigo filial', 'cod filial'],
+  };
+}
+
+function inferFilialFcFromFilename(fileName) {
+  const key = normalizeHeader(fileName);
+  if (!key) return '';
+  const filiais = appData.filiais || [];
+  for (const filial of filiais) {
+    const relKey1 = normalizeHeader(filial.siegRelatorio || '');
+    const relKey2 = normalizeHeader(filial.siegContabilidade || '');
+    if ((relKey1 && key.includes(relKey1)) || (relKey2 && key.includes(relKey2))) {
+      return String(filial.codigo || '');
+    }
+  }
+  return '';
+}
+
+// ============================================================================
+// CAIXAS
+// ============================================================================
+
+function loadCaixasData() {
+  showLoading('Carregando caixas...');
   window.gasRun
-    .withSuccessHandler(function() {
+    .withSuccessHandler(function(data) {
       hideLoading();
-      showToast('Conciliação realizada com sucesso', 'success');
-      selectedExtrato = null;
-      selectedLancamento = null;
-      loadConciliacaoData();
+      if (!data || !data.success) {
+        showToast(data?.message || 'Erro ao carregar caixas', 'error');
+        return;
+      }
+      caixasState.caixas = data.caixas || [];
+      caixasState.movimentos = data.movimentos || [];
+      populateCaixaCanais();
+      renderCaixas();
+      populateCaixasSelects();
+      populateMovTypes();
+      updateMovTipoHint(document.getElementById('mov-tipo')?.value || '');
+      initCaixaDropzone();
+      const today = new Date().toISOString().slice(0, 10);
+      const caixaData = document.getElementById('caixa-data');
+      if (caixaData && !caixaData.value) caixaData.value = today;
+      if (caixasState.selectedId) {
+        renderMovimentos(caixasState.selectedId);
+        updateResumo(caixasState.selectedId);
+      } else {
+        updateResumo(null);
+      }
     })
     .withFailureHandler(handleError)
-    .conciliarItens(extratoId, lancamentoId);
+    .getCaixasData();
 }
 
-function conciliarAutomatico() {
-  if (!confirm('Executar conciliação automática? Isso pode levar alguns segundos.')) return;
+function getActiveCaixaTipos() {
+  const tipos = (appData.caixaTipos || []).filter(t => t.ativo !== false);
+  if (!tipos.length) {
+    return defaultMovTypes.map(t => ({
+      tipo: t,
+      natureza: 'ENTRADA',
+      requerArquivo: false,
+      sistemaFc: t === 'Sistema FC',
+      contaReforco: t === 'Dinheiro Caixa' || t === 'Moedas',
+      ativo: true
+    }));
+  }
+  return tipos;
+}
 
-  showLoading('Processando conciliação automática...');
+function getCaixaTipoConfig(tipo) {
+  const key = String(tipo || '').trim().toUpperCase();
+  return getActiveCaixaTipos().find(t => String(t.tipo).trim().toUpperCase() === key) || null;
+}
 
+function getOrderedCaixaTipos() {
+  const tipos = getActiveCaixaTipos();
+  const map = new Map();
+  tipos.forEach(t => {
+    const key = String(t.tipo || '').trim().toUpperCase();
+    if (key && !map.has(key)) map.set(key, t);
+  });
+  const ordered = [];
+  defaultMovTypes.forEach(name => {
+    const key = String(name || '').trim().toUpperCase();
+    if (map.has(key)) ordered.push(map.get(key));
+  });
+  map.forEach((value, key) => {
+    if (!defaultMovTypes.some(t => String(t).trim().toUpperCase() === key)) {
+      ordered.push(value);
+    }
+  });
+  return ordered;
+}
+
+function populateMovTypes() {
+  const select = document.getElementById('mov-tipo');
+  if (!select) return;
+  const options = ['<option value=\"\">Selecionar...</option>'];
+  getActiveCaixaTipos().forEach(t => {
+    options.push(`<option value="${escapeHtml(t.tipo)}">${escapeHtml(t.tipo)}</option>`);
+  });
+  select.innerHTML = options.join('');
+  select.onchange = function() {
+    updateMovTipoHint(this.value);
+  };
+}
+
+function updateMovTipoHint(tipo) {
+  const config = getCaixaTipoConfig(tipo);
+  const natureza = document.getElementById('mov-natureza');
+  const hint = document.getElementById('mov-file-hint');
+  const fileInput = document.getElementById('mov-file');
+  if (natureza && config && config.natureza) {
+    natureza.value = config.natureza;
+  }
+  if (hint) {
+    hint.textContent = config?.requerArquivo ? 'Comprovante obrigatorio para este tipo.' : '';
+  }
+  if (fileInput && !config?.requerArquivo) {
+    fileInput.value = '';
+    const nameEl = document.getElementById('mov-file-name');
+    if (nameEl) nameEl.textContent = 'Nenhum arquivo selecionado';
+  }
+}
+
+function initCaixaDropzone() {
+  const drop = document.getElementById('mov-file-drop');
+  const input = document.getElementById('mov-file');
+  const nameEl = document.getElementById('mov-file-name');
+  if (!drop || !input || !nameEl) return;
+
+  const updateName = (file) => {
+    nameEl.textContent = file ? file.name : 'Nenhum arquivo selecionado';
+  };
+
+  drop.onclick = () => input.click();
+  drop.ondragover = (e) => {
+    e.preventDefault();
+    drop.classList.add('drag');
+  };
+  drop.ondragleave = () => {
+    drop.classList.remove('drag');
+  };
+  drop.ondrop = (e) => {
+    e.preventDefault();
+    drop.classList.remove('drag');
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    updateName(file);
+  };
+  input.onchange = () => {
+    const file = input.files && input.files[0];
+    updateName(file);
+  };
+}
+
+function populateCaixaCanais() {
+  const select = document.getElementById('caixa-canal');
+  if (!select) return;
+  const options = ['<option value="">Selecionar...</option>'];
+  (appData.canais || []).forEach(c => {
+    options.push(`<option value="${escapeHtml(c.codigo)}">${escapeHtml(c.nome)}</option>`);
+  });
+  select.innerHTML = options.join('');
+}
+
+function populateCaixasSelects() {
+  const selects = ['mov-caixa-select', 'upload-caixa-select', 'relatorio-caixa-select', 'caixa-fechar-select'];
+  selects.forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const options = ['<option value="">Selecionar...</option>'];
+    caixasState.caixas.forEach(c => {
+      const label = `${c.canal} - ${formatDate(c.dataFechamento)}`;
+      options.push(`<option value="${escapeHtml(c.id)}">${escapeHtml(label)}</option>`);
+    });
+    select.innerHTML = options.join('');
+    if (caixasState.selectedId) select.value = caixasState.selectedId;
+    select.onchange = function() {
+      if (this.value) selectCaixa(this.value);
+    };
+  });
+}
+
+function renderCaixas() {
+  const tbody = document.getElementById('table-caixas');
+  if (!tbody) return;
+  if (!caixasState.caixas.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum caixa cadastrado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = caixasState.caixas.map(c => {
+    const resumo = computeResumoForCaixa(c.id);
+    return `
+      <tr>
+        <td>${escapeHtml(c.canal)}</td>
+        <td>${escapeHtml(c.colaborador || '-')}</td>
+        <td>${formatDate(c.dataFechamento)}</td>
+        <td>${formatCurrency(resumo.totalRecebido)}</td>
+        <td>${formatCurrency(resumo.sistemaFc)}</td>
+        <td>${formatCurrency(resumo.diferenca)}</td>
+        <td>
+          <button class="btn btn-sm btn-secondary" onclick="editarCaixa('${escapeHtml(c.id)}')">Editar</button>
+          <button class="btn btn-sm btn-outline" onclick="selectCaixa('${escapeHtml(c.id)}')">Mov.</button>
+          <button class="btn btn-sm btn-danger" onclick="excluirCaixaUi('${escapeHtml(c.id)}')">Excluir</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function computeResumoForCaixa(caixaId) {
+  const movimentos = caixasState.movimentos.filter(m => m.caixaId === caixaId);
+  const tipos = getActiveCaixaTipos();
+  const tipoMap = new Map(tipos.map(t => [String(t.tipo).trim().toUpperCase(), t]));
+  let totalEntradas = 0;
+  let totalSaidas = 0;
+  let sistemaFc = 0;
+  let reforco = 0;
+  const pendencias = [];
+
+  movimentos.forEach(m => {
+    const config = tipoMap.get(String(m.tipo || '').trim().toUpperCase());
+    const valor = Number(m.valor || 0);
+    const natureza = String(m.natureza || '').toUpperCase();
+    if (config && config.sistemaFc) {
+      sistemaFc += valor;
+    } else if (natureza === 'SAIDA') {
+      totalSaidas += valor;
+    } else {
+      totalEntradas += valor;
+    }
+    if (config && config.contaReforco && natureza !== 'SAIDA') {
+      reforco += valor;
+    }
+    if (config && config.requerArquivo && !m.arquivoUrl) {
+      pendencias.push(m.tipo);
+    }
+  });
+
+  const totalRecebido = totalEntradas - totalSaidas;
+  const diferenca = totalRecebido - sistemaFc;
+  return { totalEntradas, totalSaidas, totalRecebido, sistemaFc, diferenca, reforco, pendencias };
+}
+
+function updateResumo(caixaId) {
+  const pendenciasEl = document.getElementById('caixa-pendencias');
+  const resumoCardsEl = document.getElementById('resumo-cards');
+  const justificativaLinkEl = document.getElementById('caixa-justificativa-link');
+  if (!pendenciasEl || !resumoCardsEl) return;
+  const hasCaixa = Boolean(caixaId);
+  const resumo = hasCaixa ? computeResumoForCaixa(caixaId) : {
+    totalRecebido: 0,
+    sistemaFc: 0,
+    diferenca: 0,
+    reforco: 0,
+    pendencias: []
+  };
+  if (resumo.pendencias.length) {
+    pendenciasEl.textContent = `Comprovantes pendentes: ${resumo.pendencias.join(', ')}`;
+  } else {
+    pendenciasEl.textContent = '';
+  }
+
+  const movimentos = hasCaixa ? caixasState.movimentos.filter(m => m.caixaId === caixaId) : [];
+  const orderedTipos = getOrderedCaixaTipos();
+  const cards = [];
+
+  orderedTipos.forEach(t => {
+    const total = movimentos
+      .filter(m => String(m.tipo).trim().toUpperCase() === String(t.tipo).trim().toUpperCase())
+      .reduce((sum, m) => sum + Number(m.valor || 0), 0);
+    cards.push({
+      title: t.tipo,
+      subtitle: t.natureza || '',
+      value: formatCurrency(total)
+    });
+  });
+
+  cards.push(
+    {
+      title: 'Total Recebido',
+      subtitle: 'Resumo',
+      value: formatCurrency(resumo.totalRecebido)
+    },
+    {
+      title: 'Sistema Formula Certa',
+      subtitle: 'Resumo',
+      value: formatCurrency(resumo.sistemaFc)
+    },
+    {
+      title: 'Diferenca (Recebido - Sistema)',
+      subtitle: 'Resumo',
+      value: formatCurrency(resumo.diferenca)
+    },
+    {
+      title: 'Reforco para o dia seguinte',
+      subtitle: 'Resumo',
+      value: formatCurrency(resumo.reforco)
+    }
+  );
+
+  const caixa = hasCaixa ? caixasState.caixas.find(c => c.id === caixaId) : null;
+  const justificativa = caixa ? String(caixa.observacoes || '') : '';
+  if (justificativaLinkEl) {
+    justificativaLinkEl.innerHTML = justificativa
+      ? `<a href="#" onclick="openJustificativaModal();return false;">Ver justificativa atual</a>`
+      : '';
+  }
+
+  resumoCardsEl.innerHTML = cards.map(card => `
+    <div class="summary-card">
+      <div class="summary-title">${escapeHtml(card.title)}</div>
+      <div class="summary-subtitle">${escapeHtml(card.subtitle)}</div>
+      <div class="summary-value">${card.value}</div>
+    </div>
+  `).join('');
+}
+
+function resetCaixaForm() {
+  document.getElementById('caixa-id').value = '';
+  document.getElementById('caixa-canal').value = '';
+  document.getElementById('caixa-colaborador').value = '';
+  document.getElementById('caixa-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('caixa-observacoes').value = '';
+  updateResumo(null);
+}
+
+function salvarCaixaUi() {
+  let id = document.getElementById('caixa-id').value;
+  if (!id && caixasState.selectedId) id = caixasState.selectedId;
+  if (!id) {
+    const selectFechar = document.getElementById('caixa-fechar-select');
+    if (selectFechar && selectFechar.value) id = selectFechar.value;
+  }
+  const canal = document.getElementById('caixa-canal').value;
+  const colaborador = document.getElementById('caixa-colaborador').value;
+  const dataFechamento = document.getElementById('caixa-data').value;
+  const observacoes = document.getElementById('caixa-observacoes').value;
+  const resumo = computeResumoForCaixa(id);
+
+  if (!id) {
+    showToast('Selecione o caixa para fechar', 'warning');
+    return;
+  }
+  if (resumo.pendencias.length) {
+    showToast('Existem movimentacoes sem comprovante', 'warning');
+    return;
+  }
+  if (Math.abs(resumo.diferenca) > 0.009 && !String(observacoes || '').trim()) {
+    showToast('Informe a justificativa da diferenca', 'warning');
+    return;
+  }
+
+  showLoading('Fechando caixa...');
   window.gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
-      showToast(`${result.conciliados} itens conciliados automaticamente`, 'success');
-      loadConciliacaoData();
+      if (result && result.success) {
+        showToast(result.message || 'Caixa salvo', 'success');
+        resetCaixaForm();
+        loadCaixasData();
+      } else {
+        showToast(result?.message || 'Erro ao salvar caixa', 'error');
+      }
     })
     .withFailureHandler(handleError)
-    .conciliarAutomatico();
+    .salvarCaixa({ id: id || undefined, canal, colaborador, dataFechamento, observacoes, finalizar: true });
 }
 
-function renderHistoricoConciliacao(historico) {
-  const tbody = document.getElementById('table-historico-conciliacao');
-  if (!tbody) return;
+function salvarCabecalhoUi() {
+  const id = document.getElementById('caixa-id').value;
+  const canal = document.getElementById('caixa-canal').value;
+  const colaborador = document.getElementById('caixa-colaborador').value;
+  const dataFechamento = document.getElementById('caixa-data').value;
 
-  if (!historico || historico.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma conciliação realizada</td></tr>';
+  showLoading('Salvando dados...');
+  window.gasRun
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast(result.message || 'Caixa salvo', 'success');
+        if (result.id) caixasState.selectedId = result.id;
+        loadCaixasData();
+      } else {
+        showToast(result?.message || 'Erro ao salvar caixa', 'error');
+      }
+    })
+    .withFailureHandler(handleError)
+    .salvarCaixa({ id: id || undefined, canal, colaborador, dataFechamento, finalizar: false });
+}
+
+function editarCaixa(id) {
+  const caixa = caixasState.caixas.find(c => c.id === id);
+  if (!caixa) return;
+  document.getElementById('caixa-id').value = caixa.id;
+  document.getElementById('caixa-canal').value = caixa.canal;
+  document.getElementById('caixa-colaborador').value = caixa.colaborador || '';
+  document.getElementById('caixa-data').value = caixa.dataFechamento || '';
+  document.getElementById('caixa-observacoes').value = caixa.observacoes || '';
+  selectCaixa(caixa.id);
+}
+
+function excluirCaixaUi(id) {
+  openConfirmModal({ title: 'Excluir Caixa', message: 'Deseja excluir este caixa?' }).then(ok => {
+    if (!ok) return;
+    showLoading('Excluindo caixa...');
+    window.gasRun
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result && result.success) {
+          showToast(result.message || 'Caixa excluido', 'success');
+          loadCaixasData();
+        } else {
+          showToast(result?.message || 'Erro ao excluir caixa', 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .excluirCaixa(id);
+  });
+}
+
+function selectCaixa(id) {
+  caixasState.selectedId = id;
+  populateCaixasSelects();
+  renderMovimentos(id);
+  updateResumo(id);
+  const caixa = caixasState.caixas.find(c => c.id === id);
+  if (caixa) {
+    const fecharSelect = document.getElementById('caixa-fechar-select');
+    if (fecharSelect) fecharSelect.value = id;
+    const idEl = document.getElementById('caixa-id');
+    if (idEl) idEl.value = id;
+    const canalEl = document.getElementById('caixa-canal');
+    if (canalEl) canalEl.value = caixa.canal || '';
+    const colabEl = document.getElementById('caixa-colaborador');
+    if (colabEl) colabEl.value = caixa.colaborador || '';
+    const dataEl = document.getElementById('caixa-data');
+    if (dataEl) dataEl.value = caixa.dataFechamento || '';
+    const obsEl = document.getElementById('caixa-observacoes');
+    if (obsEl && caixa.observacoes) obsEl.value = caixa.observacoes || '';
+  }
+}
+
+function renderMovimentos(caixaId) {
+  const tbody = document.getElementById('table-movimentos');
+  if (!tbody) return;
+  const movimentos = caixasState.movimentos.filter(m => m.caixaId === caixaId);
+  if (!movimentos.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhuma movimentacao registrada</td></tr>';
     return;
   }
-
-  tbody.innerHTML = historico.slice(0, 50).map(h => `
+  tbody.innerHTML = movimentos.map(m => `
     <tr>
-      <td>${formatDate(h.dataConciliacao)}</td>
-      <td>${escapeHtml(h.extratoId)}</td>
-      <td>${escapeHtml(h.lancamentoId)}</td>
-      <td>${escapeHtml(h.descricao)}</td>
-      <td>${formatCurrency(h.valor)}</td>
-      <td>${escapeHtml(h.banco)}</td>
-      <td>${escapeHtml(h.usuario || 'Sistema')}</td>
+      <td>${escapeHtml(m.tipo)}</td>
+      <td>${escapeHtml(m.natureza)}</td>
+      <td>${formatCurrency(m.valor || 0)}</td>
+      <td>${escapeHtml(m.observacoes || '-')}</td>
+      <td>${m.arquivoUrl ? `<a href="${escapeHtml(m.arquivoUrl)}" target="_blank">Ver</a>` : '-'}</td>
+      <td>${(() => {
+        const cfg = getCaixaTipoConfig(m.tipo);
+        if (cfg && cfg.requerArquivo && !m.arquivoUrl) return '<span class="badge badge-warning">Pendente</span>';
+        return '<span class="badge badge-success">OK</span>';
+      })()}</td>
       <td>
-        <button class="btn btn-sm btn-danger" onclick="desfazerConciliacao(${JSON.stringify(String(h.extratoId))}, ${JSON.stringify(String(h.lancamentoId))})">↩️</button>
+        <button class="btn btn-sm btn-secondary" onclick="editarMovimento('${escapeHtml(m.id)}')">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="excluirMovimentoUi('${escapeHtml(m.id)}')">Excluir</button>
       </td>
     </tr>
   `).join('');
 }
 
-function exportHistorico() {
-  const historico = (conciliacaoSnapshot && conciliacaoSnapshot.historico) ? conciliacaoSnapshot.historico : [];
-  if (!historico || historico.length === 0) {
-    showToast('Sem historico para exportar', 'warning');
+function salvarMovimentoUi() {
+  const id = document.getElementById('mov-id').value;
+  const caixaId = document.getElementById('mov-caixa-select').value;
+  const tipo = document.getElementById('mov-tipo').value;
+  const natureza = document.getElementById('mov-natureza').value;
+  const valor = document.getElementById('mov-valor').value;
+  const observacoes = document.getElementById('mov-observacoes').value;
+  const fileInput = document.getElementById('mov-file');
+  const tipoConfig = getCaixaTipoConfig(tipo);
+  const caixa = caixasState.caixas.find(c => c.id === caixaId);
+  const dataMov = caixa ? caixa.dataFechamento : '';
+
+  if (!caixa) {
+    showToast('Selecione um caixa', 'warning');
     return;
   }
-  const rows = [
-    ['Data Conciliacao', 'Extrato ID', 'Lancamento ID', 'Descricao', 'Valor', 'Banco', 'Usuario'],
-  ];
-  historico.forEach(h => {
-    rows.push([
-      h.dataConciliacao || '',
-      h.extratoId || '',
-      h.lancamentoId || '',
-      h.descricao || '',
-      String(h.valor || 0),
-      h.banco || '',
-      h.usuario || '',
-    ]);
-  });
-  downloadCsvFromRows('historico_conciliacao', rows);
-}
+  if (tipoConfig?.requerArquivo && (!fileInput || !fileInput.files || !fileInput.files[0]) && !id) {
+    showToast('Comprovante obrigatorio para este tipo', 'warning');
+    return;
+  }
 
-function downloadCsvFromRows(prefix, rows) {
-  if (!rows || rows.length <= 1) return;
-  const escapeCell = (value) => {
-    const v = String(value ?? '');
-    if (/[\";\n\r]/.test(v)) {
-      return '"' + v.replace(/"/g, '""') + '"';
-    }
-    return v;
+  showLoading('Salvando movimentacao...');
+
+  const salvarMov = (arquivoUrl, arquivoNome) => {
+    window.gasRun
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result && result.success) {
+          showToast(result.message || 'Movimentacao salva', 'success');
+          document.getElementById('mov-id').value = '';
+          document.getElementById('mov-valor').value = '';
+          document.getElementById('mov-observacoes').value = '';
+          if (fileInput) fileInput.value = '';
+          const nameEl = document.getElementById('mov-file-name');
+          if (nameEl) nameEl.textContent = 'Nenhum arquivo selecionado';
+          caixasState.selectedId = caixaId;
+          loadCaixasData();
+        } else {
+          showToast(result?.message || 'Erro ao salvar movimentacao', 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .salvarCaixaMovimento({
+        id: id || undefined,
+        caixaId,
+        tipo,
+        natureza,
+        valor,
+        dataMov,
+        observacoes,
+        arquivoUrl,
+        arquivoNome
+      });
   };
-  const csv = rows.map(r => r.map(escapeCell).join(';')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const date = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `${prefix}_${date}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    readFileAsBase64(file).then(data => {
+      if (!data) {
+        hideLoading();
+        showToast('Falha ao ler arquivo', 'error');
+        return;
+      }
+      window.gasRun
+        .withSuccessHandler(function(result) {
+          if (result && result.success) {
+            salvarMov(result.url || '', file.name);
+          } else {
+            hideLoading();
+            showToast(result?.message || 'Erro ao enviar arquivo', 'error');
+          }
+        })
+        .withFailureHandler(handleError)
+        .uploadCaixaArquivo({
+          base64: data.base64,
+          mimeType: data.mimeType,
+          fileName: file.name,
+          canal: caixa.canal,
+          dataFechamento: caixa.dataFechamento,
+          tipo,
+          valor
+        });
+    });
+  } else {
+    salvarMov('', '');
+  }
 }
 
-function desfazerConciliacao(extratoId, lancamentoId) {
-  if (!confirm('Desfazer esta conciliacao?')) return;
+function editarMovimento(id) {
+  const mov = caixasState.movimentos.find(m => m.id === id);
+  if (!mov) return;
+  document.getElementById('mov-id').value = mov.id;
+  document.getElementById('mov-caixa-select').value = mov.caixaId;
+  document.getElementById('mov-tipo').value = mov.tipo;
+  document.getElementById('mov-natureza').value = mov.natureza || 'ENTRADA';
+  document.getElementById('mov-valor').value = mov.valor || '';
+  document.getElementById('mov-observacoes').value = mov.observacoes || '';
+  updateMovTipoHint(mov.tipo);
+  const hint = document.getElementById('mov-file-hint');
+  if (hint && mov.arquivoUrl) {
+    hint.innerHTML = `Comprovante atual: <a href="${escapeHtml(mov.arquivoUrl)}" target="_blank">abrir</a>`;
+  }
+  const fileInput = document.getElementById('mov-file');
+  if (fileInput) fileInput.value = '';
+}
 
-  showLoading();
+function openJustificativaModal() {
+  const caixaId = caixasState.selectedId;
+  const caixa = caixasState.caixas.find(c => c.id === caixaId);
+  const text = caixa ? String(caixa.observacoes || '') : '';
+  const body = document.getElementById('modal-justificativa-body');
+  if (body) {
+    body.textContent = text || 'Nenhuma justificativa informada.';
+  }
+  ModalManager.open('modal-caixa-justificativa');
+}
+
+function excluirMovimentoUi(id) {
+  openConfirmModal({ title: 'Excluir Movimentacao', message: 'Deseja excluir esta movimentacao?' }).then(ok => {
+    if (!ok) return;
+    showLoading('Excluindo movimentacao...');
+    window.gasRun
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result && result.success) {
+          showToast(result.message || 'Movimentacao excluida', 'success');
+          loadCaixasData();
+        } else {
+          showToast(result?.message || 'Erro ao excluir movimentacao', 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .excluirCaixaMovimento(id);
+  });
+}
+
+function uploadCaixaArquivoUi() {
+  const caixaId = document.getElementById('upload-caixa-select').value;
+  const tipo = document.getElementById('upload-tipo').value;
+  const valor = document.getElementById('upload-valor').value;
+  const fileInput = document.getElementById('upload-file');
+  const status = document.getElementById('upload-status');
+  const caixa = caixasState.caixas.find(c => c.id === caixaId);
+  if (!caixa) {
+    showToast('Selecione um caixa', 'warning');
+    return;
+  }
+  if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+    showToast('Selecione um arquivo', 'warning');
+    return;
+  }
+  const file = fileInput.files[0];
+  showLoading('Enviando arquivo...');
+  readFileAsBase64(file).then(data => {
+    if (!data) {
+      hideLoading();
+      showToast('Falha ao ler arquivo', 'error');
+      return;
+    }
+    window.gasRun
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result && result.success) {
+          showToast('Upload concluido', 'success');
+          if (status && result.url) status.innerHTML = `Arquivo salvo: <a href="${result.url}" target="_blank">abrir</a>`;
+          fileInput.value = '';
+        } else {
+          showToast(result?.message || 'Erro ao enviar arquivo', 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .uploadCaixaArquivo({
+        base64: data.base64,
+        mimeType: data.mimeType,
+        fileName: file.name,
+        canal: caixa.canal,
+        dataFechamento: caixa.dataFechamento,
+        tipo,
+        valor
+      });
+  });
+}
+
+function readFileAsBase64(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const result = String(e.target.result || '');
+      const parts = result.split(',');
+      if (parts.length < 2) return resolve(null);
+      resolve({ base64: parts[1], mimeType: file.type || '' });
+    };
+    reader.onerror = function() {
+      resolve(null);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function gerarRelatorioCaixa() {
+  const caixaId = document.getElementById('relatorio-caixa-select').value;
+  if (!caixaId) {
+    showToast('Selecione um caixa', 'warning');
+    return;
+  }
+  showLoading('Gerando relatorio...');
   window.gasRun
     .withSuccessHandler(function(result) {
       hideLoading();
-      if (result && result.success) {
-        showToast(result.message || 'Conciliacao desfeita', 'success');
-        loadConciliacaoData();
-      } else {
-        showToast(result?.message || 'Erro ao desfazer conciliacao', 'error');
+      if (!result || !result.success) {
+        showToast(result?.message || 'Erro ao gerar relatorio', 'error');
+        return;
       }
+      renderRelatorioCaixa(result.report);
     })
     .withFailureHandler(handleError)
-    .desfazerConciliacao(extratoId, lancamentoId);
+    .getCaixaRelatorio(caixaId);
 }
 
+function renderRelatorioCaixa(report) {
+  const container = document.getElementById('relatorio-caixa');
+  if (!container) return;
+  if (!report || !report.caixa) {
+    container.innerHTML = '<div class="text-muted">Nenhum relatorio disponivel</div>';
+    return;
+  }
+  const caixa = report.caixa;
+  const canalInfo = (appData.canais || []).find(c => c.codigo === caixa.canal);
+  const canalNome = canalInfo ? canalInfo.nome : (caixa.canal || '');
+  const logoEl = document.querySelector('.logo');
+  const logoUrl = (logoEl && logoEl.getAttribute('src')) ||
+    'https://neoformula.com.br/cdn/shop/files/Logotipo-NeoFormula-Manipulacao-Homeopatia_76b2fa98-5ffa-4cc3-ac0a-6d41e1bc8810.png?height=200&v=1677088468';
+  const porTipo = new Map();
+  (report.porTipo || []).forEach(item => {
+    porTipo.set(item.tipo, { entradas: Number(item.entradas || 0), saidas: Number(item.saidas || 0) });
+  });
+
+  const orderedTipos = getOrderedCaixaTipos();
+  const orderedKeys = orderedTipos.map(t => String(t.tipo || '').trim());
+  const extras = Array.from(porTipo.keys()).filter(t => !orderedKeys.includes(t));
+  const rows = orderedKeys.concat(extras).map(tipo => {
+    const item = porTipo.get(tipo) || { entradas: 0, saidas: 0 };
+    const value = item.entradas > 0 ? item.entradas : item.saidas;
+    return `
+      <tr>
+        <td>${escapeHtml(tipo)}</td>
+        <td class="caixa-report-value">${formatCurrency(value || 0)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="caixa-report">
+      <div class="caixa-report-header">
+        <div class="caixa-report-logo">
+          <img src="${escapeHtml(logoUrl)}" alt="Neoformula" onerror="this.style.display='none';document.getElementById('caixa-report-logo-text').style.display='block';" />
+          <div id="caixa-report-logo-text" style="display:none; font-weight:700; font-size:1.1rem;">Neoformula</div>
+        </div>
+        <div class="caixa-report-title">
+          <div class="caixa-report-title-text">Fechamento Diario</div>
+        </div>
+        <div class="caixa-report-actions">
+          <button class="btn btn-outline" onclick="printCaixaReport()">Impressao</button>
+        </div>
+      </div>
+
+      <div class="caixa-report-meta">
+        <div class="meta-row">
+          <span class="label">Fechamento de Caixa Unidade:</span>
+          <span class="value">${escapeHtml(canalNome)}</span>
+        </div>
+        <div class="meta-row">
+          <span class="label">Colaborador:</span>
+          <span class="value">${escapeHtml(caixa.colaborador || '-')}</span>
+        </div>
+        <div class="meta-row">
+          <span class="label">Data:</span>
+          <span class="value">${formatDate(caixa.dataFechamento)}</span>
+        </div>
+      </div>
+
+      <div class="caixa-report-table">
+        <table>
+          <tbody>
+            ${rows}
+            <tr class="row-total">
+              <td>Total Recebido</td>
+              <td class="caixa-report-value">${formatCurrency(report.totalRecebido || 0)}</td>
+            </tr>
+            <tr class="row-sistema">
+              <td>Sistema Formula Certa</td>
+              <td class="caixa-report-value">${formatCurrency(report.sistemaFc || 0)}</td>
+            </tr>
+            <tr class="row-diff">
+              <td>Diferenca (Recebido - Sistema)</td>
+              <td class="caixa-report-value">${formatCurrency(report.diferenca || 0)}</td>
+            </tr>
+            <tr class="row-reforco">
+              <td>Reforco para o dia seguinte</td>
+              <td class="caixa-report-value">${formatCurrency(report.reforco || 0)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="caixa-report-observacoes">
+        <div class="label">Observacoes:</div>
+        <div class="value">${escapeHtml(caixa.observacoes || '')}</div>
+      </div>
+    </div>
+  `;
+}
+
+function printCaixaReport() {
+  const container = document.getElementById('relatorio-caixa');
+  if (!container) return;
+  const styles = document.getElementById('caixa-report-styles');
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Relatorio de Caixa</title>
+        <style>${styles ? styles.textContent : ''}</style>
+      </head>
+      <body>
+        <div id="relatorio-caixa">
+          ${container.innerHTML}
+        </div>
+      </body>
+    </html>
+  `);
+  win.document.close();
+  const doPrint = () => {
+    win.focus();
+    win.print();
+  };
+  const imgs = win.document.images || [];
+  if (!imgs.length) {
+    setTimeout(doPrint, 200);
+    return;
+  }
+  let loaded = 0;
+  Array.from(imgs).forEach(img => {
+    const done = () => {
+      loaded += 1;
+      if (loaded >= imgs.length) doPrint();
+    };
+    img.onload = done;
+    img.onerror = done;
+  });
+}
 // ============================================================================
 // RELATÓRIOS
 // ============================================================================

@@ -1,140 +1,116 @@
 <div class="view-container" id="conciliacao-view">
-  <h1 class="view-title">Conciliação Bancária</h1>
+  <h1 class="view-title">Conciliacao de Importacoes</h1>
 
-  <!-- Summary Cards -->
-  <div class="stats-grid">
-    <div class="stat-card warning">
-      <div class="stat-label">Extratos Pendentes</div>
-      <div class="stat-value" id="conc-extratos-pendentes">0</div>
-      <div class="stat-change" id="conc-extratos-valor">R$ 0,00</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-label">Lançamentos Não Conciliados</div>
-      <div class="stat-value" id="conc-lancamentos-pendentes">0</div>
-      <div class="stat-change" id="conc-lancamentos-valor">R$ 0,00</div>
-    </div>
-
-    <div class="stat-card success">
-      <div class="stat-label">Conciliados Hoje</div>
-      <div class="stat-value" id="conc-hoje">0</div>
-      <div class="stat-change" id="conc-hoje-valor">R$ 0,00</div>
-    </div>
-
-    <div class="stat-card">
-      <div class="stat-label">Taxa de Conciliação</div>
-      <div class="stat-value" id="conc-taxa">0%</div>
-      <div class="stat-change" id="conc-taxa-mes">No mês</div>
-    </div>
-  </div>
-
-  <!-- Import Section -->
   <div class="card">
     <div class="card-header">
-      <h2 class="card-title">Importar Extrato Bancário</h2>
+      <h2 class="card-title">Importacao de Dados</h2>
     </div>
     <div class="card-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Banco</label>
-          <select class="form-control" id="import-banco">
-            <option value="">Selecione o banco</option>
-            <option value="BRADESCO">Bradesco</option>
-            <option value="ITAU">Itaú</option>
-            <option value="SANTANDER">Santander</option>
-            <option value="BB">Banco do Brasil</option>
-            <option value="CAIXA">Caixa Econômica</option>
-          </select>
+      <div class="import-grid">
+        <div class="import-card">
+          <h3>Relatorio FC</h3>
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <select class="form-control" id="fc-tipo">
+              <option value="PAGAR">Pagar</option>
+              <option value="RECEBER">Receber</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Filial FC (opcional)</label>
+            <select class="form-control" id="fc-filial">
+              <option value="">Selecionar...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Arquivo (CSV/XLSX)</label>
+            <input type="file" class="form-control" id="fc-file" accept=".csv,.xlsx">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Planilha Google (URL ou ID)</label>
+            <input type="text" class="form-control" id="fc-sheet" placeholder="https://docs.google.com/...">
+          </div>
+          <button class="btn btn-primary" onclick="importarFc()">Importar Relatorio FC</button>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Conta</label>
-          <select class="form-control" id="import-conta">
-            <option value="">Selecione a conta</option>
-          </select>
+        <div class="import-card">
+          <h3>Extrato Itau</h3>
+          <div class="form-group">
+            <label class="form-label">Filial FC (opcional)</label>
+            <select class="form-control" id="itau-filial">
+              <option value="">Selecionar...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Conta (opcional)</label>
+            <input type="text" class="form-control" id="itau-conta" placeholder="00000-0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Arquivo (CSV/XLSX)</label>
+            <input type="file" class="form-control" id="itau-file" accept=".csv,.xlsx">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Planilha Google (URL ou ID)</label>
+            <input type="text" class="form-control" id="itau-sheet" placeholder="https://docs.google.com/...">
+          </div>
+          <button class="btn btn-primary" onclick="importarItau()">Importar Itau</button>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Arquivo OFX/CSV</label>
-          <input type="file" class="form-control" id="import-file" accept=".ofx,.csv">
-        </div>
-
-        <div class="form-group d-flex align-center">
-          <button class="btn btn-primary" onclick="importarExtrato()" style="margin-top: 1.9rem;">
-            📤 Importar
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Conciliation Panel -->
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Painel de Conciliação</h2>
-      <div class="card-actions">
-        <button class="btn btn-success" onclick="conciliarAutomatico()">
-          ⚡ Conciliação Automática
-        </button>
-        <button class="btn btn-outline" onclick="refreshConciliacao()">
-          🔄 Atualizar
-        </button>
-      </div>
-    </div>
-
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-      <!-- Extratos Bancários -->
-      <div>
-        <h3 style="margin-bottom: 1rem; color: #495057; font-size: 1.1rem;">
-          📄 Extratos Bancários Não Conciliados
-        </h3>
-
-        <div class="filters mb-2" style="padding: 1rem;">
-          <input
-            type="text"
-            class="form-control"
-            id="search-extratos"
-            placeholder="Buscar extratos..."
-            onkeyup="filterExtratos()"
-          >
-        </div>
-
-        <div id="extratos-list" style="max-height: 600px; overflow-y: auto;">
-          <p class="text-muted text-center">Carregando extratos...</p>
-        </div>
-      </div>
-
-      <!-- Lançamentos -->
-      <div>
-        <h3 style="margin-bottom: 1rem; color: #495057; font-size: 1.1rem;">
-          📊 Lançamentos Não Conciliados
-        </h3>
-
-        <div class="filters mb-2" style="padding: 1rem;">
-          <input
-            type="text"
-            class="form-control"
-            id="search-lancamentos"
-            placeholder="Buscar lançamentos..."
-            onkeyup="filterLancamentos()"
-          >
-        </div>
-
-        <div id="lancamentos-list" style="max-height: 600px; overflow-y: auto;">
-          <p class="text-muted text-center">Carregando lançamentos...</p>
+        <div class="import-card">
+          <h3>Extrato SIEG (NF-e)</h3>
+          <div class="form-group">
+            <label class="form-label">Filial FC (opcional)</label>
+            <select class="form-control" id="sieg-filial">
+              <option value="">Selecionar...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Arquivo (CSV/XLSX)</label>
+            <input type="file" class="form-control" id="sieg-file" accept=".csv,.xlsx">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Planilha Google (URL ou ID)</label>
+            <input type="text" class="form-control" id="sieg-sheet" placeholder="https://docs.google.com/...">
+          </div>
+          <button class="btn btn-primary" onclick="importarSieg()">Importar SIEG</button>
+          <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">
+            Dica: o nome do arquivo pode conter a filial SIEG.
+          </p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- History -->
   <div class="card">
     <div class="card-header">
-      <h2 class="card-title">Histórico de Conciliações</h2>
+      <h2 class="card-title">Comparativo</h2>
       <div class="card-actions">
-        <button class="btn btn-outline" onclick="exportHistorico()">
-          📥 Exportar
-        </button>
+        <button class="btn btn-outline" onclick="loadComparativo('PAGAR')">Pagar</button>
+        <button class="btn btn-outline" onclick="loadComparativo('RECEBER')">Receber</button>
+        <button class="btn btn-outline" onclick="refreshComparativo()">Atualizar</button>
+      </div>
+    </div>
+
+    <div class="stats-grid small">
+      <div class="stat-card">
+        <div class="stat-label">Total</div>
+        <div class="stat-value" id="comp-total">0</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-label">Auto</div>
+        <div class="stat-value" id="comp-auto">0</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-label">Pendente</div>
+        <div class="stat-value" id="comp-pendente">0</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-label">Sem Match</div>
+        <div class="stat-value" id="comp-sem-match">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Duplicado</div>
+        <div class="stat-value" id="comp-duplicado">0</div>
       </div>
     </div>
 
@@ -142,19 +118,15 @@
       <table>
         <thead>
           <tr>
-            <th>Data Conciliação</th>
-            <th>Extrato ID</th>
-            <th>Lançamento ID</th>
-            <th>Descrição</th>
-            <th>Valor</th>
-            <th>Banco</th>
-            <th>Usuário</th>
-            <th>Ações</th>
+            <th>FC</th>
+            <th>NF-e (SIEG)</th>
+            <th>Extrato Itau</th>
+            <th>Status</th>
           </tr>
         </thead>
-        <tbody id="table-historico-conciliacao">
+        <tbody id="table-comparativo">
           <tr>
-            <td colspan="8" class="text-center text-muted">Carregando...</td>
+            <td colspan="4" class="text-center text-muted">Carregando...</td>
           </tr>
         </tbody>
       </table>
@@ -163,61 +135,56 @@
 </div>
 
 <style>
-.extrato-item, .lancamento-item {
-  background: white;
-  border: 2px solid #e0e0e0;
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.import-card {
+  border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 1rem;
-  margin-bottom: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s;
+  background: #fff;
 }
 
-.extrato-item:hover, .lancamento-item:hover {
-  border-color: #00a8e8;
-  box-shadow: 0 2px 8px rgba(0,168,232,0.2);
-}
-
-.extrato-item.selected, .lancamento-item.selected {
-  border-color: #00a8e8;
-  background: #e8f7fd;
-}
-
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.item-date {
-  font-weight: 600;
-  color: #1a1a1a;
-}
-
-.item-value {
+.import-card h3 {
+  margin-bottom: 0.8rem;
   font-size: 1.1rem;
-  font-weight: 700;
 }
 
-.item-value.positive {
-  color: #06d6a0;
+.stats-grid.small {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-bottom: 1rem;
 }
 
-.item-value.negative {
-  color: #ef476f;
-}
-
-.item-description {
-  color: #6c757d;
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
-}
-
-.item-meta {
+.comp-cell {
   display: flex;
-  gap: 1rem;
-  font-size: 0.85rem;
-  color: #adb5bd;
+  flex-direction: column;
+  gap: 0.25rem;
 }
+
+.comp-muted {
+  color: #6c757d;
+  font-size: 0.85rem;
+}
+
+.diff {
+  background: #fff3cd;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-auto { background: #d4edda; color: #155724; }
+.status-pendente { background: #fff3cd; color: #856404; }
+.status-sem-match { background: #f8d7da; color: #721c24; }
+.status-duplicado { background: #d1ecf1; color: #0c5460; }
 </style>

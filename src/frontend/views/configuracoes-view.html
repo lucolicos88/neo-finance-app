@@ -8,6 +8,7 @@
     <button class="tab active" data-tab-group="config" data-tab="centros-custo">🏷 Centros de Custo</button>
     <button class="tab" data-tab-group="config" data-tab="plano-contas">📒 Plano de Contas</button>
     <button class="tab" data-tab-group="config" data-tab="canais">🛍 Canais de Venda</button>
+    <button class="tab" data-tab-group="config" data-tab="caixas">Caixas</button>
     <button class="tab" data-tab-group="config" data-tab="filiais">🏢 Filiais</button>
     <button class="tab" data-tab-group="config" data-tab="usuarios">👥 Usuários</button>
     <button class="tab" data-tab-group="config" data-tab="logs">Logs</button>
@@ -25,12 +26,12 @@
     <div class="card-body">
       <div class="table-responsive">
         <table class="table">
-          <thead>
+                    <thead>
             <tr>
-              <th>Código</th>
+              <th>C?digo</th>
               <th>Nome</th>
               <th>Status</th>
-              <th class="text-right">Ações</th>
+              <th class="text-right">A??es</th>
             </tr>
           </thead>
           <tbody id="table-centros-custo">
@@ -200,6 +201,54 @@
   </div>
 </div>
 
+
+<!-- Caixas -->
+<div class="tab-content" data-tab-content="config" data-content="caixas">
+  <div class="card">
+    <div class="card-header">
+      <h3>Caixas</h3>
+    </div>
+    <div class="card-body">
+      <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items: end;">
+        <div style="flex:1; min-width: 260px;">
+          <label class="form-label">Pasta Drive (URL ou ID)</label>
+          <input id="caixas-pasta-id" class="form-control" type="text" placeholder="https://drive.google.com/drive/folders/..." />
+          <div class="text-muted" id="caixas-pasta-atual" style="margin-top: 0.4rem; font-size: 0.85rem;"></div>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="salvarCaixasConfig()">Salvar Pasta</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top: 1rem;">
+    <div class="card-header">
+      <h3>Tipos de Movimentacao</h3>
+      <button class="btn btn-primary" onclick="openModalNovoCaixaTipo()">+ Novo Tipo</button>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Natureza</th>
+              <th>Requer Arquivo</th>
+              <th>Sistema FC</th>
+              <th>Conta Reforco</th>
+              <th>Status</th>
+              <th class="text-right">Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="table-caixa-tipos">
+            <tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Filiais -->
 <div class="tab-content" data-tab-content="config" data-content="filiais">
   <div class="card">
@@ -210,16 +259,18 @@
     <div class="card-body">
       <div class="table-responsive">
         <table class="table">
-          <thead>
+                    <thead>
             <tr>
-              <th>Código</th>
+              <th>C?digo</th>
               <th>Nome</th>
+              <th>SIEG Relatorio</th>
+              <th>SIEG Contabilidade</th>
               <th>Status</th>
-              <th class="text-right">Ações</th>
+              <th class="text-right">A??es</th>
             </tr>
           </thead>
           <tbody id="table-filiais">
-            <tr><td colspan="4" class="text-center text-muted">Carregando...</td></tr>
+            <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -258,7 +309,7 @@
   <div class="card" style="margin-top: 1.5rem;">
     <div class="card-header"><h3>Perfis de Acesso</h3></div>
     <div class="card-body">
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 1rem;">
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h4 style="margin-bottom: 0.5rem; color: #D72C0D;">👑 Administrador</h4>
           <p style="font-size: 0.9rem; color: #666;">Acesso total ao sistema. Pode gerenciar usuários, configurações e todas as funcionalidades.</p>
@@ -270,6 +321,10 @@
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h4 style="margin-bottom: 0.5rem; color: #4ECDC4;">🔧 Operacional</h4>
           <p style="font-size: 0.9rem; color: #666;">Pode criar e editar lançamentos, mas não aprovar ou excluir.</p>
+        </div>
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h4 style="margin-bottom: 0.5rem; color: #2E7D32;">💰 Caixa</h4>
+          <p style="font-size: 0.9rem; color: #666;">Acesso ao módulo Caixas para fechamento e upload de comprovantes.</p>
         </div>
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
           <h4 style="margin-bottom: 0.5rem; color: #95E1D3;">👁 Visualizador</h4>

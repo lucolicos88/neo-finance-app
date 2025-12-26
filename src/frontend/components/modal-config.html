@@ -217,6 +217,22 @@
   </div>
 </div>
 
+<div id="modal-confirm-caixa-tipo" class="modal-overlay" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2>Confirmar exclusao</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-confirm-caixa-tipo')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 1rem; color: #333;">Tem certeza que deseja excluir este tipo?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="ModalManager.close('modal-confirm-caixa-tipo')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmExcluirCaixaTipo()">Excluir</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============================================================================ -->
 <!-- MODAL: CANAL DE VENDA -->
 <!-- ============================================================================ -->
@@ -259,6 +275,63 @@
 </div>
 
 <!-- ============================================================================ -->
+<!-- MODAL: TIPO CAIXA -->
+<!-- ============================================================================ -->
+<div id="modal-caixa-tipo" class="modal-overlay" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2 id="titulo-caixa-tipo">Novo Tipo de Movimentacao</h2>
+      <button class="modal-close" onclick="ModalManager.close('modal-caixa-tipo')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-caixa-tipo">
+        <input type="hidden" id="caixa-tipo-edit-index" value="">
+
+        <div class="form-group">
+          <label for="caixa-tipo-nome">Tipo *</label>
+          <input type="text" id="caixa-tipo-nome" class="form-control" placeholder="Ex: Cartao de Credito" required>
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="caixa-tipo-natureza">Natureza *</label>
+          <select id="caixa-tipo-natureza" class="form-control">
+            <option value="ENTRADA">Entrada</option>
+            <option value="SAIDA">Saida</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Opcoes</label>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="caixa-tipo-requer-arquivo" />
+              <span>Requer comprovante</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="caixa-tipo-sistema-fc" />
+              <span>Sistema FC</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="caixa-tipo-conta-reforco" />
+              <span>Conta no reforco</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="caixa-tipo-ativo" checked />
+              <span>Ativo</span>
+            </label>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="ModalManager.close('modal-caixa-tipo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCaixaTipo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================ -->
 <!-- MODAL: FILIAL -->
 <!-- ============================================================================ -->
 <div id="modal-filial" class="modal-overlay" style="display: none;">
@@ -280,6 +353,18 @@
         <div class="form-group">
           <label for="filial-nome">Nome *</label>
           <input type="text" id="filial-nome" class="form-control" placeholder="Ex: Matriz São Paulo" required>
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="filial-sieg-relatorio">Filial SIEG Relatorio</label>
+          <input type="text" id="filial-sieg-relatorio" class="form-control" placeholder="Ex: 13 - Bosque">
+          <span class="form-error"></span>
+        </div>
+
+        <div class="form-group">
+          <label for="filial-sieg-contabilidade">Filial SIEG Contabilidade</label>
+          <input type="text" id="filial-sieg-contabilidade" class="form-control" placeholder="Ex: 5">
           <span class="form-error"></span>
         </div>
 

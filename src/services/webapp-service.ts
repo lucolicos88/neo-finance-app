@@ -18,10 +18,23 @@ import { combineValidations, validateEnum, validateRequired } from '../shared/va
 import {
   SHEET_TB_LANCAMENTOS,
   SHEET_TB_EXTRATOS,
+  SHEET_TB_IMPORT_FC,
+  SHEET_TB_IMPORT_ITAU,
+  SHEET_TB_IMPORT_SIEG,
+  SHEET_TB_CAIXAS,
+  SHEET_TB_CAIXAS_MOV,
+  SHEET_REF_CAIXA_TIPOS,
   SHEET_REF_FILIAIS,
   SHEET_REF_CANAIS,
   SHEET_REF_CCUSTO,
   SHEET_REF_PLANO_CONTAS,
+  SHEET_CFG_CONFIG,
+  TB_IMPORT_FC_COLS,
+  TB_IMPORT_ITAU_COLS,
+  TB_IMPORT_SIEG_COLS,
+  TB_CAIXAS_COLS,
+  TB_CAIXAS_MOV_COLS,
+  REF_CAIXA_TIPOS_COLS,
 } from '../config/sheet-mapping';
 
 // ============================================================================
@@ -34,6 +47,7 @@ const WEBAPP_VIEW_ALLOWLIST = new Set([
   'dashboard',
   'contas-pagar',
   'contas-receber',
+  'caixas',
   'conciliacao',
   'relatorios',
   'dre',
@@ -100,6 +114,127 @@ function isSeedDataEnabled(): boolean {
   return PropertiesService.getScriptProperties().getProperty('ENABLE_SEED_DATA') === 'true';
 }
 
+function ensureRefFiliaisSchema(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
+  const headers = [
+    'Código',
+    'Nome',
+    'CNPJ',
+    'Ativo',
+    'Filial SIEG Relatorio',
+    'Filial SIEG Contabilidade',
+  ];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < headers.length) {
+    sheet.insertColumnsAfter(Math.max(1, lastCol), headers.length - lastCol);
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+}
+
+function ensureCfgConfigSheet(): GoogleAppsScript.Spreadsheet.Sheet {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_CFG_CONFIG);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_CFG_CONFIG);
+    sheet.getRange('A1:E1').setValues([[
+      'Chave', 'Valor', 'Tipo', 'Descricao', 'Ativo'
+    ]]);
+    sheet.getRange('A1:E1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
+  }
+  return sheet;
+}
+
+function getConfigValue(key: string): string {
+  const sheet = ensureCfgConfigSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] || '') === key) {
+      return String(rows[i][1] || '').trim();
+    }
+  }
+  return '';
+}
+
+function setConfigValue(key: string, value: string): void {
+  const sheet = ensureCfgConfigSheet();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] || '') === key) {
+      sheet.getRange(i + 1, 2).setValue(value);
+      return;
+    }
+  }
+  sheet.appendRow([key, value, 'TEXT', '', 'TRUE']);
+}
+
+function parseDriveFolderId(input: string): string {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  const match = raw.match(/\/folders\/([a-zA-Z0-9-_]+)/);
+  if (match) return match[1];
+  const idMatch = raw.match(/[?&]id=([a-zA-Z0-9-_]+)/);
+  if (idMatch) return idMatch[1];
+  return raw;
+}
+
+function ensureCaixasSheets(): void {
+  createSheetIfNotExists(SHEET_TB_CAIXAS, [
+    'ID', 'Canal', 'Colaborador', 'Data Fechamento', 'Observacoes',
+    'Sistema Valor', 'Reforco', 'Criado Em', 'Atualizado Em',
+  ]);
+  createSheetIfNotExists(SHEET_TB_CAIXAS_MOV, [
+    'ID', 'Caixa ID', 'Tipo', 'Natureza', 'Valor', 'Data Mov', 'Arquivo URL',
+    'Arquivo Nome', 'Criado Em', 'Atualizado Em', 'Observacoes',
+  ]);
+  createSheetIfNotExists(SHEET_REF_CAIXA_TIPOS, [
+    'Tipo', 'Natureza', 'Requer Arquivo', 'Sistema FC', 'Conta Reforco', 'Ativo',
+  ]);
+  ensureCaixasMovSchema();
+  ensureCaixaTiposSchema();
+}
+
+function ensureCaixasMovSchema(): void {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_CAIXAS_MOV);
+  if (!sheet) return;
+  const headers = [
+    'ID', 'Caixa ID', 'Tipo', 'Natureza', 'Valor', 'Data Mov', 'Arquivo URL',
+    'Arquivo Nome', 'Criado Em', 'Atualizado Em', 'Observacoes',
+  ];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < headers.length) {
+    sheet.insertColumnsAfter(Math.max(1, lastCol), headers.length - lastCol);
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+}
+
+function ensureCaixaTiposSchema(): void {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_REF_CAIXA_TIPOS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_REF_CAIXA_TIPOS);
+  }
+  const headers = ['Tipo', 'Natureza', 'Requer Arquivo', 'Sistema FC', 'Conta Reforco', 'Ativo'];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < headers.length) {
+    sheet.insertColumnsAfter(Math.max(1, lastCol), headers.length - lastCol);
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (sheet.getLastRow() <= 1) {
+    sheet.getRange(2, 1, 10, headers.length).setValues([
+      ['Dinheiro Cofre', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Dinheiro Caixa', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+      ['Moedas', 'ENTRADA', 'FALSE', 'FALSE', 'TRUE', 'TRUE'],
+      ['Cortesias', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Cartao de Credito', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Depositos', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Link', 'ENTRADA', 'TRUE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Outras Entradas', 'ENTRADA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Outras Saidas', 'SAIDA', 'FALSE', 'FALSE', 'FALSE', 'TRUE'],
+      ['Sistema FC', 'ENTRADA', 'TRUE', 'TRUE', 'FALSE', 'TRUE'],
+    ]);
+  }
+}
+
 function getRequestingUserEmail(): string {
   return Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
 }
@@ -114,7 +249,7 @@ function sanitizeSheetString(value: unknown): string {
 
 function normalizePerfil(raw: unknown): string {
   const value = String(raw ?? '').trim().toUpperCase();
-  const allowed = ['ADMIN', 'GESTOR', 'OPERACIONAL', 'VISUALIZADOR', 'SEM_ACESSO'];
+  const allowed = ['ADMIN', 'GESTOR', 'OPERACIONAL', 'CAIXA', 'VISUALIZADOR', 'SEM_ACESSO'];
   return allowed.includes(value) ? value : 'VISUALIZADOR';
 }
 
@@ -132,11 +267,7 @@ function normalizePermissoes(
   perfil: string,
   perms: Record<string, boolean> | null | undefined
 ): NonNullable<Usuario['permissoes']> {
-  const base = getPermissoesPadrao(perfil);
-  if (!perms) return base;
-  const hasAnyTrue = Object.values(perms).some((value) => Boolean(value));
-  if (!hasAnyTrue) return base;
-  return { ...base, ...perms };
+  return getPermissoesPadrao(perfil);
 }
 
 
@@ -241,6 +372,31 @@ function requirePermission<T extends { success: boolean; message: string }>(
   if (!user.permissoes?.[permission]) {
     appendAuditLog('permissionDenied', { permission, action, perfil: user.perfil }, false, `Sem permissão: ${action}`);
     return { success: false, message: `Sem permissão: ${action}` } as T;
+  }
+
+  return null;
+}
+
+function requireAnyPermission<T extends { success: boolean; message: string }>(
+  permissions: PermissionKey[],
+  action: string
+): T | null {
+  const email = getRequestingUserEmail();
+  const user = getUsuarioByEmail(email);
+
+  if (!user) {
+    appendAuditLog('permissionDenied', { permissions, action }, false, `Usuario nao cadastrado: ${action}`);
+    return { success: false, message: `Usuario nao cadastrado: ${action}` } as T;
+  }
+  if (user.status !== 'ATIVO') {
+    appendAuditLog('permissionDenied', { permissions, action, status: user.status }, false, `Usuario inativo: ${action}`);
+    return { success: false, message: `Usuario inativo: ${action}` } as T;
+  }
+
+  const allowed = permissions.some((p) => Boolean(user.permissoes?.[p]));
+  if (!allowed) {
+    appendAuditLog('permissionDenied', { permissions, action, perfil: user.perfil }, false, `Sem permissao: ${action}`);
+    return { success: false, message: `Sem permissao: ${action}` } as T;
   }
 
   return null;
@@ -439,6 +595,7 @@ export function runSmokeTests(): {
       'dashboard',
       'contas-pagar',
       'contas-receber',
+      'caixas',
       'conciliacao',
       'dre',
       'fluxo-caixa',
@@ -672,6 +829,43 @@ export function clearCaches(): { success: boolean; message: string } {
   }
 }
 
+// ============================================================================
+// CONFIGURACAO CAIXAS
+// ============================================================================
+
+export function getCaixasConfig(): { pastaId: string; pastaUrl?: string; pastaNome?: string } {
+  const user = getUsuarioByEmail(getRequestingUserEmail());
+  if (!user || user.status !== 'ATIVO') return { pastaId: '' };
+  const pastaId = getConfigValue('CAIXAS_PASTA_ID');
+  if (!pastaId) return { pastaId: '' };
+  try {
+    const folder = DriveApp.getFolderById(pastaId);
+    return { pastaId, pastaUrl: folder.getUrl(), pastaNome: folder.getName() };
+  } catch {
+    return { pastaId };
+  }
+}
+
+export function salvarCaixasConfig(pastaIdOrUrl: string): { success: boolean; message: string } {
+  const denied = requirePermission('gerenciarConfig', 'salvar config caixas');
+  if (denied) return denied;
+  const pastaId = parseDriveFolderId(pastaIdOrUrl);
+  if (!pastaId) {
+    setConfigValue('CAIXAS_PASTA_ID', '');
+    return { success: true, message: 'Pasta de caixas removida' };
+  }
+  let valid = true;
+  try {
+    DriveApp.getFolderById(pastaId);
+  } catch {
+    valid = false;
+  }
+  setConfigValue('CAIXAS_PASTA_ID', pastaId);
+  appendAuditLog('caixas:config', { pastaId }, true);
+  return { success: true, message: valid ? 'Pasta de caixas atualizada' : 'Pasta salva, mas nao foi possivel validar acesso' };
+}
+
+
 /**
  * Retorna o HTML de uma view específica
  */
@@ -685,6 +879,23 @@ export function getViewHtml(viewName: string): string {
       const denied = requirePermission('gerenciarConfig', 'acessar configurações');
       if (denied) {
         return `<div class="empty-state"><div class="empty-state-message">${escapeHtml(denied.message)}</div></div>`;
+      }
+    }
+
+    if (normalized === 'caixas') {
+      const denied = requireAnyPermission<{ success: boolean; message: string }>(
+        ['visualizarRelatorios', 'importarArquivos'],
+        'acessar caixas'
+      );
+      if (denied) {
+        return `<div class="empty-state"><div class="empty-state-message">${escapeHtml(denied.message)}</div></div>`;
+      }
+    }
+
+    if (normalized === 'conciliacao') {
+      const user = getUsuarioByEmail(getRequestingUserEmail());
+      if (user && user.perfil === 'CAIXA') {
+        return `<div class="empty-state"><div class="empty-state-message">Sem permissao para acessar conciliacao</div></div>`;
       }
     }
 
@@ -735,14 +946,15 @@ export function getCurrentUserInfo(): {
 // ============================================================================
 
 export function getReferenceData(): {
-  filiais: Array<{ codigo: string; nome: string; ativo?: boolean }>;
+  filiais: Array<{ codigo: string; nome: string; cnpj?: string; ativo?: boolean; siegRelatorio?: string; siegContabilidade?: string }>;
+  caixaTipos: Array<{ tipo: string; natureza: string; requerArquivo?: boolean; sistemaFc?: boolean; contaReforco?: boolean; ativo?: boolean }>;
   canais: Array<{ codigo: string; nome: string; ativo?: boolean }>;
   contas: Array<{ codigo: string; nome: string; tipo?: string; grupoDRE?: string; subgrupoDRE?: string; grupoDFC?: string; variavelFixa?: string; cmaCmv?: string }>;
   centrosCusto: Array<{ codigo: string; nome: string; ativo?: boolean }>;
 } {
   const user = getUsuarioByEmail(getRequestingUserEmail());
   if (!user || user.status !== 'ATIVO') {
-    return { filiais: [], canais: [], contas: [], centrosCusto: [] };
+    return { filiais: [], caixaTipos: [], canais: [], contas: [], centrosCusto: [] };
   }
 
   const cached = cacheGet<any>(CacheNamespace.REFERENCE, 'all');
@@ -755,11 +967,17 @@ export function getReferenceData(): {
 
     // Filiais (da planilha)
     const sheetFiliais = ss.getSheetByName(SHEET_REF_FILIAIS);
+    if (sheetFiliais) ensureRefFiliaisSchema(sheetFiliais);
     const filiais = sheetFiliais ? sheetFiliais.getDataRange().getValues().slice(1) : [];
 
     // Canais (da planilha)
     const sheetCanais = ss.getSheetByName(SHEET_REF_CANAIS);
     const canais = sheetCanais ? sheetCanais.getDataRange().getValues().slice(1) : [];
+
+    // Tipos de movimentacao de caixa
+    ensureCaixaTiposSchema();
+    const sheetCaixaTipos = ss.getSheetByName(SHEET_REF_CAIXA_TIPOS);
+    const caixaTipos = sheetCaixaTipos ? sheetCaixaTipos.getDataRange().getValues().slice(1) : [];
 
     // Centros de Custo (da planilha, com fallback para hardcoded)
     const sheetCCusto = ss.getSheetByName(SHEET_REF_CCUSTO);
@@ -819,9 +1037,20 @@ export function getReferenceData(): {
         return {
           codigo: String(f[0]),
           nome: String(f[1]),
+          cnpj: String(f[2] || ''),
           ativo: f[ativoIdx] !== false && String(f[ativoIdx] ?? 'TRUE').toUpperCase() !== 'FALSE',
+          siegRelatorio: String(f[4] || ''),
+          siegContabilidade: String(f[5] || ''),
         };
       }),
+      caixaTipos: caixaTipos.filter((t: any) => t[0]).map((t: any) => ({
+        tipo: String(t[REF_CAIXA_TIPOS_COLS.TIPO]),
+        natureza: String(t[REF_CAIXA_TIPOS_COLS.NATUREZA] || 'ENTRADA'),
+        requerArquivo: String(t[REF_CAIXA_TIPOS_COLS.REQUER_ARQUIVO] ?? 'FALSE').toUpperCase() === 'TRUE',
+        sistemaFc: String(t[REF_CAIXA_TIPOS_COLS.SISTEMA_FC] ?? 'FALSE').toUpperCase() === 'TRUE',
+        contaReforco: String(t[REF_CAIXA_TIPOS_COLS.CONTA_REFORCO] ?? 'FALSE').toUpperCase() === 'TRUE',
+        ativo: String(t[REF_CAIXA_TIPOS_COLS.ATIVO] ?? 'TRUE').toUpperCase() !== 'FALSE',
+      })),
       canais: canais.filter((c: any) => c[0]).map((c: any) => ({
         codigo: String(c[0]),
         nome: String(c[1]),
@@ -838,6 +1067,7 @@ export function getReferenceData(): {
     // Retornar dados vazios em caso de erro
     return {
       filiais: [],
+      caixaTipos: [],
       canais: [],
       contas: [],
       centrosCusto: [],
@@ -1113,6 +1343,108 @@ export function excluirCanal(index: number): { success: boolean; message: string
   }
 }
 
+// Tipos de movimentacao do caixa
+export function salvarCaixaTipo(tipo: {
+  tipo: string;
+  natureza: string;
+  requerArquivo?: boolean;
+  sistemaFc?: boolean;
+  contaReforco?: boolean;
+  ativo?: boolean;
+}, editIndex: number): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('gerenciarConfig', 'salvar tipo de caixa');
+    if (denied) return denied;
+
+    const validation = combineValidations(
+      validateRequired(tipo?.tipo, 'Tipo'),
+      validateEnum(String(tipo?.natureza || ''), ['ENTRADA', 'SAIDA'], 'Natureza')
+    );
+    if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
+    ensureCaixaTiposSchema();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_REF_CAIXA_TIPOS);
+    if (!sheet) return { success: false, message: 'Aba de tipos de caixa nao encontrada' };
+
+    if (editIndex < 0) {
+      const data = sheet.getDataRange().getValues().slice(1);
+      const existe = data.some((row: any) => String(row[0]).toUpperCase() === String(tipo.tipo).toUpperCase());
+      if (existe) return { success: false, message: 'Tipo ja existe' };
+    }
+
+    const rowData = [
+      sanitizeSheetString(tipo.tipo),
+      String(tipo.natureza || 'ENTRADA').toUpperCase(),
+      tipo.requerArquivo ? 'TRUE' : 'FALSE',
+      tipo.sistemaFc ? 'TRUE' : 'FALSE',
+      tipo.contaReforco ? 'TRUE' : 'FALSE',
+      tipo.ativo === false ? 'FALSE' : 'TRUE',
+    ];
+
+    if (editIndex >= 0) {
+      sheet.getRange(editIndex + 2, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+    }
+
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('salvarCaixaTipo', { tipo: rowData, editIndex }, true);
+    return { success: true, message: 'Tipo salvo com sucesso' };
+  } catch (error: any) {
+    appendAuditLog('salvarCaixaTipo', { tipo, editIndex }, false, error?.message);
+    return { success: false, message: `Erro: ${error.message}` };
+  }
+}
+
+export function excluirCaixaTipo(index: number): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('gerenciarConfig', 'excluir tipo de caixa');
+    if (denied) return denied;
+    if (!Number.isFinite(index) || index < 0) return { success: false, message: 'Indice invalido' };
+
+    ensureCaixaTiposSchema();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_REF_CAIXA_TIPOS);
+    if (!sheet) return { success: false, message: 'Aba de tipos de caixa nao encontrada' };
+    if (index + 2 > sheet.getLastRow()) return { success: false, message: 'Indice invalido' };
+
+    sheet.deleteRow(index + 2);
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('excluirCaixaTipo', { index }, true);
+    return { success: true, message: 'Tipo excluido' };
+  } catch (error: any) {
+    appendAuditLog('excluirCaixaTipo', { index }, false, error?.message);
+    return { success: false, message: `Erro: ${error.message}` };
+  }
+}
+
+export function toggleCaixaTipo(index: number, ativo: boolean): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('gerenciarConfig', 'ativar/inativar tipo de caixa');
+    if (denied) return denied;
+    if (!Number.isFinite(index) || index < 0) return { success: false, message: 'Indice invalido' };
+
+    ensureCaixaTiposSchema();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_REF_CAIXA_TIPOS);
+    if (!sheet) return { success: false, message: 'Aba de tipos de caixa nao encontrada' };
+
+    if (index + 2 > sheet.getLastRow()) return { success: false, message: 'Indice invalido' };
+    sheet.getRange(index + 2, REF_CAIXA_TIPOS_COLS.ATIVO + 1).setValue(ativo ? 'TRUE' : 'FALSE');
+
+    cacheRemoveNamespace(CacheNamespace.REFERENCE);
+    clearReportsCache();
+    appendAuditLog('toggleCaixaTipo', { index, ativo }, true);
+    return { success: true, message: ativo ? 'Tipo ativado' : 'Tipo inativado' };
+  } catch (error: any) {
+    appendAuditLog('toggleCaixaTipo', { index, ativo }, false, error?.message);
+    return { success: false, message: `Erro: ${error.message}` };
+  }
+}
+
 export function toggleCanal(index: number, ativo: boolean): { success: boolean; message: string } {
   try {
     const denied = requirePermission('gerenciarConfig', 'alterar canal');
@@ -1133,13 +1465,16 @@ export function toggleCanal(index: number, ativo: boolean): { success: boolean; 
 }
 
 // Filiais
-export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boolean }, editIndex: number): { success: boolean; message: string } {
+export function salvarFilial(
+  filial: { codigo: string; nome: string; cnpj?: string; siegRelatorio?: string; siegContabilidade?: string; ativo?: boolean },
+  editIndex: number
+): { success: boolean; message: string } {
   try {
     const denied = requirePermission('gerenciarConfig', 'salvar filial');
     if (denied) return denied;
 
     const validation = combineValidations(
-      validateRequired(filial?.codigo, 'Código'),
+      validateRequired(filial?.codigo, 'C?digo'),
       validateRequired(filial?.nome, 'Nome')
     );
     if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
@@ -1149,41 +1484,46 @@ export function salvarFilial(filial: { codigo: string; nome: string; ativo?: boo
 
     if (!sheet) {
       sheet = ss.insertSheet(SHEET_REF_FILIAIS);
-      sheet.getRange('A1:D1').setValues([['Código', 'Nome', 'CNPJ', 'Ativo']]);
-      sheet.getRange('A1:D1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
+      sheet.getRange('A1:F1').setValues([['C?digo', 'Nome', 'CNPJ', 'Ativo', 'Filial SIEG Relatorio', 'Filial SIEG Contabilidade']]);
+      sheet.getRange('A1:F1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
+    } else if (sheet.getLastColumn() < 6) {
+      sheet.getRange('A1:F1').setValues([['C?digo', 'Nome', 'CNPJ', 'Ativo', 'Filial SIEG Relatorio', 'Filial SIEG Contabilidade']]);
+      sheet.getRange('A1:F1').setFontWeight('bold').setBackground('#00a8e8').setFontColor('#ffffff');
     }
 
-    // Verificar código duplicado
+    // Verificar c?digo duplicado
     if (editIndex < 0) {
       const data = sheet.getDataRange().getValues().slice(1);
       const codigoExiste = data.some((row: any) => String(row[0]).toUpperCase() === filial.codigo.toUpperCase());
       if (codigoExiste) {
-        return { success: false, message: 'Código já existe' };
+        return { success: false, message: 'C?digo j? existe' };
       }
     }
 
     const ativo = filial.ativo !== false && String(filial.ativo ?? 'TRUE').toUpperCase() !== 'FALSE';
     const codigo = sanitizeSheetString(filial.codigo).toUpperCase();
     const nome = sanitizeSheetString(filial.nome);
+    const lastCol = Math.max(6, sheet.getLastColumn());
+    const existing =
+      editIndex >= 0 && sheet.getLastRow() >= editIndex + 2
+        ? sheet.getRange(editIndex + 2, 1, 1, lastCol).getValues()[0]
+        : [];
 
-    const lastCol = Math.max(4, sheet.getLastColumn());
-    const cnpjColIdx = lastCol >= 4 ? 3 : 2; // zero-based for getRange values assembly
-    const ativoColIdx = lastCol >= 4 ? 4 : 3; // 1-based positions for getRange
+    const cnpj =
+      typeof filial.cnpj === 'string' ? sanitizeSheetString(filial.cnpj) : (existing[2] || '');
+    const siegRelatorio =
+      typeof filial.siegRelatorio === 'string' ? sanitizeSheetString(filial.siegRelatorio) : (existing[4] || '');
+    const siegContabilidade =
+      typeof filial.siegContabilidade === 'string' ? sanitizeSheetString(filial.siegContabilidade) : (existing[5] || '');
 
-    // Preserve CNPJ existente se houver
-    let cnpj = '';
-    if (editIndex >= 0 && sheet.getLastRow() >= editIndex + 2) {
-      const existing = sheet.getRange(editIndex + 2, 1, 1, lastCol).getValues()[0];
-      cnpj = existing[cnpjColIdx - 1] || '';
-    }
-
-    const rowData: any[] = [codigo, nome];
-    if (ativoColIdx === 4) {
-      rowData.push(cnpj || '');
-      rowData.push(ativo);
-    } else {
-      rowData.push(ativo);
-    }
+    const rowData: any[] = [
+      codigo,
+      nome,
+      cnpj || '',
+      ativo,
+      siegRelatorio || '',
+      siegContabilidade || '',
+    ];
 
     if (editIndex >= 0) {
       sheet.getRange(editIndex + 2, 1, 1, rowData.length).setValues([rowData]);
@@ -2528,6 +2868,1040 @@ export function conciliarAutomatico(): { success: boolean; conciliados: number; 
   }
 }
 
+
+// ============================================================================
+// CAIXAS
+// ============================================================================
+
+type CaixaRow = {
+  id: string;
+  canal: string;
+  colaborador: string;
+  dataFechamento: string;
+  observacoes: string;
+  sistemaValor: number;
+  reforco: number;
+  criadoEm: string;
+  atualizadoEm: string;
+};
+
+type CaixaMovRow = {
+  id: string;
+  caixaId: string;
+  tipo: string;
+  natureza: 'ENTRADA' | 'SAIDA';
+  valor: number;
+  dataMov: string;
+  observacoes?: string;
+  arquivoUrl?: string;
+  arquivoNome?: string;
+  criadoEm: string;
+  atualizadoEm: string;
+};
+
+type CaixaTipoConfig = {
+  tipo: string;
+  natureza: 'ENTRADA' | 'SAIDA';
+  requerArquivo: boolean;
+  sistemaFc: boolean;
+  contaReforco: boolean;
+  ativo: boolean;
+};
+
+function getCaixaTiposConfig(): CaixaTipoConfig[] {
+  ensureCaixaTiposSchema();
+  const values = getSheetValues(SHEET_REF_CAIXA_TIPOS, { skipHeader: true });
+  return values
+    .filter((r) => r && r[REF_CAIXA_TIPOS_COLS.TIPO])
+    .map((r) => ({
+      tipo: String(r[REF_CAIXA_TIPOS_COLS.TIPO]),
+      natureza: String(r[REF_CAIXA_TIPOS_COLS.NATUREZA] || 'ENTRADA').toUpperCase() as 'ENTRADA' | 'SAIDA',
+      requerArquivo: String(r[REF_CAIXA_TIPOS_COLS.REQUER_ARQUIVO] ?? 'FALSE').toUpperCase() === 'TRUE',
+      sistemaFc: String(r[REF_CAIXA_TIPOS_COLS.SISTEMA_FC] ?? 'FALSE').toUpperCase() === 'TRUE',
+      contaReforco: String(r[REF_CAIXA_TIPOS_COLS.CONTA_REFORCO] ?? 'FALSE').toUpperCase() === 'TRUE',
+      ativo: String(r[REF_CAIXA_TIPOS_COLS.ATIVO] ?? 'TRUE').toUpperCase() !== 'FALSE',
+    }));
+}
+
+function getCaixaTipoByName(tipo: string): CaixaTipoConfig | null {
+  const key = String(tipo || '').trim().toUpperCase();
+  if (!key) return null;
+  const tipos = getCaixaTiposConfig();
+  return tipos.find((t) => String(t.tipo).trim().toUpperCase() === key) || null;
+}
+
+function getCaixasRows(): CaixaRow[] {
+  ensureCaixasSheets();
+  const values = getSheetValues(SHEET_TB_CAIXAS, { skipHeader: true });
+  return values
+    .filter((r) => r && r[TB_CAIXAS_COLS.ID])
+    .map((r) => ({
+      id: String(r[TB_CAIXAS_COLS.ID] || ''),
+      canal: String(r[TB_CAIXAS_COLS.CANAL] || ''),
+      colaborador: String(r[TB_CAIXAS_COLS.COLABORADOR] || ''),
+      dataFechamento: normalizeDateInput(r[TB_CAIXAS_COLS.DATA_FECHAMENTO]),
+      observacoes: String(r[TB_CAIXAS_COLS.OBSERVACOES] || ''),
+      sistemaValor: parseMoneyInput(r[TB_CAIXAS_COLS.SISTEMA_VALOR]),
+      reforco: parseMoneyInput(r[TB_CAIXAS_COLS.REFORCO]),
+      criadoEm: String(r[TB_CAIXAS_COLS.CRIADO_EM] || ''),
+      atualizadoEm: String(r[TB_CAIXAS_COLS.ATUALIZADO_EM] || ''),
+    }));
+}
+
+function getCaixaMovRows(caixaId?: string): CaixaMovRow[] {
+  ensureCaixasSheets();
+  const values = getSheetValues(SHEET_TB_CAIXAS_MOV, { skipHeader: true });
+  const rows = values
+    .filter((r) => r && r[TB_CAIXAS_MOV_COLS.ID])
+    .map((r) => ({
+      id: String(r[TB_CAIXAS_MOV_COLS.ID] || ''),
+      caixaId: String(r[TB_CAIXAS_MOV_COLS.CAIXA_ID] || ''),
+      tipo: String(r[TB_CAIXAS_MOV_COLS.TIPO] || ''),
+      natureza: String(r[TB_CAIXAS_MOV_COLS.NATUREZA] || 'ENTRADA') as 'ENTRADA' | 'SAIDA',
+      valor: parseMoneyInput(r[TB_CAIXAS_MOV_COLS.VALOR]),
+      dataMov: normalizeDateInput(r[TB_CAIXAS_MOV_COLS.DATA_MOV]),
+      observacoes: String(r[TB_CAIXAS_MOV_COLS.OBSERVACOES] || ''),
+      arquivoUrl: String(r[TB_CAIXAS_MOV_COLS.ARQUIVO_URL] || ''),
+      arquivoNome: String(r[TB_CAIXAS_MOV_COLS.ARQUIVO_NOME] || ''),
+      criadoEm: String(r[TB_CAIXAS_MOV_COLS.CRIADO_EM] || ''),
+      atualizadoEm: String(r[TB_CAIXAS_MOV_COLS.ATUALIZADO_EM] || ''),
+    }));
+  return caixaId ? rows.filter((r) => r.caixaId === caixaId) : rows;
+}
+
+function computeCaixaResumo(movimentos: CaixaMovRow[]) {
+  const tipos = getCaixaTiposConfig();
+  const tipoMap = new Map(tipos.map((t) => [String(t.tipo).trim().toUpperCase(), t]));
+
+  let totalEntradas = 0;
+  let totalSaidas = 0;
+  let sistemaFc = 0;
+  let reforco = 0;
+  const pendencias: Array<{ id: string; tipo: string }> = [];
+
+  movimentos.forEach((m) => {
+    const config = tipoMap.get(String(m.tipo || '').trim().toUpperCase());
+    const valor = Number(m.valor || 0);
+    const natureza = String(m.natureza || '').toUpperCase();
+
+    if (config?.sistemaFc) {
+      sistemaFc += valor;
+    } else if (natureza === 'SAIDA') {
+      totalSaidas += valor;
+    } else {
+      totalEntradas += valor;
+    }
+
+    if (config?.contaReforco && natureza !== 'SAIDA') {
+      reforco += valor;
+    }
+
+    if (config?.requerArquivo && !m.arquivoUrl) {
+      pendencias.push({ id: m.id, tipo: m.tipo });
+    }
+  });
+
+  const totalRecebido = totalEntradas - totalSaidas;
+  const diferenca = totalRecebido - sistemaFc;
+
+  return { totalEntradas, totalSaidas, totalRecebido, sistemaFc, diferenca, reforco, pendencias };
+}
+
+export function getCaixasData(): { success: boolean; caixas: CaixaRow[]; movimentos: CaixaMovRow[] } {
+  const denied = requireAnyPermission<{ success: boolean; message: string }>(
+    ['visualizarRelatorios', 'importarArquivos'],
+    'carregar caixas'
+  );
+  if (denied) return { success: false, caixas: [], movimentos: [] };
+
+  const caixas = getCaixasRows();
+  const movimentos = getCaixaMovRows();
+  return { success: true, caixas, movimentos };
+}
+
+export function getCaixaMovimentos(caixaId: string): { success: boolean; movimentos: CaixaMovRow[] } {
+  const denied = requireAnyPermission<{ success: boolean; message: string }>(
+    ['visualizarRelatorios', 'importarArquivos'],
+    'carregar movimentos de caixa'
+  );
+  if (denied) return { success: false, movimentos: [] };
+
+  const id = String(caixaId || '').trim();
+  if (!id) return { success: true, movimentos: [] };
+  return { success: true, movimentos: getCaixaMovRows(id) };
+}
+
+export function salvarCaixa(caixa: {
+  id?: string;
+  canal: string;
+  colaborador?: string;
+  dataFechamento: string;
+  observacoes?: string;
+  sistemaValor?: number | string;
+  reforco?: number | string;
+  finalizar?: boolean;
+}): { success: boolean; message: string; id?: string } {
+  const denied = requirePermission('importarArquivos', 'salvar caixa');
+  if (denied) return denied;
+
+  const validation = combineValidations(
+    validateRequired(caixa?.canal, 'Canal'),
+    validateRequired(caixa?.dataFechamento, 'Data Fechamento')
+  );
+  if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
+  ensureCaixasSheets();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_CAIXAS);
+  if (!sheet) return { success: false, message: 'Aba de caixas nao encontrada' };
+
+  const now = new Date().toISOString();
+  const id = caixa.id ? String(caixa.id) : Utilities.getUuid();
+  const dataFechamento = normalizeDateInput(caixa.dataFechamento);
+  const movimentos = getCaixaMovRows(id);
+  const resumo = computeCaixaResumo(movimentos);
+  const sistemaValor = resumo.sistemaFc;
+  const reforco = resumo.reforco;
+
+  const finalizar = caixa.finalizar !== false;
+  if (finalizar) {
+    if (Math.abs(resumo.diferenca) > 0.009 && !String(caixa.observacoes || '').trim()) {
+      return { success: false, message: 'Informe a justificativa da diferenca' };
+    }
+    if (resumo.pendencias.length > 0) {
+      return { success: false, message: 'Ha movimentacoes que exigem comprovante' };
+    }
+  }
+
+  let rowIndex = findRowByExactValueInColumn(sheet, TB_CAIXAS_COLS.ID, id, 2);
+  let criadoEm = now;
+  if (rowIndex) {
+    const existing = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+    criadoEm = String(existing[TB_CAIXAS_COLS.CRIADO_EM] || now);
+  }
+
+  const allRows = sheet.getRange(2, 1, Math.max(0, sheet.getLastRow() - 1), sheet.getLastColumn()).getValues();
+  const duplicate = allRows.find((r, idx) => {
+    const existingId = String(r[TB_CAIXAS_COLS.ID] || '');
+    if (existingId === id) return false;
+    const existingCanal = String(r[TB_CAIXAS_COLS.CANAL] || '');
+    const existingData = normalizeDateInput(r[TB_CAIXAS_COLS.DATA_FECHAMENTO]);
+    return existingCanal === String(caixa.canal) && existingData === dataFechamento;
+  });
+  if (duplicate) {
+    return { success: false, message: 'Ja existe um caixa para este canal e data' };
+  }
+
+  const rowData = [
+    id,
+    sanitizeSheetString(caixa.canal || ''),
+    sanitizeSheetString(caixa.colaborador || ''),
+    dataFechamento,
+    sanitizeSheetString(caixa.observacoes || ''),
+    sistemaValor,
+    reforco,
+    criadoEm,
+    now,
+  ];
+
+  if (rowIndex) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+
+  appendAuditLog('caixas:salvar', { id, canal: caixa.canal, finalizar }, true);
+  return { success: true, message: finalizar ? 'Caixa fechado com sucesso' : 'Caixa salvo com sucesso', id };
+}
+
+export function excluirCaixa(id: string): { success: boolean; message: string } {
+  const denied = requirePermission('importarArquivos', 'excluir caixa');
+  if (denied) return denied;
+  const caixaId = String(id || '').trim();
+  if (!caixaId) return { success: false, message: 'ID invalido' };
+
+  ensureCaixasSheets();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_CAIXAS);
+  const movSheet = ss.getSheetByName(SHEET_TB_CAIXAS_MOV);
+  if (!sheet || !movSheet) return { success: false, message: 'Abas de caixas nao encontradas' };
+
+  const rowIndex = findRowByExactValueInColumn(sheet, TB_CAIXAS_COLS.ID, caixaId, 2);
+  if (!rowIndex) return { success: false, message: 'Caixa nao encontrado' };
+
+  sheet.deleteRow(rowIndex);
+
+  const movValues = movSheet.getDataRange().getValues();
+  for (let i = movValues.length - 1; i >= 1; i--) {
+    if (String(movValues[i][TB_CAIXAS_MOV_COLS.CAIXA_ID] || '') === caixaId) {
+      movSheet.deleteRow(i + 1);
+    }
+  }
+
+  appendAuditLog('caixas:excluir', { id: caixaId }, true);
+  return { success: true, message: 'Caixa excluido' };
+}
+
+export function salvarCaixaMovimento(mov: {
+  id?: string;
+  caixaId: string;
+  tipo: string;
+  natureza: string;
+  valor: number | string;
+  dataMov?: string;
+  observacoes?: string;
+  arquivoUrl?: string;
+  arquivoNome?: string;
+}): { success: boolean; message: string; id?: string } {
+  const denied = requirePermission('importarArquivos', 'salvar movimento de caixa');
+  if (denied) return denied;
+
+  const validation = combineValidations(
+    validateRequired(mov?.caixaId, 'Caixa'),
+    validateRequired(mov?.tipo, 'Tipo'),
+    validateEnum(String(mov?.natureza || ''), ['ENTRADA', 'SAIDA'], 'Natureza')
+  );
+  if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
+
+  ensureCaixasSheets();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_CAIXAS_MOV);
+  if (!sheet) return { success: false, message: 'Aba de movimentacoes nao encontrada' };
+
+  const now = new Date().toISOString();
+  const id = mov.id ? String(mov.id) : Utilities.getUuid();
+  const valor = parseMoneyInput(mov.valor);
+  let dataMov = normalizeDateInput(mov.dataMov || '');
+  if (!dataMov) {
+    const caixaRows = getCaixasRows();
+    const caixa = caixaRows.find((c) => c.id === String(mov.caixaId));
+    dataMov = caixa ? caixa.dataFechamento : '';
+  }
+
+  let rowIndex = findRowByExactValueInColumn(sheet, TB_CAIXAS_MOV_COLS.ID, id, 2);
+  let criadoEm = now;
+  let arquivoUrl = sanitizeSheetString(mov.arquivoUrl || '');
+  let arquivoNome = sanitizeSheetString(mov.arquivoNome || '');
+  let observacoes = sanitizeSheetString(mov.observacoes || '');
+  if (rowIndex) {
+    const existing = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+    criadoEm = String(existing[TB_CAIXAS_MOV_COLS.CRIADO_EM] || now);
+    if (!arquivoUrl) arquivoUrl = String(existing[TB_CAIXAS_MOV_COLS.ARQUIVO_URL] || '');
+    if (!arquivoNome) arquivoNome = String(existing[TB_CAIXAS_MOV_COLS.ARQUIVO_NOME] || '');
+    if (!observacoes) observacoes = String(existing[TB_CAIXAS_MOV_COLS.OBSERVACOES] || '');
+  }
+
+  const tipoConfig = getCaixaTipoByName(mov.tipo);
+  if (tipoConfig?.requerArquivo && !arquivoUrl) {
+    return { success: false, message: 'Este tipo requer comprovante' };
+  }
+
+  const rowData = [
+    id,
+    String(mov.caixaId),
+    sanitizeSheetString(mov.tipo || ''),
+    String(mov.natureza || 'ENTRADA').toUpperCase(),
+    valor,
+    dataMov,
+    arquivoUrl,
+    arquivoNome,
+    criadoEm,
+    now,
+    observacoes,
+  ];
+
+  if (rowIndex) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+
+  appendAuditLog('caixas:movimento', { id, caixaId: mov.caixaId, tipo: mov.tipo }, true);
+  return { success: true, message: 'Movimento salvo', id };
+}
+
+export function excluirCaixaMovimento(id: string): { success: boolean; message: string } {
+  const denied = requirePermission('importarArquivos', 'excluir movimento de caixa');
+  if (denied) return denied;
+  const movId = String(id || '').trim();
+  if (!movId) return { success: false, message: 'ID invalido' };
+
+  ensureCaixasSheets();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_CAIXAS_MOV);
+  if (!sheet) return { success: false, message: 'Aba de movimentacoes nao encontrada' };
+
+  const rowIndex = findRowByExactValueInColumn(sheet, TB_CAIXAS_MOV_COLS.ID, movId, 2);
+  if (!rowIndex) return { success: false, message: 'Movimento nao encontrado' };
+
+  sheet.deleteRow(rowIndex);
+  appendAuditLog('caixas:movimento:excluir', { id: movId }, true);
+  return { success: true, message: 'Movimento excluido' };
+}
+
+export function getCaixaRelatorio(caixaId: string): { success: boolean; report?: any; message?: string } {
+  const denied = requireAnyPermission<{ success: boolean; message: string }>(
+    ['visualizarRelatorios', 'importarArquivos'],
+    'relatorio caixas'
+  );
+  if (denied) return { success: false, message: denied.message };
+
+  const id = String(caixaId || '').trim();
+  if (!id) return { success: false, message: 'Caixa invalido' };
+
+  const caixas = getCaixasRows();
+  const caixa = caixas.find((c) => c.id === id);
+  if (!caixa) return { success: false, message: 'Caixa nao encontrado' };
+
+  const movimentos = getCaixaMovRows(id);
+  const porTipo = new Map<string, { tipo: string; entradas: number; saidas: number }>();
+  const resumo = computeCaixaResumo(movimentos);
+
+  movimentos.forEach((m) => {
+    const key = m.tipo || 'Outros';
+    const item = porTipo.get(key) || { tipo: key, entradas: 0, saidas: 0 };
+    if (m.natureza === 'SAIDA') {
+      item.saidas += m.valor;
+    } else {
+      item.entradas += m.valor;
+    }
+    porTipo.set(key, item);
+  });
+
+  return {
+    success: true,
+    report: {
+      caixa,
+      totalEntradas: resumo.totalEntradas,
+      totalSaidas: resumo.totalSaidas,
+      totalRecebido: resumo.totalRecebido,
+      diferenca: resumo.diferenca,
+      sistemaFc: resumo.sistemaFc,
+      reforco: resumo.reforco,
+      porTipo: Array.from(porTipo.values()),
+      movimentos,
+      pendencias: resumo.pendencias,
+    },
+  };
+}
+
+function ensureFolder(parent: GoogleAppsScript.Drive.Folder, name: string): GoogleAppsScript.Drive.Folder {
+  const folders = parent.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return parent.createFolder(name);
+}
+
+function sanitizeFileName(value: string): string {
+  return String(value || '')
+    .trim()
+    .replace(/[\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .slice(0, 120) || 'Arquivo';
+}
+
+function formatMoneyFile(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return safe.toFixed(2).replace('.', '_');
+}
+
+export function uploadCaixaArquivo(payload: {
+  base64: string;
+  mimeType: string;
+  fileName: string;
+  canal: string;
+  dataFechamento: string;
+  tipo: string;
+  valor: number | string;
+}): { success: boolean; message: string; url?: string } {
+  const denied = requirePermission('importarArquivos', 'upload caixa');
+  if (denied) return denied;
+
+  const pastaId = getConfigValue('CAIXAS_PASTA_ID');
+  if (!pastaId) return { success: false, message: 'Configure a pasta de caixas nas configuracoes' };
+
+  const base64 = String(payload?.base64 || '');
+  if (!base64) return { success: false, message: 'Arquivo invalido' };
+
+  const canal = sanitizeFileName(payload?.canal || 'CANAL');
+  const dataFechamento = normalizeDateInput(payload?.dataFechamento) || normalizeDateInput(new Date());
+  const tipo = sanitizeFileName(payload?.tipo || 'Movimentacao');
+  const valor = parseMoneyInput(payload?.valor);
+
+  const ext = (String(payload?.fileName || '').split('.').pop() || 'dat').toLowerCase();
+  const time = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
+  const fileName = `${canal} - ${dataFechamento} - ${tipo} - ${formatMoneyFile(valor)} - ${time}.${ext}`;
+
+  try {
+    const root = DriveApp.getFolderById(pastaId);
+    const canalFolder = ensureFolder(root, canal);
+    const dateFolder = ensureFolder(canalFolder, dataFechamento);
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(base64),
+      payload.mimeType || 'application/octet-stream',
+      fileName
+    );
+    const file = dateFolder.createFile(blob);
+    appendAuditLog('caixas:upload', { canal, dataFechamento, tipo, valor, fileName }, true);
+    return { success: true, message: 'Upload concluido', url: file.getUrl() };
+  } catch (error: any) {
+    appendAuditLog('caixas:upload', { canal, dataFechamento, tipo, valor }, false, error?.message);
+    return { success: false, message: `Erro ao salvar arquivo: ${error?.message || error}` };
+  }
+}
+
+// ============================================================================
+// IMPORTACAO E COMPARATIVO (FC x SIEG x BANCO)
+// ============================================================================
+
+function normalizeKey(value: unknown): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function normalizeDateInput(value: unknown): string {
+  if (!value) return '';
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  const s = String(value).trim();
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  const brMatch = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (brMatch) {
+    const dd = brMatch[1].padStart(2, '0');
+    const mm = brMatch[2].padStart(2, '0');
+    const yyyy = brMatch[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const altMatch = s.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})$/);
+  if (altMatch) {
+    const yyyy = altMatch[1];
+    const mm = altMatch[2].padStart(2, '0');
+    const dd = altMatch[3].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return s;
+}
+
+function parseMoneyInput(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return 0;
+  let s = String(value).trim();
+  if (!s) return 0;
+  s = s.replace(/[^\d,.-]/g, '');
+  if (s.includes(',') && s.includes('.')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function buildMatchKey(dateStr: string, value: number): string {
+  const dateKey = normalizeDateInput(dateStr);
+  if (!dateKey) return '';
+  return `${dateKey}|${Math.abs(value).toFixed(2)}`;
+}
+
+function buildImportKey(parts: Array<string | number | null | undefined>): string {
+  return parts
+    .map((p) => normalizeKey(p))
+    .filter((p) => p)
+    .join('|');
+}
+
+function isItauMovement(lancamento: string): boolean {
+  const key = normalizeKey(lancamento);
+  if (!key) return false;
+  if (key.includes('saldo')) return false;
+  return true;
+}
+
+function resolveFilialFcFromRelations(
+  codigoFilial: string,
+  fallback: string,
+  relations: Array<{ filialFc: string; filialSiegRelatorio: string; filialSiegContabil: string; ativa?: boolean }>
+): string {
+  const direct = String(fallback || '').trim();
+  if (direct) return direct;
+  const key = normalizeKey(codigoFilial);
+  if (!key) return '';
+  for (const rel of relations) {
+    if (rel.ativa === false) continue;
+    const relKey1 = normalizeKey(rel.filialSiegRelatorio);
+    const relKey2 = normalizeKey(rel.filialSiegContabil);
+    if (key === relKey1 || key === relKey2) {
+      return String(rel.filialFc || '');
+    }
+  }
+  return '';
+}
+
+function getImportFcRows(tipo?: string): any[] {
+  createSheetIfNotExists(SHEET_TB_IMPORT_FC, [
+    'Data Emissao', 'Num Documento', 'Cod Conta', 'Filial FC', 'Historico', 'Fornecedor',
+    'Valor', 'Descricao', 'Data Baixa', 'Flag Baixa', 'Data Vencimento', 'Tipo', 'Importado Em',
+  ]);
+  const values = getSheetValues(SHEET_TB_IMPORT_FC, { skipHeader: true });
+  return values
+    .filter((r) => r && (r[0] || r[1]))
+    .map((r) => ({
+      dataEmissao: normalizeDateInput(r[TB_IMPORT_FC_COLS.DATA_EMISSAO]),
+      numDocumento: String(r[TB_IMPORT_FC_COLS.NUM_DOCUMENTO] || ''),
+      codConta: String(r[TB_IMPORT_FC_COLS.COD_CONTA] || ''),
+      filialFc: String(r[TB_IMPORT_FC_COLS.FILIAL_FC] || ''),
+      historico: String(r[TB_IMPORT_FC_COLS.HISTORICO] || ''),
+      fornecedor: String(r[TB_IMPORT_FC_COLS.FORNECEDOR] || ''),
+      valor: parseMoneyInput(r[TB_IMPORT_FC_COLS.VALOR]),
+      descricao: String(r[TB_IMPORT_FC_COLS.DESCRICAO] || ''),
+      dataBaixa: normalizeDateInput(r[TB_IMPORT_FC_COLS.DATA_BAIXA]),
+      flagBaixa: String(r[TB_IMPORT_FC_COLS.FLAG_BAIXA] || ''),
+      dataVencimento: normalizeDateInput(r[TB_IMPORT_FC_COLS.DATA_VENCIMENTO]),
+      tipo: String(r[TB_IMPORT_FC_COLS.TIPO] || '').toUpperCase(),
+    }))
+    .filter((r) => (tipo ? r.tipo === tipo : true));
+}
+
+function getImportItauRows(): any[] {
+  createSheetIfNotExists(SHEET_TB_IMPORT_ITAU, [
+    'Data', 'Lancamento', 'Agencia/Origem', 'Razao Social', 'CPF/CNPJ', 'Valor',
+    'Saldo', 'Conta', 'Filial FC', 'Modelo', 'Importado Em',
+  ]);
+  const values = getSheetValues(SHEET_TB_IMPORT_ITAU, { skipHeader: true });
+  return values
+    .filter((r) => r && (r[0] || r[1]))
+    .map((r) => ({
+      data: normalizeDateInput(r[TB_IMPORT_ITAU_COLS.DATA]),
+      lancamento: String(r[TB_IMPORT_ITAU_COLS.LANCAMENTO] || ''),
+      agenciaOrigem: String(r[TB_IMPORT_ITAU_COLS.AGENCIA_ORIGEM] || ''),
+      razaoSocial: String(r[TB_IMPORT_ITAU_COLS.RAZAO_SOCIAL] || ''),
+      cpfCnpj: String(r[TB_IMPORT_ITAU_COLS.CPF_CNPJ] || ''),
+      valor: parseMoneyInput(r[TB_IMPORT_ITAU_COLS.VALOR]),
+      saldo: parseMoneyInput(r[TB_IMPORT_ITAU_COLS.SALDO]),
+      conta: String(r[TB_IMPORT_ITAU_COLS.CONTA] || ''),
+      filialFc: String(r[TB_IMPORT_ITAU_COLS.FILIAL_FC] || ''),
+      modelo: String(r[TB_IMPORT_ITAU_COLS.MODELO] || ''),
+    }));
+}
+
+function getImportSiegRows(): any[] {
+  createSheetIfNotExists(SHEET_TB_IMPORT_SIEG, [
+    'Num NFe', 'Valor', 'Data Emissao', 'CNPJ Emit', 'Nome Fant Emit', 'Razao Soc Emit',
+    'CNPJ Dest', 'Nome Fant Dest', 'Razao Soc Dest', 'Data Envio Cofre', 'Chave NFe',
+    'Tags', 'Codigo Evento', 'Tipo Evento', 'Status', 'Danfe', 'Xml', 'Codigo Filial',
+    'Filial FC', 'Importado Em',
+  ]);
+  const values = getSheetValues(SHEET_TB_IMPORT_SIEG, { skipHeader: true });
+  return values
+    .filter((r) => r && (r[0] || r[1]))
+    .map((r) => ({
+      numNfe: String(r[TB_IMPORT_SIEG_COLS.NUM_NFE] || ''),
+      valor: parseMoneyInput(r[TB_IMPORT_SIEG_COLS.VALOR]),
+      dataEmissao: normalizeDateInput(r[TB_IMPORT_SIEG_COLS.DATA_EMISSAO]),
+      cnpjEmit: String(r[TB_IMPORT_SIEG_COLS.CNPJ_EMIT] || ''),
+      nomeFantEmit: String(r[TB_IMPORT_SIEG_COLS.NOME_FANT_EMIT] || ''),
+      razaoEmit: String(r[TB_IMPORT_SIEG_COLS.RAZAO_EMIT] || ''),
+      cnpjDest: String(r[TB_IMPORT_SIEG_COLS.CNPJ_DEST] || ''),
+      nomeFantDest: String(r[TB_IMPORT_SIEG_COLS.NOME_FANT_DEST] || ''),
+      razaoDest: String(r[TB_IMPORT_SIEG_COLS.RAZAO_DEST] || ''),
+      dataEnvioCofre: normalizeDateInput(r[TB_IMPORT_SIEG_COLS.DATA_ENVIO_COFRE]),
+      chaveNfe: String(r[TB_IMPORT_SIEG_COLS.CHAVE_NFE] || ''),
+      tags: String(r[TB_IMPORT_SIEG_COLS.TAGS] || ''),
+      codigoEvento: String(r[TB_IMPORT_SIEG_COLS.CODIGO_EVENTO] || ''),
+      tipoEvento: String(r[TB_IMPORT_SIEG_COLS.TIPO_EVENTO] || ''),
+      status: String(r[TB_IMPORT_SIEG_COLS.STATUS] || ''),
+      danfe: String(r[TB_IMPORT_SIEG_COLS.DANFE] || ''),
+      xml: String(r[TB_IMPORT_SIEG_COLS.XML] || ''),
+      codigoFilial: String(r[TB_IMPORT_SIEG_COLS.CODIGO_FILIAL_SIEG] || ''),
+      filialFc: String(r[TB_IMPORT_SIEG_COLS.FILIAL_FC] || ''),
+    }));
+}
+
+export function importarFc(
+  rows: Array<any>,
+  meta?: { tipo?: string; filialFc?: string }
+): { success: boolean; message: string; imported?: number } {
+  const denied = requirePermission('importarArquivos', 'importar FC');
+  if (denied) return denied;
+
+  const tipo = String(meta?.tipo || '').toUpperCase();
+  if (!['PAGAR', 'RECEBER'].includes(tipo)) {
+    return { success: false, message: 'Tipo invalido para importacao FC' };
+  }
+
+  const now = new Date().toISOString();
+  const payload = Array.isArray(rows) ? rows : [];
+  const existing = getImportFcRows(tipo);
+  const existingKeys = new Set(
+    existing.map((r) => buildImportKey([r.dataEmissao, r.valor, r.numDocumento, r.filialFc, r.tipo]))
+  );
+
+  const values = payload
+    .filter((r) => r)
+    .map((r) => ({
+      dataEmissao: normalizeDateInput(r.dataEmissao),
+      numDocumento: sanitizeSheetString(r.numDocumento || ''),
+      codConta: sanitizeSheetString(r.codConta || ''),
+      filialFc: sanitizeSheetString(r.filialFc || meta?.filialFc || ''),
+      historico: sanitizeSheetString(r.historico || ''),
+      fornecedor: sanitizeSheetString(r.fornecedor || ''),
+      valor: parseMoneyInput(r.valor),
+      descricao: sanitizeSheetString(r.descricao || ''),
+      dataBaixa: normalizeDateInput(r.dataBaixa),
+      flagBaixa: sanitizeSheetString(r.flagBaixa || ''),
+      dataVencimento: normalizeDateInput(r.dataVencimento),
+      tipo: tipo,
+    }))
+    .filter((r) => {
+      const key = buildImportKey([r.dataEmissao, r.valor, r.numDocumento, r.filialFc, r.tipo]);
+      if (!key || existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
+    })
+    .map((r) => ([
+      r.dataEmissao,
+      r.numDocumento,
+      r.codConta,
+      r.filialFc,
+      r.historico,
+      r.fornecedor,
+      r.valor,
+      r.descricao,
+      r.dataBaixa,
+      r.flagBaixa,
+      r.dataVencimento,
+      r.tipo,
+      now,
+    ]));
+
+  const imported = values.length;
+  const total = payload.length;
+  const skipped = Math.max(0, total - imported);
+  if (!values.length) {
+    if (payload.length > 0) {
+      return { success: false, message: 'Nenhuma linha importada (todas duplicadas ou invalidas)' };
+    }
+    return { success: false, message: 'Nenhuma linha valida para importar' };
+  }
+
+  appendRows(SHEET_TB_IMPORT_FC, values);
+  appendAuditLog('importarFc', { tipo, imported, skipped }, true);
+  return {
+    success: true,
+    message: `Importado ${imported} linhas FC${skipped ? ` (ignoradas ${skipped} duplicadas)` : ''}`,
+    imported,
+  };
+}
+
+export function getSheetData(
+  sheetIdOrUrl: string,
+  sheetName?: string
+): { success: boolean; message?: string; values?: string[][] } {
+  const denied = requirePermission('importarArquivos', 'ler planilha');
+  if (denied) return denied;
+
+  const input = String(sheetIdOrUrl || '').trim();
+  if (!input) {
+    return { success: false, message: 'Informe o ID ou URL da planilha' };
+  }
+
+  let sheetId = input;
+  const match = input.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (match) sheetId = match[1];
+  const idMatch = input.match(/[?&]id=([a-zA-Z0-9-_]+)/);
+  if (idMatch) sheetId = idMatch[1];
+
+  try {
+    const ss = SpreadsheetApp.openById(sheetId);
+    const sheet = sheetName ? ss.getSheetByName(sheetName) : ss.getSheets()[0];
+    if (!sheet) {
+      return { success: false, message: 'Aba nao encontrada na planilha' };
+    }
+    const values = sheet.getDataRange().getDisplayValues();
+    return { success: true, values };
+  } catch (error: any) {
+    return { success: false, message: `Erro ao ler planilha: ${error?.message || error}` };
+  }
+}
+
+export function importarItau(
+  rows: Array<any>,
+  meta?: { modelo?: string; filialFc?: string; conta?: string }
+): { success: boolean; message: string; imported?: number } {
+  const denied = requirePermission('importarArquivos', 'importar Itau');
+  if (denied) return denied;
+
+  const now = new Date().toISOString();
+  const payload = Array.isArray(rows) ? rows : [];
+  const existing = getImportItauRows();
+  const existingKeys = new Set(
+    existing.map((r) => buildImportKey([r.data, r.valor, r.lancamento, r.conta, r.cpfCnpj]))
+  );
+
+  const mapped = payload
+    .filter((r) => r)
+    .map((r) => ({
+      data: normalizeDateInput(r.data),
+      lancamento: sanitizeSheetString(r.lancamento || ''),
+      agenciaOrigem: sanitizeSheetString(r.agenciaOrigem || ''),
+      razaoSocial: sanitizeSheetString(r.razaoSocial || ''),
+      cpfCnpj: sanitizeSheetString(r.cpfCnpj || ''),
+      valor: parseMoneyInput(r.valor),
+      saldo: parseMoneyInput(r.saldo),
+      conta: sanitizeSheetString(r.conta || meta?.conta || ''),
+      filialFc: sanitizeSheetString(r.filialFc || meta?.filialFc || ''),
+      modelo: sanitizeSheetString(r.modelo || meta?.modelo || ''),
+    }));
+
+  const movimentos = mapped.filter((r) => isItauMovement(r.lancamento));
+  const skippedNoMov = Math.max(0, mapped.length - movimentos.length);
+
+  const values = movimentos
+    .filter((r) => {
+      const key = buildImportKey([r.data, r.valor, r.lancamento, r.conta, r.cpfCnpj]);
+      if (!key || existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
+    })
+    .map((r) => ([
+      r.data,
+      r.lancamento,
+      r.agenciaOrigem,
+      r.razaoSocial,
+      r.cpfCnpj,
+      r.valor,
+      r.saldo,
+      r.conta,
+      r.filialFc,
+      r.modelo,
+      now,
+    ]));
+
+  const imported = values.length;
+  const total = payload.length;
+  const skippedDup = Math.max(0, movimentos.length - imported);
+
+  if (!values.length) {
+    if (payload.length > 0) {
+      return { success: false, message: 'Nenhuma linha importada (todas duplicadas, saldo ou invalidas)' };
+    }
+    return { success: false, message: 'Nenhuma linha valida para importar' };
+  }
+
+  appendRows(SHEET_TB_IMPORT_ITAU, values);
+  appendAuditLog('importarItau', { imported, skippedDup, skippedNoMov }, true);
+
+  const notes = [] as string[];
+  if (skippedDup) notes.push(`ignoradas ${skippedDup} duplicadas`);
+  if (skippedNoMov) notes.push(`ignoradas ${skippedNoMov} de saldo`);
+  const suffix = notes.length ? ` (${notes.join(', ')})` : '';
+
+  return {
+    success: true,
+    message: `Importado ${imported} linhas Itau${suffix}`,
+    imported,
+  };
+}
+
+export function importarSieg(
+  rows: Array<any>,
+  meta?: { filialFc?: string }
+): { success: boolean; message: string; imported?: number } {
+  const denied = requirePermission('importarArquivos', 'importar SIEG');
+  if (denied) return denied;
+
+  const now = new Date().toISOString();
+  createSheetIfNotExists(SHEET_REF_FILIAIS, [
+    'Código', 'Nome', 'CNPJ', 'Ativo', 'Filial SIEG Relatorio', 'Filial SIEG Contabilidade',
+  ]);
+  const relations = getSheetValues(SHEET_REF_FILIAIS, { skipHeader: true })
+    .map((r) => ({
+      filialFc: String(r[0] || ''),
+      filialSiegRelatorio: String(r[4] || ''),
+      filialSiegContabil: String(r[5] || ''),
+      ativa: r[3] !== false && String(r[3] || '').toUpperCase() !== 'FALSE',
+    }));
+
+  const payload = Array.isArray(rows) ? rows : [];
+  const existing = getImportSiegRows();
+  const existingKeys = new Set(
+    existing.map((r) => buildImportKey([r.chaveNfe || r.numNfe, r.valor, r.dataEmissao, r.cnpjEmit]))
+  );
+
+  const values = payload
+    .filter((r) => r)
+    .map((r) => {
+      const codigoFilial = String(r.codigoFilial || r.codigo_filial || '');
+      const filialFc = resolveFilialFcFromRelations(codigoFilial, r.filialFc || meta?.filialFc || '', relations);
+      return {
+        numNfe: sanitizeSheetString(r.numNfe || r.num_nfe || ''),
+        valor: parseMoneyInput(r.valor),
+        dataEmissao: normalizeDateInput(r.dataEmissao),
+        cnpjEmit: sanitizeSheetString(r.cnpjEmit || ''),
+        nomeFantEmit: sanitizeSheetString(r.nomeFantEmit || ''),
+        razaoEmit: sanitizeSheetString(r.razaoEmit || ''),
+        cnpjDest: sanitizeSheetString(r.cnpjDest || ''),
+        nomeFantDest: sanitizeSheetString(r.nomeFantDest || ''),
+        razaoDest: sanitizeSheetString(r.razaoDest || ''),
+        dataEnvioCofre: normalizeDateInput(r.dataEnvioCofre),
+        chaveNfe: sanitizeSheetString(r.chaveNfe || ''),
+        tags: sanitizeSheetString(r.tags || ''),
+        codigoEvento: sanitizeSheetString(r.codigoEvento || ''),
+        tipoEvento: sanitizeSheetString(r.tipoEvento || ''),
+        status: sanitizeSheetString(r.status || ''),
+        danfe: sanitizeSheetString(r.danfe || ''),
+        xml: sanitizeSheetString(r.xml || ''),
+        codigoFilial: sanitizeSheetString(codigoFilial),
+        filialFc: sanitizeSheetString(filialFc),
+      };
+    })
+    .filter((r) => {
+      const key = buildImportKey([r.chaveNfe || r.numNfe, r.valor, r.dataEmissao, r.cnpjEmit]);
+      if (!key || existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
+    })
+    .map((r) => ([
+      r.numNfe,
+      r.valor,
+      r.dataEmissao,
+      r.cnpjEmit,
+      r.nomeFantEmit,
+      r.razaoEmit,
+      r.cnpjDest,
+      r.nomeFantDest,
+      r.razaoDest,
+      r.dataEnvioCofre,
+      r.chaveNfe,
+      r.tags,
+      r.codigoEvento,
+      r.tipoEvento,
+      r.status,
+      r.danfe,
+      r.xml,
+      r.codigoFilial,
+      r.filialFc,
+      now,
+    ]));
+
+  const imported = values.length;
+  const total = payload.length;
+  const skipped = Math.max(0, total - imported);
+  if (!values.length) {
+    if (payload.length > 0) {
+      return { success: false, message: 'Nenhuma linha importada (todas duplicadas ou invalidas)' };
+    }
+    return { success: false, message: 'Nenhuma linha valida para importar' };
+  }
+
+  appendRows(SHEET_TB_IMPORT_SIEG, values);
+  appendAuditLog('importarSieg', { imported, skipped }, true);
+  return {
+    success: true,
+    message: `Importado ${imported} linhas SIEG${skipped ? ` (ignoradas ${skipped} duplicadas)` : ''}`,
+    imported,
+  };
+}
+
+export function getComparativoData(tipo: string): {
+  success: boolean;
+  message?: string;
+  tipo?: string;
+  stats?: { total: number; auto: number; pendente: number; semMatch: number; duplicado: number };
+  counts?: { fcTotal: number; itauTotal: number; siegTotal: number };
+  items?: any[];
+} {
+  const denied = requireAnyPermission<{ success: boolean; message: string }>(
+    ['visualizarRelatorios', 'importarArquivos'],
+    'carregar comparativo'
+  );
+  if (denied) return denied;
+
+  const normalizedTipo = String(tipo || '').toUpperCase();
+  if (!['PAGAR', 'RECEBER'].includes(normalizedTipo)) {
+    return { success: false, message: 'Tipo invalido para comparativo' };
+  }
+
+  try {
+    const fcRows = getImportFcRows(normalizedTipo);
+    const itauRows = getImportItauRows();
+    const siegRows = normalizedTipo === 'PAGAR' ? getImportSiegRows() : [];
+
+    const mapByKey = (rows: any[], getKey: (r: any) => string) => {
+      const map = new Map<string, any[]>();
+      rows.forEach((r) => {
+        const key = getKey(r);
+        if (!key) return;
+        const list = map.get(key) || [];
+        list.push(r);
+        map.set(key, list);
+      });
+      return map;
+    };
+
+    const itauMap = mapByKey(itauRows, (r) => buildMatchKey(r.data, r.valor));
+    const siegMap = mapByKey(siegRows, (r) => buildMatchKey(r.dataEmissao, r.valor));
+
+    const items = fcRows.map((fc) => {
+      const key = buildMatchKey(fc.dataEmissao, fc.valor);
+      const bancoCandidates = key ? (itauMap.get(key) || []) : [];
+      const nfeCandidates = normalizedTipo === 'PAGAR' && key ? (siegMap.get(key) || []) : [];
+
+      const banco = bancoCandidates.length === 1 ? bancoCandidates[0] : null;
+      const nfe = nfeCandidates.length === 1 ? nfeCandidates[0] : null;
+
+      let status = 'PENDENTE';
+      if (!key || (bancoCandidates.length === 0 && nfeCandidates.length === 0)) {
+        status = 'SEM_MATCH';
+      } else if (bancoCandidates.length > 1 || nfeCandidates.length > 1) {
+        status = 'DUPLICADO';
+      } else if (normalizedTipo === 'PAGAR') {
+        status = banco && nfe ? 'AUTO' : 'PENDENTE';
+      } else {
+        status = banco ? 'AUTO' : 'PENDENTE';
+      }
+
+      return {
+        key,
+        status,
+        fc,
+        nfe,
+        banco,
+        nfeMatches: nfeCandidates.length,
+        bancoMatches: bancoCandidates.length,
+        nfeCandidates: nfeCandidates.length > 1 ? nfeCandidates.slice(0, 5) : [],
+        bancoCandidates: bancoCandidates.length > 1 ? bancoCandidates.slice(0, 5) : [],
+        diffs: {
+          nfeData: nfe ? normalizeDateInput(nfe.dataEmissao) !== normalizeDateInput(fc.dataEmissao) : false,
+          nfeValor: nfe ? Math.abs(parseMoneyInput(nfe.valor) - parseMoneyInput(fc.valor)) > 0.01 : false,
+          bancoData: banco ? normalizeDateInput(banco.data) !== normalizeDateInput(fc.dataEmissao) : false,
+          bancoValor: banco ? Math.abs(parseMoneyInput(banco.valor) - parseMoneyInput(fc.valor)) > 0.01 : false,
+        },
+      };
+    });
+
+    const stats = {
+      total: items.length,
+      auto: items.filter((i) => i.status === 'AUTO').length,
+      pendente: items.filter((i) => i.status === 'PENDENTE').length,
+      semMatch: items.filter((i) => i.status === 'SEM_MATCH').length,
+      duplicado: items.filter((i) => i.status === 'DUPLICADO').length,
+    };
+
+    const counts = {
+      fcTotal: fcRows.length,
+      itauTotal: itauRows.length,
+      siegTotal: siegRows.length,
+    };
+
+    return { success: true, tipo: normalizedTipo, stats, counts, items };
+  } catch (error: any) {
+    return { success: false, message: `Erro ao montar comparativo: ${error?.message || error}` };
+  }
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -3301,7 +4675,7 @@ interface Usuario {
   id?: string;
   email: string;
   nome: string;
-  perfil: 'ADMIN' | 'GESTOR' | 'OPERACIONAL' | 'VISUALIZADOR';
+  perfil: 'ADMIN' | 'GESTOR' | 'OPERACIONAL' | 'CAIXA' | 'VISUALIZADOR';
   status: 'ATIVO' | 'INATIVO';
   ultimoAcesso?: string;
   permissoes?: {
@@ -3311,6 +4685,7 @@ interface Usuario {
     aprovarPagamentos: boolean;
     visualizarRelatorios: boolean;
     gerenciarConfig: boolean;
+    importarArquivos: boolean;
   };
 }
 
@@ -3360,13 +4735,13 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
     const v = combineValidations(
       validateRequired(usuario?.email, 'Email'),
       validateRequired(usuario?.nome, 'Nome'),
-      validateEnum(String(usuario?.perfil || ''), ['ADMIN', 'GESTOR', 'OPERACIONAL', 'VISUALIZADOR'], 'Perfil'),
+    validateEnum(String(usuario?.perfil || ''), ['ADMIN', 'GESTOR', 'OPERACIONAL', 'CAIXA', 'VISUALIZADOR'], 'Perfil'),
       validateEnum(String(usuario?.status || ''), ['ATIVO', 'INATIVO'], 'Status')
     );
     if (!v.valid) return { success: false, message: v.errors.join('; ') };
 
     const perfil = normalizePerfil(usuario.perfil);
-    const permissoes = normalizePermissoes(perfil, usuario.permissoes);
+    const permissoes = getPermissoesPadrao(perfil);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ensureUsuariosSheet();
@@ -3675,7 +5050,8 @@ function getPermissoesPadrao(perfil: string): any {
       excluirLancamentos: false,
       aprovarPagamentos: false,
       visualizarRelatorios: false,
-      gerenciarConfig: false
+      gerenciarConfig: false,
+      importarArquivos: false
     },
     'ADMIN': {
       criarLancamentos: true,
@@ -3683,7 +5059,8 @@ function getPermissoesPadrao(perfil: string): any {
       excluirLancamentos: true,
       aprovarPagamentos: true,
       visualizarRelatorios: true,
-      gerenciarConfig: true
+      gerenciarConfig: true,
+      importarArquivos: true
     },
     'GESTOR': {
       criarLancamentos: true,
@@ -3691,15 +5068,26 @@ function getPermissoesPadrao(perfil: string): any {
       excluirLancamentos: false,
       aprovarPagamentos: true,
       visualizarRelatorios: true,
-      gerenciarConfig: false
+      gerenciarConfig: false,
+      importarArquivos: true
     },
     'OPERACIONAL': {
       criarLancamentos: true,
       editarLancamentos: true,
       excluirLancamentos: false,
       aprovarPagamentos: false,
-      visualizarRelatorios: true,
-      gerenciarConfig: false
+      visualizarRelatorios: false,
+      gerenciarConfig: false,
+      importarArquivos: true
+    },
+    'CAIXA': {
+      criarLancamentos: false,
+      editarLancamentos: false,
+      excluirLancamentos: false,
+      aprovarPagamentos: false,
+      visualizarRelatorios: false,
+      gerenciarConfig: false,
+      importarArquivos: true
     },
     'VISUALIZADOR': {
       criarLancamentos: false,
@@ -3707,7 +5095,8 @@ function getPermissoesPadrao(perfil: string): any {
       excluirLancamentos: false,
       aprovarPagamentos: false,
       visualizarRelatorios: true,
-      gerenciarConfig: false
+      gerenciarConfig: false,
+      importarArquivos: false
     }
   };
 

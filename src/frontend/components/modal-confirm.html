@@ -1,0 +1,15 @@
+<div class="modal-overlay" id="modal-confirm" style="display: none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 data-confirm-title>Confirmar</h3>
+      <button class="modal-close" onclick="ConfirmModal.close(false)">×</button>
+    </div>
+    <div class="modal-body">
+      <p data-confirm-message></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-confirm-cancel onclick="ConfirmModal.close(false)">Cancelar</button>
+      <button class="btn btn-primary" data-confirm-ok onclick="ConfirmModal.close(true)">Confirmar</button>
+    </div>
+  </div>
+</div>

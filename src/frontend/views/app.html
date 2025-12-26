@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -6,6 +6,8 @@
   <title>NeoFinance - Sistema Financeiro</title>
   <?!= include('frontend/styles/theme-neoformula'); ?>
   <?!= include('frontend/styles/webapp'); ?>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body>
   <!-- Navigation Bar -->
@@ -16,40 +18,44 @@
     </div>
     <div class="navbar-menu">
       <a href="#" class="nav-item active" data-view="dashboard">
-        <i class="icon">🏠</i>
+        <i class="icon">&#127968;</i>
         Dashboard
       </a>
       <a href="#" class="nav-item" data-view="contas-pagar">
-        <i class="icon">📄</i>
+        <i class="icon">&#128196;</i>
         Contas a Pagar
       </a>
       <a href="#" class="nav-item" data-view="contas-receber">
-        <i class="icon">💰</i>
+        <i class="icon">&#128176;</i>
         Contas a Receber
       </a>
+      <a href="#" class="nav-item" data-view="caixas">
+        <i class="icon">&#128736;</i>
+        Caixas
+      </a>
       <a href="#" class="nav-item" data-view="conciliacao">
-        <i class="icon">🔗</i>
-        Conciliação
+        <i class="icon">&#128279;</i>
+        Concilia&#231;&#227;o
       </a>
       <a href="#" class="nav-item" data-view="dre">
-        <i class="icon">📊</i>
+        <i class="icon">&#128202;</i>
         DRE
       </a>
       <a href="#" class="nav-item" data-view="fluxo-caixa">
-        <i class="icon">💧</i>
+        <i class="icon">&#128167;</i>
         Fluxo de Caixa
       </a>
       <a href="#" class="nav-item" data-view="kpis">
-        <i class="icon">📈</i>
+        <i class="icon">&#128200;</i>
         KPIs
       </a>
       <a href="#" class="nav-item" data-view="ajuda">
-        <i class="icon">?</i>
+        <i class="icon">&#129489;&#8205;&#128187;</i>
         Ajuda
       </a>
       <a href="#" class="nav-item" data-view="configuracoes">
-        <i class="icon">⚙️</i>
-        Configurações
+        <i class="icon">&#9881;&#65039;</i>
+        Configura&#231;&#245;es
       </a>
     </div>
     <div class="navbar-user">
@@ -83,6 +89,7 @@
   <?!= include('frontend/components/modal-config'); ?>
   <?!= include('frontend/components/modal-usuario'); ?>
   <?!= include('frontend/components/modal-transaction'); ?>
+  <?!= include('frontend/components/modal-confirm'); ?>
 
   <?!= include('frontend/scripts/webapp'); ?>
   <?!= include('frontend/scripts/lancamentos'); ?>

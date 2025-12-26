@@ -6,7 +6,7 @@
       <h2 class="card-title">Como o acesso funciona</h2>
     </div>
     <p class="text-muted" style="margin: 0;">
-      O acesso combina perfil + permissoes. O perfil define o padrao e o administrador pode ajustar permissoes por usuario.
+      O acesso é definido apenas pelo perfil do usuário.
     </p>
   </div>
 
@@ -50,6 +50,17 @@
 
     <div class="stat-card">
       <div class="stat-label">Perfil</div>
+      <div class="stat-value">CAIXA</div>
+      <div class="stat-change">Fechamento de caixa e uploads.</div>
+      <ul style="margin: 0.75rem 0 0 1rem; color: #444; font-size: 0.95rem;">
+        <li>Registra fechamentos de caixa por canal.</li>
+        <li>Cadastra movimentacoes e envia comprovantes.</li>
+        <li>Acesso apenas ao modulo Caixas.</li>
+      </ul>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-label">Perfil</div>
       <div class="stat-value">VISUALIZADOR</div>
       <div class="stat-change">Somente consulta.</div>
       <ul style="margin: 0.75rem 0 0 1rem; color: #444; font-size: 0.95rem;">
@@ -80,6 +91,10 @@
           <tr>
             <td>Conciliacao</td>
             <td>Concilia itens, desfaz conciliacao e faz sugestoes automaticas.</td>
+          </tr>
+          <tr>
+            <td>Caixas</td>
+            <td>Registro de fechamento diario, movimentacoes e upload de comprovantes.</td>
           </tr>
           <tr>
             <td>Relatorios</td>
