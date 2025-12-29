@@ -1720,29 +1720,35 @@ function salvarCabecalhoUi() {
   const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
   const comunicadoInterno = document.getElementById('caixa-ci').value;
 
-  showLoading('Salvando dados...');
-  window.gasRun
-    .withSuccessHandler(function(result) {
-      hideLoading();
-      if (result && result.success) {
-        showToast(result.message || 'Caixa salvo', 'success');
-        if (result.id) caixasState.selectedId = result.id;
-        loadCaixasData();
-      } else {
-        showToast(result?.message || 'Erro ao salvar caixa', 'error');
-      }
-    })
-    .withFailureHandler(handleError)
-    .salvarCaixa({
-      id: id || undefined,
-      canal,
-      colaborador,
-      dataFechamento,
-      observacoesEntradas,
-      observacoesSaidas,
-      comunicadoInterno,
-      finalizar: false
-    });
+  openConfirmModal({
+    title: 'Salvar Dados do Fechamento',
+    message: `Confirmar salvamento do caixa ${escapeHtml(canal || '')} em ${formatDate(dataFechamento)}?`
+  }).then(ok => {
+    if (!ok) return;
+    showLoading('Salvando dados...');
+    window.gasRun
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result && result.success) {
+          showToast(result.message || 'Caixa salvo', 'success');
+          if (result.id) caixasState.selectedId = result.id;
+          loadCaixasData();
+        } else {
+          showToast(result?.message || 'Erro ao salvar caixa', 'error');
+        }
+      })
+      .withFailureHandler(handleError)
+      .salvarCaixa({
+        id: id || undefined,
+        canal,
+        colaborador,
+        dataFechamento,
+        observacoesEntradas,
+        observacoesSaidas,
+        comunicadoInterno,
+        finalizar: false
+      });
+  });
 }
 
 function editarCaixa(id) {

@@ -82,6 +82,8 @@ import {
   clearCaches,
 } from './services/webapp-service';
 
+const DEPLOY_LABEL = 'v119 - caixa CI e relatorio';
+
 function isDebugApiEnabled(): boolean {
   return PropertiesService.getScriptProperties().getProperty('ENABLE_DEBUG_API') === 'true';
 }
@@ -126,7 +128,7 @@ function doGet(e: any): GoogleAppsScript.HTML.HtmlOutput {
 
   const template = HtmlService.createTemplateFromFile('frontend/views/app');
   return template.evaluate()
-    .setTitle('Neoformula Finance')
+    .setTitle(`Neoformula Finance - ${DEPLOY_LABEL}`)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
 

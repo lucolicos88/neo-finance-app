@@ -3115,7 +3115,10 @@ export function salvarCaixa(caixa: {
     criadoEm = String(existing[TB_CAIXAS_COLS.CRIADO_EM] || now);
   }
 
-  const allRows = sheet.getRange(2, 1, Math.max(0, sheet.getLastRow() - 1), sheet.getLastColumn()).getValues();
+  let allRows: any[] = [];
+  if (sheet.getLastRow() > 1) {
+    allRows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+  }
   const duplicate = allRows.find((r, idx) => {
     const existingId = String(r[TB_CAIXAS_COLS.ID] || '');
     if (existingId === id) return false;
