@@ -1705,7 +1705,6 @@ function salvarCaixaUi() {
   const canal = document.getElementById('caixa-canal').value;
   const colaborador = document.getElementById('caixa-colaborador').value;
   const dataFechamento = document.getElementById('caixa-data').value;
-  const dataReferencia = id ? dataFechamento : getCaixaReferenciaDate(dataFechamento);
   const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
   const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
   const comunicadoInterno = document.getElementById('caixa-ci').value;
@@ -1720,7 +1719,14 @@ function salvarCaixaUi() {
   if (!String(colaborador || '').trim()) missing.push('Colaborador');
   if (!String(dataFechamento || '').trim()) missing.push('Data Fechamento');
   if (missing.length) {
-    openInfoModal({ title: 'Campos obrigatorios', message: `Preencha: ${missing.join(', ')}` });
+    openInfoModal({
+      title: 'Campos obrigatorios',
+      message: `<div>Preencha os campos abaixo:</div><ul>${missing.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul>`
+    });
+    return;
+  }
+  if (isSunday(dataFechamento)) {
+    openInfoModal({ title: 'Data invalida', message: 'Fechamento nao permitido aos domingos.' });
     return;
   }
   if (resumo.pendencias.length) {
@@ -1749,7 +1755,7 @@ function salvarCaixaUi() {
       id: id || undefined,
       canal,
       colaborador,
-      dataFechamento: dataReferencia,
+      dataFechamento,
       observacoesEntradas,
       observacoesSaidas,
       comunicadoInterno,
@@ -1762,7 +1768,6 @@ function salvarCabecalhoUi() {
   const canal = document.getElementById('caixa-canal').value;
   const colaborador = document.getElementById('caixa-colaborador').value;
   const dataFechamento = document.getElementById('caixa-data').value;
-  const dataReferencia = id ? dataFechamento : getCaixaReferenciaDate(dataFechamento);
   const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
   const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
   const comunicadoInterno = document.getElementById('caixa-ci').value;
@@ -1770,15 +1775,22 @@ function salvarCabecalhoUi() {
   const missing = [];
   if (!String(canal || '').trim()) missing.push('Canal');
   if (!String(colaborador || '').trim()) missing.push('Colaborador');
-  if (!String(dataReferencia || '').trim()) missing.push('Data Fechamento');
+  if (!String(dataFechamento || '').trim()) missing.push('Data Fechamento');
   if (missing.length) {
-    openInfoModal({ title: 'Campos obrigatorios', message: `Preencha: ${missing.join(', ')}` });
+    openInfoModal({
+      title: 'Campos obrigatorios',
+      message: `<div>Preencha os campos abaixo:</div><ul>${missing.map(m => `<li>${escapeHtml(m)}</li>`).join('')}</ul>`
+    });
+    return;
+  }
+  if (isSunday(dataFechamento)) {
+    openInfoModal({ title: 'Data invalida', message: 'Fechamento nao permitido aos domingos.' });
     return;
   }
 
   const duplicate = caixasState.caixas.find(c => {
     if (id && c.id === id) return false;
-    return String(c.canal) === String(canal) && String(c.dataFechamento) === String(dataReferencia);
+    return String(c.canal) === String(canal) && String(c.dataFechamento) === String(dataFechamento);
   });
   if (duplicate) {
     openInfoModal({ title: 'Caixa duplicado', message: 'Ja existe um fechamento para este canal e data.' });
@@ -1787,7 +1799,7 @@ function salvarCabecalhoUi() {
 
   openConfirmModal({
     title: 'Salvar Dados do Fechamento',
-    message: `Confirmar salvamento do caixa ${escapeHtml(canal || '')} em ${formatDate(dataReferencia)}?`
+    message: `Confirmar salvamento do caixa ${escapeHtml(canal || '')} em ${formatDate(dataFechamento)}?`
   }).then(ok => {
     if (!ok) return;
     showLoading('Salvando dados...');
@@ -1797,7 +1809,7 @@ function salvarCabecalhoUi() {
         if (result && result.success) {
           showToast(result.message || 'Caixa salvo', 'success');
           if (result.id) caixasState.selectedId = result.id;
-          document.getElementById('caixa-data').value = dataReferencia;
+          document.getElementById('caixa-data').value = dataFechamento;
           loadCaixasData();
         } else {
           showToast(result?.message || 'Erro ao salvar caixa', 'error');
@@ -1808,7 +1820,7 @@ function salvarCabecalhoUi() {
         id: id || undefined,
         canal,
         colaborador,
-        dataFechamento: dataReferencia,
+        dataFechamento,
         observacoesEntradas,
         observacoesSaidas,
         comunicadoInterno,
@@ -2169,8 +2181,7 @@ function renderRelatorioCaixa(report) {
     <div class="caixa-report">
       <div class="caixa-report-header">
         <div class="caixa-report-logo">
-          <img src="${escapeHtml(logoUrl)}" alt="Neoformula" onerror="this.style.display='none';document.getElementById('caixa-report-logo-text').style.display='block';" />
-          <div id="caixa-report-logo-text" style="display:none; font-weight:700; font-size:1.1rem;">Neoformula</div>
+          <img src="${escapeHtml(logoUrl)}" alt="Neoformula" />
         </div>
         <div class="caixa-report-title">
           <div class="caixa-report-title-text">FECHAMENTO DE CAIXA</div>
@@ -2900,11 +2911,6 @@ function getDefaultCaixaDate() {
     saturday.setDate(today.getDate() - 1);
     return getLocalIsoDate(saturday);
   }
-  if (today.getDay() === 1) {
-    const saturday = new Date(today);
-    saturday.setDate(today.getDate() - 2);
-    return getLocalIsoDate(saturday);
-  }
   return getLocalIsoDate(today);
 }
 
@@ -2918,6 +2924,13 @@ function getCaixaReferenciaDate(dateStr) {
     ref.setDate(ref.getDate() - 1);
   }
   return getLocalIsoDate(ref);
+}
+
+function isSunday(dateStr) {
+  if (!dateStr) return false;
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getDay() === 0;
 }
 
 function getStatusClass(status) {

@@ -82,7 +82,7 @@ import {
   clearCaches,
 } from './services/webapp-service';
 
-const DEPLOY_LABEL = 'v124 - caixas resumo e validacoes';
+const DEPLOY_LABEL = 'v125 - datas e logo caixa';
 
 function isDebugApiEnabled(): boolean {
   return PropertiesService.getScriptProperties().getProperty('ENABLE_DEBUG_API') === 'true';
