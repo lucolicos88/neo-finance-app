@@ -1369,7 +1369,7 @@ function loadCaixasData() {
       populateMovTypes();
       updateMovTipoHint(document.getElementById('mov-tipo')?.value || '');
       initCaixaDropzone();
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getDefaultCaixaDate();
       const caixaData = document.getElementById('caixa-data');
       if (caixaData && !caixaData.value) caixaData.value = today;
       if (caixasState.selectedId) {
@@ -1651,7 +1651,7 @@ function resetCaixaForm() {
   document.getElementById('caixa-id').value = '';
   document.getElementById('caixa-canal').value = '';
   document.getElementById('caixa-colaborador').value = '';
-  document.getElementById('caixa-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('caixa-data').value = getDefaultCaixaDate();
   document.getElementById('caixa-observacoes-entradas').value = '';
   document.getElementById('caixa-observacoes-saidas').value = '';
   document.getElementById('caixa-ci').value = '';
@@ -2798,6 +2798,22 @@ function formatDate(dateStr) {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   return date.toLocaleDateString('pt-BR');
+}
+
+function getLocalIsoDate(date) {
+  const d = date ? new Date(date) : new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function getDefaultCaixaDate() {
+  const today = new Date();
+  if (today.getDay() === 0) {
+    const saturday = new Date(today);
+    saturday.setDate(today.getDate() - 1);
+    return getLocalIsoDate(saturday);
+  }
+  return getLocalIsoDate(today);
 }
 
 function getStatusClass(status) {
