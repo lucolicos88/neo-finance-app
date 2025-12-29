@@ -1668,6 +1668,7 @@ function salvarCaixaUi() {
   const canal = document.getElementById('caixa-canal').value;
   const colaborador = document.getElementById('caixa-colaborador').value;
   const dataFechamento = document.getElementById('caixa-data').value;
+  const dataReferencia = id ? dataFechamento : getCaixaReferenciaDate(dataFechamento);
   const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
   const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
   const comunicadoInterno = document.getElementById('caixa-ci').value;
@@ -1703,7 +1704,7 @@ function salvarCaixaUi() {
       id: id || undefined,
       canal,
       colaborador,
-      dataFechamento,
+      dataFechamento: dataReferencia,
       observacoesEntradas,
       observacoesSaidas,
       comunicadoInterno,
@@ -1716,13 +1717,14 @@ function salvarCabecalhoUi() {
   const canal = document.getElementById('caixa-canal').value;
   const colaborador = document.getElementById('caixa-colaborador').value;
   const dataFechamento = document.getElementById('caixa-data').value;
+  const dataReferencia = id ? dataFechamento : getCaixaReferenciaDate(dataFechamento);
   const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
   const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
   const comunicadoInterno = document.getElementById('caixa-ci').value;
 
   openConfirmModal({
     title: 'Salvar Dados do Fechamento',
-    message: `Confirmar salvamento do caixa ${escapeHtml(canal || '')} em ${formatDate(dataFechamento)}?`
+    message: `Confirmar salvamento do caixa ${escapeHtml(canal || '')} em ${formatDate(dataReferencia)}?`
   }).then(ok => {
     if (!ok) return;
     showLoading('Salvando dados...');
@@ -1732,6 +1734,7 @@ function salvarCabecalhoUi() {
         if (result && result.success) {
           showToast(result.message || 'Caixa salvo', 'success');
           if (result.id) caixasState.selectedId = result.id;
+          document.getElementById('caixa-data').value = dataReferencia;
           loadCaixasData();
         } else {
           showToast(result?.message || 'Erro ao salvar caixa', 'error');
@@ -1742,7 +1745,7 @@ function salvarCabecalhoUi() {
         id: id || undefined,
         canal,
         colaborador,
-        dataFechamento,
+        dataFechamento: dataReferencia,
         observacoesEntradas,
         observacoesSaidas,
         comunicadoInterno,
@@ -2796,7 +2799,12 @@ function formatCurrency(value) {
 
 function formatDate(dateStr) {
   if (!dateStr) return '-';
+  const isoMatch = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  }
   const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return String(dateStr);
   return date.toLocaleDateString('pt-BR');
 }
 
@@ -2813,7 +2821,24 @@ function getDefaultCaixaDate() {
     saturday.setDate(today.getDate() - 1);
     return getLocalIsoDate(saturday);
   }
+  if (today.getDay() === 1) {
+    const saturday = new Date(today);
+    saturday.setDate(today.getDate() - 2);
+    return getLocalIsoDate(saturday);
+  }
   return getLocalIsoDate(today);
+}
+
+function getCaixaReferenciaDate(dateStr) {
+  if (!dateStr) return '';
+  const base = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return dateStr;
+  const ref = new Date(base);
+  ref.setDate(base.getDate() - 1);
+  if (ref.getDay() === 0) {
+    ref.setDate(ref.getDate() - 1);
+  }
+  return getLocalIsoDate(ref);
 }
 
 function getStatusClass(status) {
