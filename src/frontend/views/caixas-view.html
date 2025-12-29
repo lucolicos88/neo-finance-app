@@ -578,7 +578,7 @@
     box-shadow: none;
     margin: 0;
     transform: scale(0.82);
-    transform-origin: top left;
+    transform-origin: top center;
     width: 100%;
     page-break-inside: avoid;
   }
@@ -586,6 +586,15 @@
   #relatorio-caixa .caixa-report,
   #relatorio-caixa .caixa-report * {
     font-size: 10px;
+  }
+
+  #relatorio-caixa {
+    text-align: center;
+  }
+
+  #relatorio-caixa .caixa-report {
+    display: inline-block;
+    margin: 0 auto;
   }
 
   #relatorio-caixa .caixa-report-header {

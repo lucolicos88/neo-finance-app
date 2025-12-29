@@ -317,10 +317,10 @@ function ensureUsuariosSheet(): GoogleAppsScript.Spreadsheet.Sheet {
   if (sheet) return sheet;
 
   sheet = ss.insertSheet(SHEET_USUARIOS);
-  sheet.getRange('A1:H1').setValues([[
-    'ID', 'Email', 'Nome', 'Perfil', 'Status', 'Último Acesso', 'Permissões', 'Data Criação'
+  sheet.getRange('A1:I1').setValues([[
+    'ID', 'Email', 'Nome', 'Perfil', 'Status', 'Ultimo Acesso', 'Permissoes', 'Data Criacao', 'Canal'
   ]]);
-  sheet.getRange('A1:H1').setFontWeight('bold');
+  sheet.getRange('A1:I1').setFontWeight('bold');
   sheet.setFrozenRows(1);
 
   const email = getRequestingUserEmail();
@@ -336,14 +336,26 @@ function ensureUsuariosSheet(): GoogleAppsScript.Spreadsheet.Sheet {
       now,
       JSON.stringify(getPermissoesPadrao('ADMIN')),
       now,
+      '',
     ]);
   }
 
   return sheet;
 }
 
+function ensureUsuariosSchema(): void {
+  const sheet = ensureUsuariosSheet();
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map((h) => String(h || '').trim());
+  if (!headers.includes('Canal')) {
+    sheet.insertColumnAfter(lastCol);
+    sheet.getRange(1, lastCol + 1).setValue('Canal');
+  }
+}
+
 function getUsuarioByEmail(email: string): Usuario | null {
   if (!email) return null;
+  ensureUsuariosSchema();
   const sheet = ensureUsuariosSheet();
   const data = sheet.getDataRange().getValues();
 
@@ -361,6 +373,7 @@ function getUsuarioByEmail(email: string): Usuario | null {
       nome: String(row[2]),
       perfil: perfil as any,
       status: String(row[4]) as any,
+      canal: row[8] ? String(row[8]) : undefined,
       ultimoAcesso: row[5] ? String(row[5]) : undefined,
       permissoes,
     };
@@ -949,6 +962,7 @@ export function getCurrentUserInfo(): {
   email: string;
   nome: string;
   perfil: string;
+  canal?: string;
   permissoes: NonNullable<Usuario['permissoes']>;
 } {
   const email =
@@ -967,7 +981,7 @@ export function getCurrentUserInfo(): {
   const perfil = normalizePerfil(user.perfil);
   const permissoes = normalizePermissoes(perfil, user.permissoes);
   updateUserLastAccess(email);
-  return { email, nome: user.nome || fallbackNome, perfil, permissoes };
+  return { email, nome: user.nome || fallbackNome, perfil, canal: user.canal || '', permissoes };
 }
 
 // ============================================================================
@@ -3085,8 +3099,16 @@ export function getCaixasData(): { success: boolean; caixas: CaixaRow[]; movimen
   );
   if (denied) return { success: false, caixas: [], movimentos: [] };
 
-  const caixas = getCaixasRows();
-  const movimentos = getCaixaMovRows();
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  let caixas = getCaixasRows();
+  let movimentos = getCaixaMovRows();
+  if (requester && requester.perfil === 'CAIXA' && requester.canal) {
+    const canal = String(requester.canal);
+    const caixaIds = new Set(caixas.filter((c) => String(c.canal) === canal).map((c) => c.id));
+    caixas = caixas.filter((c) => String(c.canal) === canal);
+    movimentos = movimentos.filter((m) => caixaIds.has(m.caixaId));
+  }
+  appendAuditLog('caixas:listar', { total: caixas.length }, true);
   return { success: true, caixas, movimentos };
 }
 
@@ -3099,7 +3121,16 @@ export function getCaixaMovimentos(caixaId: string): { success: boolean; movimen
 
   const id = String(caixaId || '').trim();
   if (!id) return { success: true, movimentos: [] };
-  return { success: true, movimentos: getCaixaMovRows(id) };
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (requester && requester.perfil === 'CAIXA' && requester.canal) {
+    const caixa = getCaixasRows().find((c) => c.id === id);
+    if (!caixa || String(caixa.canal) !== String(requester.canal)) {
+      return { success: true, movimentos: [] };
+    }
+  }
+  const movimentos = getCaixaMovRows(id);
+  appendAuditLog('caixas:movimentos:listar', { id, total: movimentos.length }, true);
+  return { success: true, movimentos };
 }
 
 export function salvarCaixa(caixa: {
@@ -3332,9 +3363,15 @@ export function getCaixaRelatorio(caixaId: string): { success: boolean; report?:
   const id = String(caixaId || '').trim();
   if (!id) return { success: false, message: 'Caixa invalido' };
 
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
   const caixas = getCaixasRows();
   const caixa = caixas.find((c) => c.id === id);
   if (!caixa) return { success: false, message: 'Caixa nao encontrado' };
+  if (requester && requester.perfil === 'CAIXA' && requester.canal) {
+    if (String(caixa.canal) !== String(requester.canal)) {
+      return { success: false, message: 'Sem permissao para este canal' };
+    }
+  }
 
   const movimentos = getCaixaMovRows(id);
   const porTipo = new Map<string, { tipo: string; entradas: number; saidas: number }>();
@@ -3351,6 +3388,7 @@ export function getCaixaRelatorio(caixaId: string): { success: boolean; report?:
     porTipo.set(key, item);
   });
 
+  appendAuditLog('caixas:relatorio', { id }, true);
   return {
     success: true,
     report: {
@@ -4771,6 +4809,7 @@ interface Usuario {
   nome: string;
   perfil: 'ADMIN' | 'GESTOR' | 'OPERACIONAL' | 'CAIXA' | 'VISUALIZADOR';
   status: 'ATIVO' | 'INATIVO';
+  canal?: string;
   ultimoAcesso?: string;
   permissoes?: {
     criarLancamentos: boolean;
@@ -4791,6 +4830,7 @@ export function getUsuarios(): Usuario[] {
       return [];
     }
 
+    ensureUsuariosSchema();
     const sheet = ensureUsuariosSheet();
 
     const data = sheet.getDataRange().getValues();
@@ -4806,6 +4846,7 @@ export function getUsuarios(): Usuario[] {
         nome: String(row[2]),
         perfil: String(row[3]) as any,
         status: String(row[4]) as any,
+        canal: row[8] ? String(row[8]) : undefined,
         ultimoAcesso: row[5] ? String(row[5]) : undefined,
         permissoes: row[6] ? JSON.parse(String(row[6])) : getPermissoesPadrao(String(row[3]))
       });
@@ -4835,9 +4876,13 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
     if (!v.valid) return { success: false, message: v.errors.join('; ') };
 
     const perfil = normalizePerfil(usuario.perfil);
+    if (perfil === 'CAIXA' && !String(usuario.canal || '').trim()) {
+      return { success: false, message: 'Canal de venda obrigatório para o perfil Caixa' };
+    }
     const permissoes = getPermissoesPadrao(perfil);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureUsuariosSchema();
     const sheet = ensureUsuariosSheet();
 
     const data = sheet.getDataRange().getValues();
@@ -4861,12 +4906,13 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
       sanitizeSheetString(usuario.status),
       usuario.ultimoAcesso || '',
       JSON.stringify(permissoes),
-      rowIndex === -1 ? new Date().toISOString() : data[rowIndex - 1][7]
+      rowIndex === -1 ? new Date().toISOString() : data[rowIndex - 1][7],
+      sanitizeSheetString(usuario.canal || '').toUpperCase()
     ];
 
     if (rowIndex > 0) {
       // Atualizar existente
-      sheet.getRange(rowIndex, 1, 1, 8).setValues([rowData]);
+      sheet.getRange(rowIndex, 1, 1, 9).setValues([rowData]);
       appendAuditLog('salvarUsuario', { id: rowData[0], email: rowData[1], perfil: rowData[3], status: rowData[4] }, true);
       return { success: true, message: 'Usuário atualizado com sucesso!' };
     } else {

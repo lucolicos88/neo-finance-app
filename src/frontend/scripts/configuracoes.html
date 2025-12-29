@@ -1005,7 +1005,7 @@ function renderUsuarios() {
   if (!tbody) return;
 
   if (!usuariosData || usuariosData.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum usuário cadastrado</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Nenhum usuário cadastrado</td></tr>';
     return;
   }
 
@@ -1014,6 +1014,7 @@ function renderUsuarios() {
       <td>${escapeHtml(user.email)}</td>
       <td>${escapeHtml(user.nome)}</td>
       <td><span class="badge badge-${getPerfilBadge(user.perfil)}">${getPerfilLabel(user.perfil)}</span></td>
+      <td>${escapeHtml(user.canal || '-')}</td>
       <td><span class="badge badge-${user.status === 'ATIVO' ? 'success' : 'secondary'}">${escapeHtml(user.status)}</span></td>
       <td>${user.ultimoAcesso ? formatDate(user.ultimoAcesso) : 'Nunca'}</td>
       <td class="text-right">
@@ -1045,6 +1046,8 @@ function openModalNovoUsuario() {
   document.getElementById('form-usuario').reset();
   document.getElementById('usuario-id').value = '';
   document.getElementById('usuario-status').value = 'ATIVO';
+  updateUsuarioCanalOptions();
+  toggleUsuarioCanalField();
   document.getElementById('modal-usuario').style.display = 'flex';
 }
 
@@ -1056,6 +1059,10 @@ function editarUsuario(index) {
   document.getElementById('usuario-nome').value = user.nome;
   document.getElementById('usuario-perfil').value = user.perfil;
   document.getElementById('usuario-status').value = user.status;
+  updateUsuarioCanalOptions();
+  const canalEl = document.getElementById('usuario-canal');
+  if (canalEl) canalEl.value = user.canal || '';
+  toggleUsuarioCanalField();
 
   document.getElementById('modal-usuario').style.display = 'flex';
 }
@@ -1065,12 +1072,15 @@ function closeModalUsuario() {
 }
 
 function salvarUsuario() {
+  const perfil = document.getElementById('usuario-perfil').value;
+  const canal = perfil === 'CAIXA' ? (document.getElementById('usuario-canal')?.value || '') : '';
   const userData = {
     id: document.getElementById('usuario-id').value,
     email: document.getElementById('usuario-email').value,
     nome: document.getElementById('usuario-nome').value,
-    perfil: document.getElementById('usuario-perfil').value,
-    status: document.getElementById('usuario-status').value
+    perfil,
+    status: document.getElementById('usuario-status').value,
+    canal
   };
 
   showLoading();
@@ -1088,6 +1098,27 @@ function salvarUsuario() {
     })
     .withFailureHandler(handleError)
     .salvarUsuario(userData);
+}
+
+function updateUsuarioCanalOptions() {
+  const select = document.getElementById('usuario-canal');
+  if (!select) return;
+  const canais = (appData && appData.canais ? appData.canais : []).filter(c => c.ativo !== false);
+  select.innerHTML = '<option value="">Selecione o canal</option>' + canais.map(c => `
+    <option value="${escapeHtml(c.codigo)}">${escapeHtml(c.nome)}</option>
+  `).join('');
+}
+
+function toggleUsuarioCanalField() {
+  const perfil = document.getElementById('usuario-perfil')?.value || '';
+  const group = document.getElementById('usuario-canal-group');
+  if (!group) return;
+  const isCaixa = perfil === 'CAIXA';
+  group.style.display = isCaixa ? '' : 'none';
+  if (!isCaixa) {
+    const canalEl = document.getElementById('usuario-canal');
+    if (canalEl) canalEl.value = '';
+  }
 }
 
 function excluirUsuario(index) {
@@ -1129,6 +1160,13 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       salvarUsuario();
+    });
+  }
+
+  const perfilEl = document.getElementById('usuario-perfil');
+  if (perfilEl) {
+    perfilEl.addEventListener('change', function() {
+      toggleUsuarioCanalField();
     });
   }
 

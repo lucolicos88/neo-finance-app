@@ -1392,8 +1392,7 @@ function loadCaixasData() {
       const caixaData = document.getElementById('caixa-data');
       if (caixaData && !caixaData.value) caixaData.value = today;
       if (caixasState.selectedId) {
-        renderMovimentos(caixasState.selectedId);
-        updateResumo(caixasState.selectedId);
+        selectCaixa(caixasState.selectedId);
       } else {
         updateResumo(null);
       }
