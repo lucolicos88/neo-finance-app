@@ -82,7 +82,7 @@ import {
   clearCaches,
 } from './services/webapp-service';
 
-const DEPLOY_LABEL = 'v128 - canais caixa e impressao';
+const DEPLOY_LABEL = 'v129 - ajustar margens impressao';
 
 function isDebugApiEnabled(): boolean {
   return PropertiesService.getScriptProperties().getProperty('ENABLE_DEBUG_API') === 'true';
