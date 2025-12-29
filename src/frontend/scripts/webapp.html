@@ -36,7 +36,7 @@ const ModalManager = {
 
 const ConfirmModal = {
   pending: null,
-  open({ title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar' }) {
+  open({ title, message, messageHtml, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', hideCancel = false }) {
     const modal = document.getElementById('modal-confirm');
     if (!modal) return Promise.resolve(false);
     const titleEl = modal.querySelector('[data-confirm-title]');
@@ -44,9 +44,18 @@ const ConfirmModal = {
     const btnConfirm = modal.querySelector('[data-confirm-ok]');
     const btnCancel = modal.querySelector('[data-confirm-cancel]');
     if (titleEl) titleEl.textContent = title || 'Confirmar';
-    if (messageEl) messageEl.textContent = message || '';
+    if (messageEl) {
+      if (messageHtml) {
+        messageEl.innerHTML = messageHtml;
+      } else {
+        messageEl.textContent = message || '';
+      }
+    }
     if (btnConfirm) btnConfirm.textContent = confirmLabel;
-    if (btnCancel) btnCancel.textContent = cancelLabel;
+    if (btnCancel) {
+      btnCancel.textContent = cancelLabel;
+      btnCancel.style.display = hideCancel ? 'none' : '';
+    }
 
     return new Promise(resolve => {
       ConfirmModal.pending = resolve;
@@ -64,6 +73,16 @@ const ConfirmModal = {
 
 function openConfirmModal(options) {
   return ConfirmModal.open(options);
+}
+
+function openInfoModal({ title, message }) {
+  return ConfirmModal.open({
+    title: title || 'Aviso',
+    messageHtml: message || '',
+    confirmLabel: 'OK',
+    cancelLabel: '',
+    hideCancel: true
+  });
 }
 
 
@@ -1567,7 +1586,7 @@ function renderCaixas() {
         <td>${formatCurrency(resumo.diferenca)}</td>
         <td>
           <button class="btn btn-sm btn-secondary" onclick="editarCaixa('${escapeHtml(c.id)}')">Editar</button>
-          <button class="btn btn-sm btn-outline" onclick="selectCaixa('${escapeHtml(c.id)}')">Mov.</button>
+          <button class="btn btn-sm btn-outline" onclick="abrirMovimentos('${escapeHtml(c.id)}')">Movimentos</button>
           <button class="btn btn-sm btn-danger" onclick="excluirCaixaUi('${escapeHtml(c.id)}')">Excluir</button>
         </td>
       </tr>
@@ -1611,8 +1630,8 @@ function computeResumoForCaixa(caixaId) {
 
 function updateResumo(caixaId) {
   const pendenciasEl = document.getElementById('caixa-pendencias');
-  const resumoCardsEl = document.getElementById('resumo-cards');
-  if (!pendenciasEl || !resumoCardsEl) return;
+  const resumoRowsEl = document.getElementById('resumo-rows');
+  if (!pendenciasEl || !resumoRowsEl) return;
   const hasCaixa = Boolean(caixaId);
   const resumo = hasCaixa ? computeResumoForCaixa(caixaId) : {
     totalRecebido: 0,
@@ -1627,24 +1646,42 @@ function updateResumo(caixaId) {
     pendenciasEl.textContent = '';
   }
 
+  if (!hasCaixa) {
+    resumoRowsEl.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Selecione um caixa</td></tr>';
+    updateElement('resumo-colaborador', '-');
+    updateElement('resumo-data', '-');
+    updateElement('resumo-loja', '-');
+    return;
+  }
+
   const movimentos = hasCaixa ? caixasState.movimentos.filter(m => m.caixaId === caixaId) : [];
   const rows = getReportRows(resumo, movimentos);
-  const cards = rows.map(row => {
-    const tipo = row.typeName ? getCaixaTipoConfig(row.typeName) : null;
-    return {
-      title: row.label,
-      subtitle: row.type === 'resumo' ? 'Resumo' : (tipo?.natureza || 'ENTRADA'),
-      value: formatCurrency(row.value || 0)
-    };
-  });
+  const getRowClass = (label) => {
+    if (label === 'Formula Certa') return 'row-sistema';
+    if (label === 'Diferenca') return 'row-diff';
+    if (label === 'Saldo final do caixa') return 'row-total';
+    if (label.startsWith('Reforco para o dia seguinte')) return 'row-reforco';
+    return '';
+  };
 
-  resumoCardsEl.innerHTML = cards.map(card => `
-    <div class="summary-card">
-      <div class="summary-title">${escapeHtml(card.title)}</div>
-      <div class="summary-subtitle">${escapeHtml(card.subtitle)}</div>
-      <div class="summary-value">${card.value}</div>
-    </div>
+  resumoRowsEl.innerHTML = rows.map(row => `
+    <tr class="${getRowClass(row.label)}">
+      <td>${escapeHtml(row.label)}</td>
+      <td class="caixa-report-value">${formatCurrency(row.value || 0)}</td>
+    </tr>
   `).join('');
+
+  const caixa = caixasState.caixas.find(c => c.id === caixaId);
+  const canalInfo = caixa ? (appData.canais || []).find(c => c.codigo === caixa.canal) : null;
+  const canalNome = canalInfo ? canalInfo.nome : (caixa?.canal || '-');
+  const logoEl = document.querySelector('.logo');
+  const logoUrl = (logoEl && logoEl.getAttribute('src')) ||
+    'https://neoformula.com.br/cdn/shop/files/Logotipo-NeoFormula-Manipulacao-Homeopatia_76b2fa98-5ffa-4cc3-ac0a-6d41e1bc8810.png?height=200&v=1677088468';
+  const logoImg = document.getElementById('resumo-logo-img');
+  if (logoImg) logoImg.setAttribute('src', logoUrl);
+  updateElement('resumo-colaborador', caixa?.colaborador || '-');
+  updateElement('resumo-data', caixa ? formatDate(caixa.dataFechamento) : '-');
+  updateElement('resumo-loja', canalNome || '-');
 }
 
 function resetCaixaForm() {
@@ -1675,15 +1712,23 @@ function salvarCaixaUi() {
   const resumo = computeResumoForCaixa(id);
 
   if (!id) {
-    showToast('Selecione o caixa para fechar', 'warning');
+    openInfoModal({ title: 'Caixa nao selecionado', message: 'Selecione o caixa para fechar.' });
+    return;
+  }
+  const missing = [];
+  if (!String(canal || '').trim()) missing.push('Canal');
+  if (!String(colaborador || '').trim()) missing.push('Colaborador');
+  if (!String(dataFechamento || '').trim()) missing.push('Data Fechamento');
+  if (missing.length) {
+    openInfoModal({ title: 'Campos obrigatorios', message: `Preencha: ${missing.join(', ')}` });
     return;
   }
   if (resumo.pendencias.length) {
-    showToast('Existem movimentacoes sem comprovante', 'warning');
+    openInfoModal({ title: 'Comprovantes pendentes', message: 'Existem movimentacoes sem comprovante.' });
     return;
   }
   if (Math.abs(resumo.diferenca) > 0.009 && !String(comunicadoInterno || '').trim()) {
-    showToast('Informe o Comunicado Interno (CI) quando houver diferenca', 'warning');
+    openInfoModal({ title: 'Comunicado Interno obrigatorio', message: 'Informe o Comunicado Interno (CI) quando houver diferenca.' });
     return;
   }
 
@@ -1721,6 +1766,24 @@ function salvarCabecalhoUi() {
   const observacoesEntradas = document.getElementById('caixa-observacoes-entradas').value;
   const observacoesSaidas = document.getElementById('caixa-observacoes-saidas').value;
   const comunicadoInterno = document.getElementById('caixa-ci').value;
+
+  const missing = [];
+  if (!String(canal || '').trim()) missing.push('Canal');
+  if (!String(colaborador || '').trim()) missing.push('Colaborador');
+  if (!String(dataReferencia || '').trim()) missing.push('Data Fechamento');
+  if (missing.length) {
+    openInfoModal({ title: 'Campos obrigatorios', message: `Preencha: ${missing.join(', ')}` });
+    return;
+  }
+
+  const duplicate = caixasState.caixas.find(c => {
+    if (id && c.id === id) return false;
+    return String(c.canal) === String(canal) && String(c.dataFechamento) === String(dataReferencia);
+  });
+  if (duplicate) {
+    openInfoModal({ title: 'Caixa duplicado', message: 'Ja existe um fechamento para este canal e data.' });
+    return;
+  }
 
   openConfirmModal({
     title: 'Salvar Dados do Fechamento',
@@ -1815,6 +1878,14 @@ function selectCaixa(id) {
   }
 }
 
+function abrirMovimentos(id) {
+  selectCaixa(id);
+  const section = document.getElementById('caixa-movimentos');
+  if (section) {
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
 function renderMovimentos(caixaId) {
   const tbody = document.getElementById('table-movimentos');
   if (!tbody) return;
@@ -1859,11 +1930,19 @@ function salvarMovimentoUi() {
   }
 
   if (!caixa) {
-    showToast('Selecione um caixa', 'warning');
+    openInfoModal({ title: 'Caixa nao selecionado', message: 'Selecione um caixa para registrar a movimentacao.' });
+    return;
+  }
+  if (!tipo) {
+    openInfoModal({ title: 'Tipo obrigatorio', message: 'Selecione o tipo de movimentacao.' });
+    return;
+  }
+  if (!String(valor || '').trim()) {
+    openInfoModal({ title: 'Valor obrigatorio', message: 'Informe o valor da movimentacao.' });
     return;
   }
   if (tipoConfig?.requerArquivo && (!fileInput || !fileInput.files || !fileInput.files[0]) && !id) {
-    showToast('Comprovante obrigatorio para este tipo', 'warning');
+    openInfoModal({ title: 'Comprovante obrigatorio', message: 'Envie o comprovante para este tipo de movimentacao.' });
     return;
   }
 

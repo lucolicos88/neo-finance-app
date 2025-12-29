@@ -3040,6 +3040,44 @@ function computeCaixaResumo(movimentos: CaixaMovRow[]) {
   return { totalEntradas, totalSaidas, totalRecebido, sistemaFc, diferenca, reforco, pendencias };
 }
 
+function seedReforcoMovimento(caixaId: string, canal: string, dataFechamento: string): void {
+  if (!caixaId || !canal || !dataFechamento) return;
+  const prevDate = getPreviousBusinessDate(dataFechamento);
+  if (!prevDate || prevDate === dataFechamento) return;
+
+  const caixas = getCaixasRows();
+  const prev = caixas.find((c) => String(c.canal) === String(canal) && String(c.dataFechamento) === prevDate);
+  if (!prev) return;
+
+  const prevMovs = getCaixaMovRows(prev.id);
+  const prevResumo = computeCaixaResumo(prevMovs);
+  const valor = Number(prevResumo.reforco || 0);
+  if (!valor || Math.abs(valor) < 0.009) return;
+
+  const currentMovs = getCaixaMovRows(caixaId);
+  const exists = currentMovs.some((m) => normalizeKey(m.tipo) === normalizeKey('Reforco do Caixa'));
+  if (exists) return;
+
+  const movSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_TB_CAIXAS_MOV);
+  if (!movSheet) return;
+
+  const now = new Date().toISOString();
+  movSheet.appendRow([
+    Utilities.getUuid(),
+    String(caixaId),
+    'Reforco do Caixa',
+    'ENTRADA',
+    valor,
+    dataFechamento,
+    '',
+    '',
+    now,
+    now,
+    ''
+  ]);
+  appendAuditLog('caixas:movimento:reforco', { caixaId, canal, dataFechamento, valor }, true);
+}
+
 export function getCaixasData(): { success: boolean; caixas: CaixaRow[]; movimentos: CaixaMovRow[] } {
   const denied = requireAnyPermission<{ success: boolean; message: string }>(
     ['visualizarRelatorios', 'importarArquivos'],
@@ -3081,6 +3119,7 @@ export function salvarCaixa(caixa: {
 
   const validation = combineValidations(
     validateRequired(caixa?.canal, 'Canal'),
+    validateRequired(caixa?.colaborador, 'Colaborador'),
     validateRequired(caixa?.dataFechamento, 'Data Fechamento')
   );
   if (!validation.valid) return { success: false, message: validation.errors.join('; ') };
@@ -3093,6 +3132,10 @@ export function salvarCaixa(caixa: {
   const now = new Date().toISOString();
   const id = caixa.id ? String(caixa.id) : Utilities.getUuid();
   const dataFechamento = normalizeDateInput(caixa.dataFechamento);
+  const dataDate = dataFechamento ? new Date(`${dataFechamento}T00:00:00`) : null;
+  if (dataDate && !Number.isNaN(dataDate.getTime()) && dataDate.getDay() === 0) {
+    return { success: false, message: 'Fechamento nao permitido aos domingos' };
+  }
   const movimentos = getCaixaMovRows(id);
   const resumo = computeCaixaResumo(movimentos);
   const sistemaValor = resumo.sistemaFc;
@@ -3422,6 +3465,17 @@ function normalizeDateInput(value: unknown): string {
     return `${yyyy}-${mm}-${dd}`;
   }
   return s;
+}
+
+function getPreviousBusinessDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const base = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return dateStr;
+  base.setDate(base.getDate() - 1);
+  if (base.getDay() === 0) {
+    base.setDate(base.getDate() - 1);
+  }
+  return Utilities.formatDate(base, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
 function parseMoneyInput(value: unknown): number {

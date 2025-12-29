@@ -3,24 +3,24 @@
 
   <div class="card">
     <div class="card-header">
-      <h2 class="card-title">1. Dados do Fechamento</h2>
+      <h2 class="card-title">1. Dados do Fechamento do Caixa</h2>
     </div>
     <div class="card-body">
       <input type="hidden" id="caixa-id" value="">
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Canal</label>
-          <select class="form-control" id="caixa-canal">
+          <select class="form-control" id="caixa-canal" required>
             <option value="">Selecionar...</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Colaborador</label>
-          <input type="text" class="form-control" id="caixa-colaborador" placeholder="Nome do colaborador">
+          <input type="text" class="form-control" id="caixa-colaborador" placeholder="Nome do colaborador" required>
         </div>
         <div class="form-group">
           <label class="form-label">Data Fechamento</label>
-          <input type="date" class="form-control" id="caixa-data">
+          <input type="date" class="form-control" id="caixa-data" required>
         </div>
       </div>
       <button class="btn btn-primary" onclick="salvarCabecalhoUi()">Salvar Dados</button>
@@ -91,7 +91,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="caixa-movimentos">
     <div class="card-header">
       <h2 class="card-title">3. Resumo e Fechamento</h2>
     </div>
@@ -104,18 +104,59 @@
           </select>
         </div>
       </div>
-      <div class="summary-grid" id="resumo-cards"></div>
-      <div class="form-group" style="margin-top: 1rem;">
-        <label class="form-label">Observacoes / Outras Entradas</label>
-        <textarea class="form-control" id="caixa-observacoes-entradas" rows="3" placeholder="Detalhe as outras entradas"></textarea>
-      </div>
-      <div class="form-group" style="margin-top: 0.75rem;">
-        <label class="form-label">Observacoes / Outras Saidas</label>
-        <textarea class="form-control" id="caixa-observacoes-saidas" rows="3" placeholder="Detalhe as outras saidas"></textarea>
-      </div>
-      <div class="form-group" style="margin-top: 0.75rem;">
-        <label class="form-label">Comunicado Interno (CI)</label>
-        <textarea class="form-control" id="caixa-ci" rows="4" placeholder="Comunicado interno do fechamento"></textarea>
+      <div id="resumo-report" class="caixa-report resumo-report">
+        <div class="caixa-report-header">
+          <div class="caixa-report-logo">
+            <img id="resumo-logo-img" src="" alt="Neoformula" onerror="this.style.display='none';document.getElementById('resumo-logo-text').style.display='block';" />
+            <div id="resumo-logo-text" style="display:none; font-weight:700; font-size:1.1rem;">Neoformula</div>
+          </div>
+          <div class="caixa-report-title">
+            <div class="caixa-report-title-text">FECHAMENTO DE CAIXA</div>
+          </div>
+          <div></div>
+        </div>
+
+        <div class="caixa-report-meta">
+          <div class="meta-row">
+            <span class="label">Colaborador:</span>
+            <span class="value" id="resumo-colaborador">-</span>
+          </div>
+          <div class="meta-row">
+            <span class="label">Data:</span>
+            <span class="value" id="resumo-data">-</span>
+          </div>
+          <div class="meta-row">
+            <span class="label">Loja:</span>
+            <span class="value" id="resumo-loja">-</span>
+          </div>
+        </div>
+
+        <div class="caixa-report-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Descricao</th>
+                <th class="caixa-report-value">Valor</th>
+              </tr>
+            </thead>
+            <tbody id="resumo-rows">
+              <tr><td colspan="2" class="text-center text-muted">Selecione um caixa</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="caixa-report-observacoes">
+          <label class="label" for="caixa-observacoes-entradas">Observacoes / Outras Entradas:</label>
+          <textarea class="form-control" id="caixa-observacoes-entradas" rows="3" placeholder="Detalhe as outras entradas"></textarea>
+        </div>
+        <div class="caixa-report-observacoes">
+          <label class="label" for="caixa-observacoes-saidas">Observacoes / Outras Saidas:</label>
+          <textarea class="form-control" id="caixa-observacoes-saidas" rows="3" placeholder="Detalhe as outras saidas"></textarea>
+        </div>
+        <div class="caixa-report-observacoes">
+          <label class="label" for="caixa-ci">Comunicado Interno (CI):</label>
+          <textarea class="form-control" id="caixa-ci" rows="4" placeholder="Comunicado interno do fechamento"></textarea>
+        </div>
       </div>
       <div class="text-muted" id="caixa-pendencias" style="margin-top: 0.5rem;"></div>
       <button class="btn btn-primary" onclick="salvarCaixaUi()">Fechar Caixa</button>
@@ -245,6 +286,126 @@
   padding: 0.45rem;
   border: 1px dashed #cbd5e1;
   background: #f8fafc;
+}
+
+#resumo-report {
+  border: 2px solid #1f2937;
+  padding: 1.25rem;
+  background: #ffffff;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+#resumo-report,
+#resumo-report * {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#resumo-report .caixa-report-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+#resumo-report .caixa-report-logo img {
+  max-width: 180px;
+  height: auto;
+  display: block;
+}
+
+#resumo-report .caixa-report-logo div {
+  font-weight: 700;
+}
+
+#resumo-report .caixa-report-title {
+  text-align: center;
+  border: 1px solid #1f2937;
+  padding: 0.75rem;
+}
+
+#resumo-report .caixa-report-title-text {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#resumo-report .caixa-report-meta {
+  border: 1px solid #1f2937;
+  margin-bottom: 1rem;
+}
+
+#resumo-report .caixa-report-meta .meta-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #1f2937;
+}
+
+#resumo-report .caixa-report-meta .meta-row:last-child {
+  border-bottom: 0;
+}
+
+#resumo-report .caixa-report-meta .label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+#resumo-report .caixa-report-table table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #1f2937;
+}
+
+#resumo-report .caixa-report-table th {
+  background: #d1d5db;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #1f2937;
+}
+
+#resumo-report .caixa-report-table td {
+  border-bottom: 1px solid #1f2937;
+  padding: 0.45rem 0.6rem;
+}
+
+#resumo-report .caixa-report-table tr:last-child td {
+  border-bottom: 0;
+}
+
+#resumo-report .caixa-report-table .caixa-report-value {
+  text-align: right;
+  font-weight: 600;
+}
+
+#resumo-report .row-sistema td {
+  background: #d1fae5;
+}
+
+#resumo-report .row-diff td {
+  background: #dbeafe;
+}
+
+#resumo-report .row-total td,
+#resumo-report .row-reforco td {
+  font-weight: 700;
+}
+
+#resumo-report .caixa-report-observacoes {
+  border: 1px solid #1f2937;
+  padding: 0.6rem;
+  margin-top: 1rem;
+  min-height: 80px;
+}
+
+#resumo-report .caixa-report-observacoes .label {
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+  display: block;
 }
 
 .dropzone {
