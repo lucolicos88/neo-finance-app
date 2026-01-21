@@ -2,7 +2,7 @@
 // ============================================================================
 // MODAL MANAGER
 // ============================================================================
-const ModalManager = {
+var ModalManager = window.ModalManager || {
   open(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
@@ -33,8 +33,9 @@ const ModalManager = {
     document.body.style.overflow = '';
   }
 };
+window.ModalManager = ModalManager;
 
-const ConfirmModal = {
+var ConfirmModal = window.ConfirmModal || {
   pending: null,
   open({ title, message, messageHtml, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', hideCancel = false }) {
     const modal = document.getElementById('modal-confirm');
@@ -70,6 +71,7 @@ const ConfirmModal = {
     ModalManager.close('modal-confirm');
   }
 };
+window.ConfirmModal = ConfirmModal;
 
 function openConfirmModal(options) {
   return ConfirmModal.open(options);
@@ -87,24 +89,27 @@ function openInfoModal({ title, message }) {
 
 
 // Fecha modal ao clicar fora
-document.addEventListener('click', function(e) {
-  if (e.target.classList && e.target.classList.contains('modal-overlay')) {
-    ModalManager.closeAll();
-  }
-});
+if (!window.__neoFinanceModalListeners) {
+  window.__neoFinanceModalListeners = true;
+  document.addEventListener('click', function(e) {
+    if (e.target.classList && e.target.classList.contains('modal-overlay')) {
+      ModalManager.closeAll();
+    }
+  });
 
-// Fecha modal com ESC
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    ModalManager.closeAll();
-  }
-});
+  // Fecha modal com ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      ModalManager.closeAll();
+    }
+  });
+}
 
 // ============================================================================
 // GLOBAL STATE
 // ============================================================================
 
-let currentUserInfo = {
+var currentUserInfo = window.currentUserInfo || {
   email: '',
   nome: '',
   perfil: '',
@@ -119,6 +124,7 @@ let currentUserInfo = {
     importarArquivos: false
   }
 };
+window.currentUserInfo = currentUserInfo;
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -148,8 +154,8 @@ function createAvatarDataUrl(label) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-let currentView = 'dashboard';
-let appData = {
+var currentView = window.currentView || 'dashboard';
+var appData = window.appData || {
   contasPagar: [],
   contasReceber: [],
   extratos: [],
@@ -160,10 +166,12 @@ let appData = {
   centrosCusto: [],
   caixaTipos: []
 };
-let conciliacaoSnapshot = null;
-let currentComparativoTipo = 'PAGAR';
-let caixasState = { caixas: [], movimentos: [], selectedId: '' };
-const defaultCaixaTipos = [
+window.currentView = currentView;
+window.appData = appData;
+var conciliacaoSnapshot = window.conciliacaoSnapshot || null;
+var currentComparativoTipo = window.currentComparativoTipo || 'PAGAR';
+var caixasState = window.caixasState || { caixas: [], movimentos: [], selectedId: '' };
+var defaultCaixaTipos = window.defaultCaixaTipos || [
   { tipo: 'Reforco do Caixa', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: false },
   { tipo: 'Cartao de Credito', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: false, contaReforco: false },
   { tipo: 'Depositos', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: false, contaReforco: false },
@@ -177,9 +185,9 @@ const defaultCaixaTipos = [
   { tipo: 'Moedas', natureza: 'ENTRADA', requerArquivo: false, sistemaFc: false, contaReforco: true },
   { tipo: 'Sistema FC', natureza: 'ENTRADA', requerArquivo: true, sistemaFc: true, contaReforco: false }
 ];
-const defaultMovTypes = defaultCaixaTipos.map(t => t.tipo);
+var defaultMovTypes = window.defaultMovTypes || defaultCaixaTipos.map(t => t.tipo);
 
-const correlationId = (() => {
+var correlationId = window.__neoFinanceCorrelationId || (() => {
   try {
     const k = 'neoFinanceCorrelationId';
     const existing = sessionStorage.getItem(k);
@@ -191,6 +199,7 @@ const correlationId = (() => {
     return `c_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   }
 })();
+window.__neoFinanceCorrelationId = correlationId;
 
 function getRequestContext() {
   return {
@@ -225,6 +234,8 @@ window.gasRun = createGasRun();
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
+  if (window.__neoFinanceWebappInitialized) return;
+  window.__neoFinanceWebappInitialized = true;
   initializeApp();
 });
 
