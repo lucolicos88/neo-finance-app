@@ -1210,11 +1210,13 @@ function renderCaixaTipos() {
         </span>
       </td>
       <td class="text-right">
-        <button class="btn btn-sm btn-secondary" onclick="editarCaixaTipo(${index})" title="Editar">Editar</button>
-        <button class="btn btn-sm ${tipo.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCaixaTipo(${index}, ${tipo.ativo === false})" title="${tipo.ativo === false ? 'Ativar' : 'Inativar'}">
-          ${tipo.ativo === false ? 'Ativar' : 'Inativar'}
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="excluirCaixaTipo(${index})" title="Excluir">Excluir</button>
+        <div class="table-actions">
+          <button class="btn btn-sm btn-secondary" onclick="editarCaixaTipo(${index})" title="Editar">Editar</button>
+          <button class="btn btn-sm ${tipo.ativo === false ? 'btn-success' : 'btn-warning'}" onclick="alternarCaixaTipo(${index}, ${tipo.ativo === false})" title="${tipo.ativo === false ? 'Ativar' : 'Inativar'}">
+            ${tipo.ativo === false ? 'Ativar' : 'Inativar'}
+          </button>
+          <button class="btn btn-sm btn-danger" onclick="excluirCaixaTipo(${index})" title="Excluir">Excluir</button>
+        </div>
       </td>
     </tr>
   `).join('');
