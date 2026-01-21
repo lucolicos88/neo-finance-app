@@ -263,6 +263,12 @@ body.app-busy button {
   border: 1px solid #e0e0e0;
 }
 
+.table-responsive {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -305,6 +311,76 @@ td {
 
 tr:hover {
   background: #f8f9fa;
+}
+
+.table-logs {
+  table-layout: fixed;
+}
+
+.table-logs th,
+.table-logs td {
+  vertical-align: top;
+}
+
+.table-logs th:nth-child(1),
+.table-logs td:nth-child(1) {
+  width: 140px;
+}
+
+.table-logs th:nth-child(2),
+.table-logs td:nth-child(2) {
+  width: 180px;
+}
+
+.table-logs th:nth-child(3),
+.table-logs td:nth-child(3) {
+  width: 140px;
+}
+
+.table-logs th:nth-child(4),
+.table-logs td:nth-child(4) {
+  width: 90px;
+}
+
+.table-logs th:nth-child(5),
+.table-logs td:nth-child(5) {
+  width: 160px;
+}
+
+.table-logs th:nth-child(6),
+.table-logs td:nth-child(6) {
+  width: 220px;
+}
+
+.table-logs th:nth-child(7),
+.table-logs td:nth-child(7) {
+  width: 320px;
+}
+
+.log-message {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.payload-cell {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.payload-cell summary {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.payload-cell pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Status Badges */

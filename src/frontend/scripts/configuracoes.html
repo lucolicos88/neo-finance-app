@@ -452,8 +452,8 @@ function renderAuditLogs(entries) {
           </span>
         </td>
         <td><code>${escapeHtml(ref || '-')}</code></td>
-        <td>${message}</td>
-        <td>${payloadHtml}</td>
+        <td class="log-message">${message}</td>
+        <td class="payload-cell">${payloadHtml}</td>
       </tr>
     `;
   }).join('');
