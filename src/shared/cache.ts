@@ -253,4 +253,6 @@ export const CacheNamespace = {
   DFC: 'dfc',
   KPI: 'kpi',
   USERS: 'users',
+  LANCAMENTOS: 'lancamentos',
+  EXTRATOS: 'extratos',
 } as const;

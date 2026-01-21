@@ -62,6 +62,8 @@ function clearReportsCache(): void {
   cacheRemoveNamespace(CacheNamespace.DRE, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.DFC, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.KPI, CacheScope.SCRIPT);
+  invalidateLancamentosCache();
+  invalidateExtratosCache();
 }
 
 function getHeaderIndexMap(sheet: GoogleAppsScript.Spreadsheet.Sheet): Record<string, number> {
@@ -3011,6 +3013,7 @@ function getCaixaTiposConfig(): CaixaTipoConfig[] {
     }));
 }
 
+
 function getCaixaTipoByName(tipo: string): CaixaTipoConfig | null {
   const key = String(tipo || '').trim().toUpperCase();
   if (!key) return null;
@@ -4115,6 +4118,18 @@ function normalizeDateCell(value: any): string {
   return s;
 }
 
+const LANCAMENTOS_CACHE_KEY = 'all';
+const EXTRATOS_CACHE_KEY = 'all';
+const DATA_CACHE_TTL_SECONDS = 30;
+
+function invalidateLancamentosCache(): void {
+  cacheRemove(CacheNamespace.LANCAMENTOS, LANCAMENTOS_CACHE_KEY, CacheScope.SCRIPT);
+}
+
+function invalidateExtratosCache(): void {
+  cacheRemove(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, CacheScope.SCRIPT);
+}
+
 function getLancamentosFromSheet(): any[] {
   // garante aba com cabeçalhos
   createSheetIfNotExists(SHEET_TB_LANCAMENTOS, [
@@ -4141,9 +4156,15 @@ function getLancamentosFromSheet(): any[] {
     'Observações'
   ]);
 
+  const cached = cacheGet<any[]>(CacheNamespace.LANCAMENTOS, LANCAMENTOS_CACHE_KEY, CacheScope.SCRIPT);
+  if (cached) return cached;
+
   const data = getSheetValues(SHEET_TB_LANCAMENTOS);
    if (!data || data.length <= 1) {
-    if (!isSeedDataEnabled()) return [];
+    if (!isSeedDataEnabled()) {
+      cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, [], DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+      return [];
+    }
     const seed = [
       ['CP-1001','2025-01-02','2025-01-12','2025-01-11','DESPESA','MATRIZ','OPS','Compra MP','10201','','ONLINE','Compra matéria-prima lote A',1500,0,0,0,1500,'PAGO','EXT-5002','Fornecedor X','Lote inicial'],
       ['CP-1002','2025-01-05','2025-01-20','','DESPESA','MATRIZ','OPS','Frete Compras','10205','','ONLINE','Frete compras fornecedores',400,0,0,0,400,'PENDENTE','','Fornecedor Y','À espera de pagamento'],
@@ -4153,7 +4174,7 @@ function getLancamentosFromSheet(): any[] {
       ['CR-2003','2025-01-06','2025-01-21','','RECEITA','FILIAL_RJ','COM','Receita Convênio','20108','Receita Convênio','PARCEIRO','Convenio Varejo',2100,0,0,0,2100,'PENDENTE','','Convênio Varejo','Ref. janeiro'],
     ];
     appendRows(SHEET_TB_LANCAMENTOS, seed);
-    return seed.map(r => ({
+    const seeded = seed.map(r => ({
       id: String(r[0]),
       dataCompetencia: normalizeDateCell(r[1]),
       dataVencimento: normalizeDateCell(r[2]),
@@ -4176,9 +4197,11 @@ function getLancamentosFromSheet(): any[] {
       origem: String(r[19] || ''),
       observacoes: String(r[20] || ''),
     }));
+    cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, seeded, DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+    return seeded;
   }
 
-  return data.slice(1).map((row: any) => ({
+  const parsed = data.slice(1).map((row: any) => ({
     id: String(row[0]),
     dataCompetencia: normalizeDateCell(row[1]),
     dataVencimento: normalizeDateCell(row[2]),
@@ -4206,7 +4229,10 @@ function getLancamentosFromSheet(): any[] {
     else if (tipoNorm === 'AR') l.tipo = 'RECEITA';
     return l;
   });
+  cacheSet(CacheNamespace.LANCAMENTOS, LANCAMENTOS_CACHE_KEY, parsed, DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+  return parsed;
 }
+
 
 function getExtratosFromSheet(): any[] {
   // Garante que a aba existe com cabeçalhos esperados
@@ -4224,9 +4250,15 @@ function getExtratosFromSheet(): any[] {
     'Importado Em',
   ]);
 
+  const cached = cacheGet<any[]>(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, CacheScope.SCRIPT);
+  if (cached) return cached;
+
   const data = getSheetValues(SHEET_TB_EXTRATOS);
   if (!data || data.length <= 1) {
-    if (!isSeedDataEnabled()) return [];
+    if (!isSeedDataEnabled()) {
+      cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, [], DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+      return [];
+    }
     const seed = [
       ['EXT-5001','2025-01-02','Recebimento cartão venda balcão',3200,'ENTRADA','BANCO_A','CC_MATRIZ','CONCILIADO','CR-2001','Pedido balcão','2025-01-03'],
       ['EXT-5002','2025-01-11','Pagamento fornecedor matéria-prima',-1500,'SAIDA','BANCO_A','CC_MATRIZ','CONCILIADO','CP-1001','Pagto lote A','2025-01-11'],
@@ -4234,13 +4266,15 @@ function getExtratosFromSheet(): any[] {
       ['EXT-5004','2025-01-16','Recebimento boleto convênio',2100,'ENTRADA','BANCO_A','CC_MATRIZ','PENDENTE','CR-2003','Convênio varejo','2025-01-16'],
     ];
     appendRows(SHEET_TB_EXTRATOS, seed);
-    return seed.map(r => ({
+    const seeded = seed.map(r => ({
       id: r[0], data: r[1], descricao: r[2], valor: r[3], tipo: r[4], banco: r[5], conta: r[6],
       statusConciliacao: r[7], idLancamento: r[8], observacoes: r[9], importadoEm: r[10],
     }));
+    cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, seeded, DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+    return seeded;
   }
 
-  return data.slice(1).map((row: any) => ({
+  const parsed = data.slice(1).map((row: any) => ({
     id: row[0],
     data: normalizeDateCell(row[1]),
     descricao: row[2],
@@ -4253,6 +4287,8 @@ function getExtratosFromSheet(): any[] {
     observacoes: row[9],
     importadoEm: normalizeDateCell(row[10]),
   }));
+  cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, parsed, DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+  return parsed;
 }
 
 function sumValues(items: any[]): number {
