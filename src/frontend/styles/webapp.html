@@ -315,64 +315,45 @@ tr:hover {
 
 .table-logs {
   table-layout: fixed;
+  width: 100%;
+  font-size: 0.85rem;
 }
 
 .table-logs th,
 .table-logs td {
   vertical-align: top;
+  padding: 8px 10px;
 }
 
 .table-logs th:nth-child(1),
-.table-logs td:nth-child(1) {
-  width: 140px;
-}
-
+.table-logs td:nth-child(1) { width: 12%; }
 .table-logs th:nth-child(2),
-.table-logs td:nth-child(2) {
-  width: 180px;
-}
-
+.table-logs td:nth-child(2) { width: 14%; }
 .table-logs th:nth-child(3),
-.table-logs td:nth-child(3) {
-  width: 140px;
-}
-
+.table-logs td:nth-child(3) { width: 12%; }
 .table-logs th:nth-child(4),
-.table-logs td:nth-child(4) {
-  width: 90px;
-}
-
+.table-logs td:nth-child(4) { width: 8%; }
 .table-logs th:nth-child(5),
-.table-logs td:nth-child(5) {
-  width: 160px;
-}
-
+.table-logs td:nth-child(5) { width: 14%; }
 .table-logs th:nth-child(6),
-.table-logs td:nth-child(6) {
-  width: 220px;
-}
-
+.table-logs td:nth-child(6) { width: 18%; }
 .table-logs th:nth-child(7),
-.table-logs td:nth-child(7) {
-  width: 320px;
-}
+.table-logs td:nth-child(7) { width: 22%; }
 
-.log-message {
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
+.log-message,
 .payload-cell {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
+.payload-cell details {
+  max-width: 100%;
+}
+
 .payload-cell summary {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
   cursor: pointer;
 }
 
@@ -382,6 +363,39 @@ tr:hover {
   word-break: break-word;
   overflow-wrap: anywhere;
 }
+
+.table-plano-contas {
+  table-layout: fixed;
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.table-plano-contas th,
+.table-plano-contas td {
+  padding: 8px 10px;
+  vertical-align: top;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.table-plano-contas th:nth-child(1),
+.table-plano-contas td:nth-child(1) { width: 8%; }
+.table-plano-contas th:nth-child(2),
+.table-plano-contas td:nth-child(2) { width: 20%; }
+.table-plano-contas th:nth-child(3),
+.table-plano-contas td:nth-child(3) { width: 10%; }
+.table-plano-contas th:nth-child(4),
+.table-plano-contas td:nth-child(4) { width: 14%; }
+.table-plano-contas th:nth-child(5),
+.table-plano-contas td:nth-child(5) { width: 14%; }
+.table-plano-contas th:nth-child(6),
+.table-plano-contas td:nth-child(6) { width: 12%; }
+.table-plano-contas th:nth-child(7),
+.table-plano-contas td:nth-child(7) { width: 8%; }
+.table-plano-contas th:nth-child(8),
+.table-plano-contas td:nth-child(8) { width: 8%; }
+.table-plano-contas th:nth-child(9),
+.table-plano-contas td:nth-child(9) { width: 6%; }
 
 /* Status Badges */
 .badge {
