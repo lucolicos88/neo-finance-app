@@ -9,6 +9,7 @@ import { getSheetValues, createSheetIfNotExists, appendRows } from '../shared/sh
 import {
   cacheGet,
   cacheSet,
+  cacheRemove,
   cacheRemoveNamespace,
   cacheGetOrLoad,
   CacheNamespace,
@@ -296,7 +297,51 @@ function normalizePermissoes(
   perfil: string,
   perms: Record<string, boolean> | null | undefined
 ): NonNullable<Usuario['permissoes']> {
-  return getPermissoesPadrao(perfil);
+  const defaults = getPermissoesPadrao(perfil);
+  if (perms && typeof perms === 'object') {
+    return { ...defaults, ...perms };
+  }
+  return defaults;
+}
+
+const USER_CACHE_TTL_SECONDS = 300;
+const USER_SHEET_EMAIL_COL = 2; // Coluna B
+const USER_SHEET_TOTAL_COLS = 9;
+
+function normalizeEmail(value: string): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getUserCacheKey(email: string): string {
+  return `user:${normalizeEmail(email)}`;
+}
+
+function readUserFromCache(email: string): Usuario | null {
+  const key = getUserCacheKey(email);
+  return cacheGet<Usuario>(CacheNamespace.USERS, key, CacheScope.SCRIPT);
+}
+
+function writeUserCache(email: string, user: Usuario): void {
+  const key = getUserCacheKey(email);
+  cacheSet(CacheNamespace.USERS, key, user, USER_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+}
+
+function invalidateUserCache(email: string): void {
+  const key = getUserCacheKey(email);
+  cacheRemove(CacheNamespace.USERS, key, CacheScope.SCRIPT);
+}
+
+function findUserRowByEmail(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  email: string
+): number | null {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const target = normalizeEmail(email);
+  if (!target) return null;
+  const range = sheet.getRange(2, USER_SHEET_EMAIL_COL, lastRow - 1, 1);
+  const found = range.createTextFinder(target).matchEntireCell(true).matchCase(false).findNext();
+  return found ? found.getRow() : null;
 }
 
 
@@ -355,29 +400,31 @@ function ensureUsuariosSchema(): void {
 
 function getUsuarioByEmail(email: string): Usuario | null {
   if (!email) return null;
+  const cached = readUserFromCache(email);
+  if (cached) return cached;
+
   ensureUsuariosSchema();
   const sheet = ensureUsuariosSheet();
-  const data = sheet.getDataRange().getValues();
+  const rowIndex = findUserRowByEmail(sheet, email);
+  if (!rowIndex) return null;
 
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row[0]) continue;
-    if (String(row[1]).toLowerCase() !== email.toLowerCase()) continue;
+  const row = sheet.getRange(rowIndex, 1, 1, USER_SHEET_TOTAL_COLS).getValues()[0];
+  if (!row || !row[0]) return null;
 
-    const perfil = normalizePerfil(row[3]);
-    const permissoes = normalizePermissoes(perfil, safeParsePermissions(row[6]));
-
-    return {
-      id: String(row[0]),
-      email: String(row[1]),
-      nome: String(row[2]),
-      perfil: perfil as any,
-      status: String(row[4]) as any,
-      canal: row[8] ? String(row[8]) : undefined,
-      ultimoAcesso: row[5] ? String(row[5]) : undefined,
-      permissoes,
-    };
-  }
+  const perfil = normalizePerfil(row[3]);
+  const permissoes = normalizePermissoes(perfil, safeParsePermissions(row[6]));
+  const user: Usuario = {
+    id: String(row[0]),
+    email: String(row[1]),
+    nome: String(row[2]),
+    perfil: perfil as any,
+    status: String(row[4]) as any,
+    canal: row[8] ? String(row[8]) : undefined,
+    ultimoAcesso: row[5] ? String(row[5]) : undefined,
+    permissoes,
+  };
+  writeUserCache(email, user);
+  return user;
 
   return null;
 }
@@ -385,13 +432,9 @@ function getUsuarioByEmail(email: string): Usuario | null {
 function updateUserLastAccess(email: string): void {
   if (!email) return;
   const sheet = ensureUsuariosSheet();
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (!data[i][0]) continue;
-    if (String(data[i][1]).toLowerCase() !== email.toLowerCase()) continue;
-    sheet.getRange(i + 1, 6).setValue(new Date().toISOString());
-    return;
-  }
+  const rowIndex = findUserRowByEmail(sheet, email);
+  if (!rowIndex) return;
+  sheet.getRange(rowIndex, 6).setValue(new Date().toISOString());
 }
 
 type PermissionKey = keyof NonNullable<Usuario['permissoes']>;
@@ -3730,7 +3773,7 @@ export function importarFc(
 export function getSheetData(
   sheetIdOrUrl: string,
   sheetName?: string
-): { success: boolean; message?: string; values?: string[][] } {
+): { success: boolean; message?: string; values?: string[][]; truncated?: boolean } {
   const denied = requirePermission('importarArquivos', 'ler planilha');
   if (denied) return denied;
 
@@ -3744,6 +3787,9 @@ export function getSheetData(
   if (match) sheetId = match[1];
   const idMatch = input.match(/[?&]id=([a-zA-Z0-9-_]+)/);
   if (idMatch) sheetId = idMatch[1];
+  if (!/^[a-zA-Z0-9-_]{10,}$/.test(sheetId)) {
+    return { success: false, message: 'ID da planilha invalido' };
+  }
 
   try {
     const ss = SpreadsheetApp.openById(sheetId);
@@ -3751,8 +3797,28 @@ export function getSheetData(
     if (!sheet) {
       return { success: false, message: 'Aba nao encontrada na planilha' };
     }
-    const values = sheet.getDataRange().getDisplayValues();
-    return { success: true, values };
+    const MAX_ROWS = 2000;
+    const MAX_COLS = 50;
+    const MAX_CELLS = 100000;
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow === 0 || lastCol === 0) {
+      return { success: true, values: [] };
+    }
+    const rows = Math.min(lastRow, MAX_ROWS);
+    const cols = Math.min(lastCol, MAX_COLS);
+    const truncated = rows * cols < lastRow * lastCol || rows * cols > MAX_CELLS;
+    const safeRows = Math.min(rows, Math.max(1, Math.floor(MAX_CELLS / cols)));
+    const values = sheet.getRange(1, 1, safeRows, cols).getDisplayValues();
+    if (truncated || safeRows < lastRow) {
+      return {
+        success: true,
+        values,
+        truncated: true,
+        message: 'Planilha muito grande, leitura limitada para performance',
+      };
+    }
+    return { success: true, values, truncated: false };
   } catch (error: any) {
     return { success: false, message: `Erro ao ler planilha: ${error?.message || error}` };
   }
@@ -4911,14 +4977,18 @@ export function salvarUsuario(usuario: Usuario): { success: boolean; message: st
     ];
 
     if (rowIndex > 0) {
+      const previousEmail = String(data[rowIndex - 1][1] || '');
       // Atualizar existente
       sheet.getRange(rowIndex, 1, 1, 9).setValues([rowData]);
       appendAuditLog('salvarUsuario', { id: rowData[0], email: rowData[1], perfil: rowData[3], status: rowData[4] }, true);
+      invalidateUserCache(previousEmail);
+      invalidateUserCache(String(rowData[1] || ''));
       return { success: true, message: 'Usuário atualizado com sucesso!' };
     } else {
       // Criar novo
       sheet.appendRow(rowData);
       appendAuditLog('salvarUsuario', { id: rowData[0], email: rowData[1], perfil: rowData[3], status: rowData[4] }, true);
+      invalidateUserCache(String(rowData[1] || ''));
       return { success: true, message: 'Usuário criado com sucesso!' };
     }
   } catch (error: any) {
@@ -4950,8 +5020,10 @@ export function excluirUsuario(id: string): { success: boolean; message: string 
 
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === id || data[i][1] === id) {
+        const deletedEmail = String(data[i][1] || '');
         sheet.deleteRow(i + 1);
         appendAuditLog('excluirUsuario', { id }, true);
+        invalidateUserCache(deletedEmail);
         return { success: true, message: 'Usuário excluído com sucesso!' };
       }
     }
