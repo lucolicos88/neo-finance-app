@@ -611,8 +611,8 @@ function loadPlanoContas() {
       <td>${escapeHtml(conta.grupoDFC || '-')}</td>
       <td>${escapeHtml(conta.variavelFixa || '-')}</td>
       <td>${escapeHtml(conta.cmaCmv || '-')}</td>
-      <td class="text-right" style="white-space: nowrap;">
-        <div class="table-actions" style="display:inline-flex; gap:8px; white-space:nowrap;">
+      <td class="text-right plano-actions">
+        <div class="table-actions table-actions-wrap">
           <button class="btn btn-sm btn-secondary" onclick="editarConta(${index})" title="Editar">Editar</button>
           <button class="btn btn-sm btn-danger" onclick="excluirConta(${index})" title="Excluir">Excluir</button>
         </div>

@@ -269,6 +269,10 @@ body.app-busy button {
   border: 1px solid #e0e0e0;
 }
 
+.table-no-scroll {
+  overflow-x: hidden;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -367,12 +371,12 @@ tr:hover {
 .table-plano-contas {
   table-layout: fixed;
   width: 100%;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .table-plano-contas th,
 .table-plano-contas td {
-  padding: 8px 10px;
+  padding: 6px 8px;
   vertical-align: top;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -395,7 +399,29 @@ tr:hover {
 .table-plano-contas th:nth-child(8),
 .table-plano-contas td:nth-child(8) { width: 8%; }
 .table-plano-contas th:nth-child(9),
-.table-plano-contas td:nth-child(9) { width: 6%; }
+.table-plano-contas td:nth-child(9) { width: 10%; }
+
+.table-plano-contas .badge {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+}
+
+.table-plano-contas .plano-actions {
+  white-space: normal;
+}
+
+.table-actions-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.table-plano-contas .btn.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.78rem;
+}
 
 /* Status Badges */
 .badge {
