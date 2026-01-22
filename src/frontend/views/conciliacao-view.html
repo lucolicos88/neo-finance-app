@@ -85,6 +85,7 @@
     <div class="card-header">
       <h2 class="card-title">Comparativo</h2>
       <div class="card-actions">
+        <input type="month" class="form-control" id="conciliacao-mes" style="min-width: 160px;" onchange="onComparativoMonthChange()" />
         <button class="btn btn-outline" onclick="loadComparativo('PAGAR')">Pagar</button>
         <button class="btn btn-outline" onclick="loadComparativo('RECEBER')">Receber</button>
         <button class="btn btn-outline" onclick="refreshComparativo()">Atualizar</button>
@@ -130,6 +131,16 @@
           </tr>
         </tbody>
       </table>
+    </div>
+    <div class="card-actions" style="justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem;">
+      <span class="text-muted" id="comp-page-info">P&aacute;gina 1</span>
+      <button class="btn btn-outline" id="comp-prev" onclick="changeComparativoPage(-1)">Anterior</button>
+      <button class="btn btn-outline" id="comp-next" onclick="changeComparativoPage(1)">Pr&oacute;xima</button>
+      <select class="form-control" id="comp-page-size" onchange="setComparativoPageSize(this.value)" style="width: 120px;">
+        <option value="50">50 / p&aacute;gina</option>
+        <option value="100" selected>100 / p&aacute;gina</option>
+        <option value="200">200 / p&aacute;gina</option>
+      </select>
     </div>
   </div>
 </div>

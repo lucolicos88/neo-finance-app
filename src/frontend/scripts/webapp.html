@@ -915,10 +915,28 @@ function cancelarReceberEmLote() {
 // ============================================================================
 // CONCILIACAO (IMPORTACOES)
 // ============================================================================
+let comparativoPage = 1;
+let comparativoPageSize = 100;
 
 function loadConciliacaoData() {
+  initComparativoMonth();
   populateImportFiliais();
-  loadComparativo(currentComparativoTipo);
+  loadComparativo(currentComparativoTipo, true);
+}
+
+function initComparativoMonth() {
+  const input = document.getElementById('conciliacao-mes');
+  if (!input) return;
+  if (!input.value) {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    input.value = `${now.getFullYear()}-${month}`;
+  }
+}
+
+function onComparativoMonthChange() {
+  comparativoPage = 1;
+  loadComparativo(currentComparativoTipo, true);
 }
 
 function populateImportFiliais() {
@@ -935,12 +953,19 @@ function populateImportFiliais() {
 }
 
 function refreshComparativo() {
-  loadComparativo(currentComparativoTipo);
+  comparativoPage = 1;
+  loadComparativo(currentComparativoTipo, true);
 }
 
-function loadComparativo(tipo) {
+function loadComparativo(tipo, resetPage) {
   const t = String(tipo || 'PAGAR').toUpperCase();
   currentComparativoTipo = t;
+  if (resetPage) comparativoPage = 1;
+  const monthInput = document.getElementById('conciliacao-mes');
+  const monthValue = monthInput && monthInput.value ? String(monthInput.value) : '';
+  const [yearStr, monthStr] = monthValue.split('-');
+  const year = Number(yearStr) || null;
+  const month = Number(monthStr) || null;
   showLoading('Carregando comparativo...');
   window.gasRun
     .withSuccessHandler(function(data) {
@@ -955,9 +980,40 @@ function loadComparativo(tipo) {
       updateElement('comp-sem-match', String(data.stats?.semMatch || 0));
       updateElement('comp-duplicado', String(data.stats?.duplicado || 0));
       renderComparativo(data.items || [], t, data.counts || null);
+      updateComparativoPagination(data.total || 0, data.page || comparativoPage, data.pageSize || comparativoPageSize);
     })
     .withFailureHandler(handleError)
-    .getComparativoData(t);
+    .getComparativoData({ tipo: t, year, month, page: comparativoPage, pageSize: comparativoPageSize });
+}
+
+function updateComparativoPagination(total, page, pageSize) {
+  const info = document.getElementById('comp-page-info');
+  const prev = document.getElementById('comp-prev');
+  const next = document.getElementById('comp-next');
+  const sizeSelect = document.getElementById('comp-page-size');
+
+  const totalPages = Math.max(1, Math.ceil((Number(total) || 0) / (Number(pageSize) || 1)));
+  if (info) info.textContent = `P\u00e1gina ${page} de ${totalPages}`;
+  if (prev) prev.disabled = page <= 1;
+  if (next) next.disabled = page >= totalPages;
+  if (sizeSelect && String(sizeSelect.value) !== String(pageSize)) {
+    sizeSelect.value = String(pageSize);
+  }
+}
+
+function changeComparativoPage(delta) {
+  const nextPage = Math.max(1, comparativoPage + Number(delta || 0));
+  if (nextPage === comparativoPage) return;
+  comparativoPage = nextPage;
+  loadComparativo(currentComparativoTipo, false);
+}
+
+function setComparativoPageSize(value) {
+  const nextSize = Math.max(20, Math.min(200, Number(value) || 100));
+  if (nextSize === comparativoPageSize) return;
+  comparativoPageSize = nextSize;
+  comparativoPage = 1;
+  loadComparativo(currentComparativoTipo, true);
 }
 
 function renderComparativo(items, tipo, counts) {

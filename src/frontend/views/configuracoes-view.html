@@ -100,6 +100,16 @@
           </tbody>
         </table>
       </div>
+      <div style="display:flex; gap: 0.5rem; align-items:center; justify-content:flex-end; margin-top: 0.75rem;">
+        <span class="text-muted" id="logs-page-info">P&aacute;gina 1</span>
+        <button class="btn btn-secondary" id="logs-prev" onclick="changeLogsPage(-1)">Anterior</button>
+        <button class="btn btn-secondary" id="logs-next" onclick="changeLogsPage(1)">Pr&oacute;xima</button>
+        <select id="logs-page-size" class="form-control" onchange="setLogsPageSize(this.value)" style="width: 140px;">
+          <option value="50">50 / p&aacute;gina</option>
+          <option value="100" selected>100 / p&aacute;gina</option>
+          <option value="200">200 / p&aacute;gina</option>
+        </select>
+      </div>
     </div>
   </div>
 </div>

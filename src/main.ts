@@ -71,6 +71,8 @@ import {
   logClientError,
   logServerException,
   getAuditLogEntries,
+  getAuditLogEntriesPage,
+  getAuditLogEntriesFilteredPage,
   salvarUsuario,
   excluirUsuario,
   setRequestContext,
@@ -533,6 +535,8 @@ global.getUsuarios = wrapApi('getUsuarios', getUsuarios);
 global.getCurrentUserInfo = wrapApi('getCurrentUserInfo', getCurrentUserInfo);
 global.logClientError = logClientError;
 global.getAuditLogEntries = wrapApi('getAuditLogEntries', getAuditLogEntries);
+global.getAuditLogEntriesPage = wrapApi('getAuditLogEntriesPage', getAuditLogEntriesPage);
+global.getAuditLogEntriesFilteredPage = wrapApi('getAuditLogEntriesFilteredPage', getAuditLogEntriesFilteredPage);
 global.salvarUsuario = wrapApi('salvarUsuario', salvarUsuario);
 global.excluirUsuario = wrapApi('excluirUsuario', excluirUsuario);
 global.runSmokeTests = wrapApi('runSmokeTests', runSmokeTests);

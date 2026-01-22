@@ -35,6 +35,10 @@ function setupConfigTabs() {
 let auditLogsCache = [];
 let auditLogsLoadedAt = 0;
 let auditLogsFilteredCache = [];
+let auditLogsPage = 1;
+let auditLogsPageSize = 100;
+let auditLogsTotal = 0;
+let auditLogsMode = 'all';
 
 function initLogsTabAccess() {
   const logsTabBtn = document.querySelector('[data-tab-group="config"][data-tab="logs"]');
@@ -48,6 +52,8 @@ function initLogsTabAccess() {
 }
 
 function refreshLogs() {
+  auditLogsPage = 1;
+  auditLogsMode = 'all';
   loadLogs(true);
 }
 
@@ -57,11 +63,18 @@ function loadLogs(force = false) {
 
   const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
   if (!isAdmin) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sem permissão para visualizar logs</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sem permiss??o para visualizar logs</td></tr>';
     return;
   }
 
   loadAdminDiagnostics();
+  auditLogsMode = 'all';
+  loadLogsPage(force);
+}
+
+function loadLogsPage(force = false) {
+  const tbody = document.getElementById('table-logs');
+  if (!tbody) return;
 
   const now = Date.now();
   if (!force && auditLogsCache.length > 0 && now - auditLogsLoadedAt < 15000) {
@@ -72,20 +85,63 @@ function loadLogs(force = false) {
   tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>';
   showLoading('Carregando logs...');
 
+  if (auditLogsMode === 'filtered') {
+    const queryEl = document.getElementById('logs-query');
+    const emailEl = document.getElementById('logs-email');
+    const actionEl = document.getElementById('logs-action');
+    const refEl = document.getElementById('logs-ref');
+    const statusEl = document.getElementById('logs-status');
+
+    const query = queryEl && queryEl.value ? String(queryEl.value).trim() : '';
+    const email = emailEl && emailEl.value ? String(emailEl.value).trim() : '';
+    const action = actionEl && actionEl.value ? String(actionEl.value).trim() : '';
+    const correlationId = refEl && refEl.value ? String(refEl.value).trim() : '';
+    const status = statusEl && statusEl.value ? String(statusEl.value).trim().toLowerCase() : '';
+    const success = status === 'ok' ? true : status === 'erro' ? false : null;
+
+    gasRun
+      .withSuccessHandler(result => {
+        hideLoading();
+        auditLogsCache = Array.isArray(result?.items) ? result.items : [];
+        auditLogsLoadedAt = Date.now();
+        auditLogsTotal = Number(result?.total || 0);
+        applyLogsFilter();
+        updateLogsPagination();
+      })
+      .withFailureHandler(err => {
+        hideLoading();
+        handleError(err);
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Falha ao buscar logs</td></tr>';
+      })
+      .getAuditLogEntriesFilteredPage({
+        page: auditLogsPage,
+        pageSize: auditLogsPageSize,
+        query,
+        email,
+        action,
+        correlationId,
+        success,
+      });
+    return;
+  }
+
   gasRun
-    .withSuccessHandler(entries => {
+    .withSuccessHandler(result => {
       hideLoading();
-      auditLogsCache = Array.isArray(entries) ? entries : [];
+      auditLogsCache = Array.isArray(result?.items) ? result.items : [];
       auditLogsLoadedAt = Date.now();
+      auditLogsTotal = Number(result?.total || 0);
       applyLogsFilter();
+      updateLogsPagination();
     })
     .withFailureHandler(err => {
       hideLoading();
       handleError(err);
       tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Falha ao carregar logs</td></tr>';
     })
-    .getAuditLogEntries(200);
+    .getAuditLogEntriesPage({ page: auditLogsPage, pageSize: auditLogsPageSize });
 }
+
 
 function applyLogsFilter() {
   const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
@@ -131,45 +187,51 @@ function applyLogsFilter() {
   renderAuditLogs(filtered);
 }
 
+function updateLogsPagination() {
+  const info = document.getElementById('logs-page-info');
+  const prev = document.getElementById('logs-prev');
+  const next = document.getElementById('logs-next');
+  const sizeSelect = document.getElementById('logs-page-size');
+
+  const totalPages = Math.max(1, Math.ceil((Number(auditLogsTotal) || 0) / (Number(auditLogsPageSize) || 1)));
+  if (info) info.textContent = `Pagina ${auditLogsPage} de ${totalPages}`;
+  if (prev) prev.disabled = auditLogsPage <= 1;
+  if (next) next.disabled = auditLogsPage >= totalPages;
+  if (sizeSelect && String(sizeSelect.value) !== String(auditLogsPageSize)) {
+    sizeSelect.value = String(auditLogsPageSize);
+  }
+}
+
+function changeLogsPage(delta) {
+  const nextPage = Math.max(1, auditLogsPage + Number(delta || 0));
+  if (nextPage === auditLogsPage) return;
+  auditLogsPage = nextPage;
+  loadLogsPage(true);
+}
+
+function setLogsPageSize(value) {
+  const nextSize = Math.max(20, Math.min(200, Number(value) || 100));
+  if (nextSize === auditLogsPageSize) return;
+  auditLogsPageSize = nextSize;
+  auditLogsPage = 1;
+  loadLogsPage(true);
+}
+
+
 function searchLogsServer() {
   const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';
   const tbody = document.getElementById('table-logs');
   if (!tbody) return;
   if (!isAdmin) {
-    showToast('Sem permissão', 'warning');
+    showToast('Sem permiss??o', 'warning');
     return;
   }
 
-  const queryEl = document.getElementById('logs-query');
-  const emailEl = document.getElementById('logs-email');
-  const actionEl = document.getElementById('logs-action');
-  const refEl = document.getElementById('logs-ref');
-  const statusEl = document.getElementById('logs-status');
-
-  const query = queryEl && queryEl.value ? String(queryEl.value).trim() : '';
-  const email = emailEl && emailEl.value ? String(emailEl.value).trim() : '';
-  const action = actionEl && actionEl.value ? String(actionEl.value).trim() : '';
-  const correlationId = refEl && refEl.value ? String(refEl.value).trim() : '';
-  const status = statusEl && statusEl.value ? String(statusEl.value).trim().toLowerCase() : '';
-  const success = status === 'ok' ? true : status === 'erro' ? false : null;
-
-  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Buscando...</td></tr>';
-  showLoading('Buscando logs...');
-
-  gasRun
-    .withSuccessHandler(entries => {
-      hideLoading();
-      auditLogsCache = Array.isArray(entries) ? entries : [];
-      auditLogsLoadedAt = Date.now();
-      applyLogsFilter();
-    })
-    .withFailureHandler(err => {
-      hideLoading();
-      handleError(err);
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Falha ao buscar logs</td></tr>';
-    })
-    .getAuditLogEntriesFiltered({ limit: 200, query, email, action, correlationId, success });
+  auditLogsMode = 'filtered';
+  auditLogsPage = 1;
+  loadLogsPage(true);
 }
+
 
 function exportLogsCsv() {
   const isAdmin = window.currentUserInfo && window.currentUserInfo.perfil === 'ADMIN';

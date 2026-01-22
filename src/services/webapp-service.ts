@@ -770,6 +770,60 @@ export function getAuditLogEntries(limit: number = 200): Array<{
     .reverse();
 }
 
+export function getAuditLogEntriesPage(params?: {
+  page?: number;
+  pageSize?: number;
+}): {
+  items: Array<{
+    timestamp: string;
+    email: string;
+    action: string;
+    success: boolean;
+    message: string;
+    payload: string;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+} {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return { items: [], total: 0, page: 1, pageSize: 100 };
+  }
+
+  const pageSize = Math.max(20, Math.min(200, Number(params?.pageSize) || 100));
+  const page = Math.max(1, Number(params?.page) || 1);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_AUDIT_LOG);
+  if (!sheet) return { items: [], total: 0, page, pageSize };
+
+  const lastRow = sheet.getLastRow();
+  const total = Math.max(0, lastRow - 1);
+  if (total === 0) return { items: [], total, page, pageSize };
+
+  const offset = (page - 1) * pageSize;
+  const endRow = lastRow - offset;
+  if (endRow < 2) return { items: [], total, page, pageSize };
+
+  const startRow = Math.max(2, endRow - pageSize + 1);
+  const numRows = endRow - startRow + 1;
+  const values = sheet.getRange(startRow, 1, numRows, 6).getDisplayValues();
+
+  const items = values
+    .map((r) => ({
+      timestamp: String(r[0] || ''),
+      email: String(r[1] || ''),
+      action: String(r[2] || ''),
+      success: String(r[3] || '').toUpperCase() === 'TRUE',
+      message: String(r[4] || ''),
+      payload: String(r[5] || ''),
+    }))
+    .reverse();
+
+  return { items, total, page, pageSize };
+}
+
 export function getAuditLogEntriesFiltered(filters: {
   limit?: number;
   action?: string;
@@ -844,6 +898,93 @@ export function getAuditLogEntriesFiltered(filters: {
   }
 
   return results;
+}
+
+export function getAuditLogEntriesFilteredPage(filters: {
+  page?: number;
+  pageSize?: number;
+  action?: string;
+  email?: string;
+  success?: boolean | null;
+  correlationId?: string;
+  query?: string;
+}): {
+  items: Array<{
+    timestamp: string;
+    email: string;
+    action: string;
+    success: boolean;
+    message: string;
+    payload: string;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+} {
+  const requester = getUsuarioByEmail(getRequestingUserEmail());
+  if (!requester || requester.status !== 'ATIVO' || requester.perfil !== 'ADMIN') {
+    return { items: [], total: 0, page: 1, pageSize: 100 };
+  }
+
+  const pageSize = Math.max(20, Math.min(200, Number(filters?.pageSize) || 100));
+  const page = Math.max(1, Number(filters?.page) || 1);
+  const offset = (page - 1) * pageSize;
+
+  const actionFilter = String(filters?.action || '').trim().toLowerCase();
+  const emailFilter = String(filters?.email || '').trim().toLowerCase();
+  const correlationId = String(filters?.correlationId || '').trim();
+  const query = String(filters?.query || '').trim().toLowerCase();
+  const successFilter =
+    typeof filters?.success === 'boolean' ? filters.success : null;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_AUDIT_LOG);
+  if (!sheet) return { items: [], total: 0, page, pageSize };
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { items: [], total: 0, page, pageSize };
+
+  const scanWindow = Math.min(5000, Math.max(1000, pageSize * 20));
+  const startRow = Math.max(2, lastRow - scanWindow + 1);
+  const numRows = lastRow - startRow + 1;
+  const values = sheet.getRange(startRow, 1, numRows, 6).getDisplayValues();
+
+  const items: Array<{
+    timestamp: string;
+    email: string;
+    action: string;
+    success: boolean;
+    message: string;
+    payload: string;
+  }> = [];
+
+  let total = 0;
+  for (let i = values.length - 1; i >= 0; i--) {
+    const r = values[i] || [];
+    const timestamp = String(r[0] || '');
+    const email = String(r[1] || '');
+    const action = String(r[2] || '');
+    const success = String(r[3] || '').toUpperCase() === 'TRUE';
+    const message = String(r[4] || '');
+    const payload = String(r[5] || '');
+
+    if (successFilter !== null && success !== successFilter) continue;
+    if (actionFilter && action.toLowerCase().indexOf(actionFilter) === -1) continue;
+    if (emailFilter && email.toLowerCase().indexOf(emailFilter) === -1) continue;
+    if (correlationId && payload.indexOf(correlationId) === -1) continue;
+
+    if (query) {
+      const hay = `${timestamp} ${email} ${action} ${message} ${payload}`.toLowerCase();
+      if (hay.indexOf(query) === -1) continue;
+    }
+
+    if (total >= offset && items.length < pageSize) {
+      items.push({ timestamp, email, action, success, message, payload });
+    }
+    total += 1;
+  }
+
+  return { items, total, page, pageSize };
 }
 
 export function getAdminDiagnostics(): {
@@ -4013,13 +4154,27 @@ export function importarSieg(
 
 const COMPARATIVO_CACHE_TTL_SECONDS = 60;
 
-export function getComparativoData(tipo: string): {
+type ComparativoParams = {
+  tipo?: string;
+  year?: number;
+  month?: number;
+  page?: number;
+  pageSize?: number;
+};
+
+export function getComparativoData(
+  tipoOrParams: string | ComparativoParams,
+  maybeParams?: ComparativoParams
+): {
   success: boolean;
   message?: string;
   tipo?: string;
   stats?: { total: number; auto: number; pendente: number; semMatch: number; duplicado: number };
   counts?: { fcTotal: number; itauTotal: number; siegTotal: number };
   items?: any[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
 } {
   const denied = requireAnyPermission<{ success: boolean; message: string }>(
     ['visualizarRelatorios', 'importarArquivos'],
@@ -4027,19 +4182,37 @@ export function getComparativoData(tipo: string): {
   );
   if (denied) return denied;
 
-  const normalizedTipo = String(tipo || '').toUpperCase();
+  const params =
+    typeof tipoOrParams === 'object' && tipoOrParams !== null ? tipoOrParams : (maybeParams || {});
+  const rawTipo = typeof tipoOrParams === 'string' ? tipoOrParams : params?.tipo;
+  const normalizedTipo = String(rawTipo || '').toUpperCase();
   if (!['PAGAR', 'RECEBER'].includes(normalizedTipo)) {
     return { success: false, message: 'Tipo invalido para comparativo' };
   }
 
   try {
-    const cacheKey = `comparativo:${normalizedTipo}`;
+    const now = new Date();
+    const year = Number(params?.year) || now.getFullYear();
+    const month = Number(params?.month) || now.getMonth() + 1;
+    const pageSize = Math.max(20, Math.min(200, Number(params?.pageSize) || 100));
+    const page = Math.max(1, Number(params?.page) || 1);
+    const monthKey = String(month).padStart(2, '0');
+    const cacheKey = `comparativo:${normalizedTipo}:${year}-${monthKey}:p${page}:s${pageSize}`;
     const cached = cacheGet<any>(CacheNamespace.CONCILIACAO, cacheKey, CacheScope.SCRIPT);
     if (cached) return cached;
 
-    const fcRows = getImportFcRows(normalizedTipo);
-    const itauRows = getImportItauRows();
-    const siegRows = normalizedTipo === 'PAGAR' ? getImportSiegRows() : [];
+    const isInMonth = (dateValue: any) => {
+      const norm = normalizeDateInput(dateValue);
+      if (!norm) return false;
+      const parts = String(norm).split('-');
+      const y = Number(parts[0] || 0);
+      const m = Number(parts[1] || 0);
+      return y === year && m === month;
+    };
+
+    const fcRows = getImportFcRows(normalizedTipo).filter((r) => isInMonth(r.dataEmissao));
+    const itauRows = getImportItauRows().filter((r) => isInMonth(r.data));
+    const siegRows = normalizedTipo === 'PAGAR' ? getImportSiegRows().filter((r) => isInMonth(r.dataEmissao)) : [];
 
     const mapByKey = (rows: any[], getKey: (r: any) => string) => {
       const map = new Map<string, any[]>();
@@ -4056,7 +4229,16 @@ export function getComparativoData(tipo: string): {
     const itauMap = mapByKey(itauRows, (r) => buildMatchKey(r.data, r.valor));
     const siegMap = mapByKey(siegRows, (r) => buildMatchKey(r.dataEmissao, r.valor));
 
-    const items = fcRows.map((fc) => {
+    const items: any[] = [];
+    let auto = 0;
+    let pendente = 0;
+    let semMatch = 0;
+    let duplicado = 0;
+    const total = fcRows.length;
+    const offset = (page - 1) * pageSize;
+    let index = 0;
+
+    fcRows.forEach((fc) => {
       const key = buildMatchKey(fc.dataEmissao, fc.valor);
       const bancoCandidates = key ? (itauMap.get(key) || []) : [];
       const nfeCandidates = normalizedTipo === 'PAGAR' && key ? (siegMap.get(key) || []) : [];
@@ -4075,31 +4257,40 @@ export function getComparativoData(tipo: string): {
         status = banco ? 'AUTO' : 'PENDENTE';
       }
 
-      return {
-        key,
-        status,
-        fc,
-        nfe,
-        banco,
-        nfeMatches: nfeCandidates.length,
-        bancoMatches: bancoCandidates.length,
-        nfeCandidates: nfeCandidates.length > 1 ? nfeCandidates.slice(0, 5) : [],
-        bancoCandidates: bancoCandidates.length > 1 ? bancoCandidates.slice(0, 5) : [],
-        diffs: {
-          nfeData: nfe ? normalizeDateInput(nfe.dataEmissao) !== normalizeDateInput(fc.dataEmissao) : false,
-          nfeValor: nfe ? Math.abs(parseMoneyInput(nfe.valor) - parseMoneyInput(fc.valor)) > 0.01 : false,
-          bancoData: banco ? normalizeDateInput(banco.data) !== normalizeDateInput(fc.dataEmissao) : false,
-          bancoValor: banco ? Math.abs(parseMoneyInput(banco.valor) - parseMoneyInput(fc.valor)) > 0.01 : false,
-        },
-      };
+      if (status === 'AUTO') auto += 1;
+      else if (status === 'SEM_MATCH') semMatch += 1;
+      else if (status === 'DUPLICADO') duplicado += 1;
+      else pendente += 1;
+
+      if (index >= offset && items.length < pageSize) {
+        items.push({
+          key,
+          status,
+          fc,
+          nfe,
+          banco,
+          nfeMatches: nfeCandidates.length,
+          bancoMatches: bancoCandidates.length,
+          nfeCandidates: nfeCandidates.length > 1 ? nfeCandidates.slice(0, 5) : [],
+          bancoCandidates: bancoCandidates.length > 1 ? bancoCandidates.slice(0, 5) : [],
+          diffs: {
+            nfeData: nfe ? normalizeDateInput(nfe.dataEmissao) !== normalizeDateInput(fc.dataEmissao) : false,
+            nfeValor: nfe ? Math.abs(parseMoneyInput(nfe.valor) - parseMoneyInput(fc.valor)) > 0.01 : false,
+            bancoData: banco ? normalizeDateInput(banco.data) !== normalizeDateInput(fc.dataEmissao) : false,
+            bancoValor: banco ? Math.abs(parseMoneyInput(banco.valor) - parseMoneyInput(fc.valor)) > 0.01 : false,
+          },
+        });
+      }
+
+      index += 1;
     });
 
     const stats = {
-      total: items.length,
-      auto: items.filter((i) => i.status === 'AUTO').length,
-      pendente: items.filter((i) => i.status === 'PENDENTE').length,
-      semMatch: items.filter((i) => i.status === 'SEM_MATCH').length,
-      duplicado: items.filter((i) => i.status === 'DUPLICADO').length,
+      total,
+      auto,
+      pendente,
+      semMatch,
+      duplicado,
     };
 
     const counts = {
@@ -4108,7 +4299,16 @@ export function getComparativoData(tipo: string): {
       siegTotal: siegRows.length,
     };
 
-    const result = { success: true, tipo: normalizedTipo, stats, counts, items };
+    const result = {
+      success: true,
+      tipo: normalizedTipo,
+      stats,
+      counts,
+      items,
+      total,
+      page,
+      pageSize,
+    };
     cacheSet(CacheNamespace.CONCILIACAO, cacheKey, result, COMPARATIVO_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
     return result;
   } catch (error: any) {
