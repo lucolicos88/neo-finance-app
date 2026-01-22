@@ -529,6 +529,8 @@ function populateFilters() {
 // ============================================================================
 // DASHBOARD
 // ============================================================================
+let dashboardViewMode = 'executiva';
+let dashboardLastData = null;
 
 function loadDashboardData() {
   window.gasRun
@@ -537,6 +539,7 @@ function loadDashboardData() {
         handleError({ message: 'getDashboardData retornou vazio' });
         return;
       }
+      dashboardLastData = data;
       // Update stats
       updateElement('stat-pagar-vencidas', formatCurrency(data.pagarVencidas.valor));
       updateElement('stat-pagar-vencidas-qtd', `${data.pagarVencidas.quantidade} contas`);
@@ -562,6 +565,32 @@ function loadDashboardData() {
     .getDashboardData();
 }
 
+function setDashboardViewMode(mode) {
+  const next = String(mode || '').toLowerCase();
+  if (!['executiva', 'operacional', 'tecnica'].includes(next)) return;
+  dashboardViewMode = next;
+  updateDashboardViewButtons();
+  if (dashboardLastData) {
+    renderDashboardStory(dashboardLastData);
+    renderDashboardActions(dashboardLastData);
+    renderDashboardInsights(dashboardLastData);
+  }
+}
+
+function updateDashboardViewButtons() {
+  const modes = ['executiva', 'operacional', 'tecnica'];
+  modes.forEach(m => {
+    const btn = document.getElementById(`dash-mode-${m}`);
+    if (!btn) return;
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-outline');
+    if (m === dashboardViewMode) {
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-outline');
+    }
+  });
+}
+
 function renderDashboardStory(data) {
   const container = document.getElementById('dashboard-story');
   if (!container) return;
@@ -575,10 +604,19 @@ function renderDashboardStory(data) {
   const balanceLabel = fluxoMes >= 0 ? 'positivo' : 'negativo';
   const riskLabel = vencidas > 0 ? 'atencao' : 'estavel';
 
+  let intro = '';
+  if (dashboardViewMode === 'executiva') {
+    intro = `Resumo: fluxo do mes ${balanceLabel}, conciliacao em ${concTaxa}% e risco ${riskLabel}.`;
+  } else if (dashboardViewMode === 'operacional') {
+    intro = `Foco do dia: manter pagamentos em dia, acelerar recebimentos e concluir conciliacao.`;
+  } else {
+    intro = `Indicadores baseados em vencimento, status e conciliacao dos dados do mes atual.`;
+  }
+
   container.innerHTML = `
     <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items:center;">
       <div style="flex:1; min-width: 240px;">
-        <strong>Resumo:</strong> fluxo do mes ${balanceLabel}, conciliacao em ${concTaxa}% e risco ${riskLabel}.
+        <strong>Resumo:</strong> ${intro}
       </div>
       <div class="stat-card" style="min-width: 220px;">
         <div class="stat-label">Receita do mes</div>
@@ -724,11 +762,23 @@ function renderDashboardActions(data) {
   const receberHoje = Number(data?.receberHoje?.quantidade || 0);
   const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
 
-  if (vencidas > 0) actions.push('Regularizar contas vencidas hoje.');
-  if (proximas > 0) actions.push('Programar pagamentos dos proximos 7 dias.');
-  if (receberHoje > 0) actions.push('Cobrar recebimentos previstos para hoje.');
-  if (receberAtraso > 0) actions.push('Atacar recebimentos em atraso para reduzir inadimplencia.');
-  if (concPend > 0) actions.push('Executar conciliacao bancaria pendente.');
+  if (dashboardViewMode === 'executiva') {
+    if (vencidas > 0) actions.push('Priorizar regularizacao de vencidos para reduzir risco.');
+    if (proximas > 0) actions.push('Confirmar capacidade de caixa para os proximos 7 dias.');
+    if (receberAtraso > 0) actions.push('Reforcar cobranca de atrasados para recuperar caixa.');
+    if (concPend > 0) actions.push('Fechar conciliacao para visao real de caixa.');
+  } else if (dashboardViewMode === 'operacional') {
+    if (vencidas > 0) actions.push('Pagar vencidos hoje e registrar comprovantes.');
+    if (proximas > 0) actions.push('Agendar pagamentos dos proximos 7 dias.');
+    if (receberHoje > 0) actions.push('Acionar clientes com recebimento previsto hoje.');
+    if (receberAtraso > 0) actions.push('Executar rotina de cobranca para inadimplentes.');
+    if (concPend > 0) actions.push('Conciliar extratos pendentes.');
+  } else {
+    if (vencidas > 0) actions.push('Checar inconsistencias de vencimento e status pendente.');
+    if (proximas > 0) actions.push('Validar datas de vencimento e classificacao de despesas.');
+    if (receberAtraso > 0) actions.push('Auditar regras de atraso e status de recebimento.');
+    if (concPend > 0) actions.push('Revisar match de conciliacao e integridade dos dados.');
+  }
 
   if (actions.length === 0) {
     container.innerHTML = '<p class="text-muted">Nenhuma acao critica hoje. Mantenha o acompanhamento diario.</p>';
@@ -753,10 +803,18 @@ function renderDashboardInsights(data) {
   const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
 
   insights.push('Ative Insights com IA para detectar desvios e oportunidades automaticamente.');
-  if (concPend > 0) insights.push('Conciliacao pendente pode atrasar a visao real de caixa.');
-  if (proximas > 0) insights.push('Planeje o caixa para vencimentos proximos e evite juros.');
-  if (receberHoje > 0) insights.push('Antecipe recebimentos para reforcar o saldo diario.');
-  if (receberAtraso > 0) insights.push('Sugestao: crie rotina de cobranca para inadimplentes.');
+  if (dashboardViewMode === 'executiva') {
+    if (concPend > 0) insights.push('Conciliacao pendente reduz confiabilidade do caixa.');
+    if (proximas > 0) insights.push('Vencimentos proximos exigem reserva de liquidez.');
+    if (receberAtraso > 0) insights.push('Atrasos podem pressionar capital de giro.');
+  } else if (dashboardViewMode === 'operacional') {
+    if (concPend > 0) insights.push('Concilie extratos para liberar fechamento diario.');
+    if (receberHoje > 0) insights.push('Priorize cobranças de hoje para evitar atraso.');
+  } else {
+    insights.push('Com IA, seria possivel detectar anomalias e outliers automaticamente.');
+    if (concPend > 0) insights.push('Sugestao tecnica: revisar regras de matching de conciliacao.');
+    if (receberAtraso > 0) insights.push('Sugestao tecnica: criar flags de risco por cliente.');
+  }
 
   container.innerHTML = `
     <ul style="margin: 0; padding-left: 1.1rem;">

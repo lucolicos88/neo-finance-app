@@ -36,6 +36,11 @@
         <button class="btn btn-outline" onclick="refreshDashboard()">&#128257; Atualizar</button>
       </div>
     </div>
+    <div style="display:flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 1rem 0.75rem 1rem;">
+      <button class="btn btn-outline" id="dash-mode-executiva" onclick="setDashboardViewMode('executiva')">Vis&atilde;o Executiva</button>
+      <button class="btn btn-outline" id="dash-mode-operacional" onclick="setDashboardViewMode('operacional')">Vis&atilde;o Operacional</button>
+      <button class="btn btn-outline" id="dash-mode-tecnica" onclick="setDashboardViewMode('tecnica')">Vis&atilde;o T&eacute;cnica</button>
+    </div>
     <div id="dashboard-story">
       <p class="text-muted">Carregando...</p>
     </div>
