@@ -1823,12 +1823,22 @@ export function toggleFilial(index: number, ativo: boolean): { success: boolean;
 // DASHBOARD
 // ============================================================================
 
-export function getDashboardData() {
+export function getDashboardData(mes?: number, ano?: number, filial?: string, canal?: string) {
   enforcePermission('visualizarRelatorios', 'carregar dashboard');
-  const lancamentos = getLancamentosFromSheet();
   const hoje = new Date();
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+  const targetMes = Number(mes) || hoje.getMonth() + 1;
+  const targetAno = Number(ano) || hoje.getFullYear();
+  const inicioMes = new Date(targetAno, targetMes - 1, 1);
+  const fimMes = new Date(targetAno, targetMes, 1);
+  const isCurrent = targetMes === hoje.getMonth() + 1 && targetAno === hoje.getFullYear();
+  const referencia = isCurrent ? hoje : new Date(targetAno, targetMes, 0);
+
+  const lancamentosBase = getLancamentosFromSheet();
+  const lancamentos = lancamentosBase.filter(l => {
+    const matchFilial = !filial || l.filial === filial;
+    const matchCanal = !canal || l.canal === canal;
+    return matchFilial && matchCanal;
+  });
 
   const toDate = (value: any): Date | null => {
     const norm = normalizeDateInput(value);
@@ -1848,47 +1858,47 @@ export function getDashboardData() {
     l.tipo === 'DESPESA' &&
     (
       String(l.status || '').toUpperCase() === 'VENCIDA' ||
-      (String(l.status || '').toUpperCase() === 'PENDENTE' && new Date(l.dataVencimento) < hoje)
+      (String(l.status || '').toUpperCase() === 'PENDENTE' && new Date(l.dataVencimento) < referencia)
     )
   );
 
   // Contas a pagar proximos 7 dias
-  const proximos7Dias = new Date();
+  const proximos7Dias = new Date(referencia.getTime());
   proximos7Dias.setDate(proximos7Dias.getDate() + 7);
   const pagarProximas = lancamentos.filter(l =>
     l.tipo === 'DESPESA' &&
     l.status === 'PENDENTE' &&
     new Date(l.dataVencimento) <= proximos7Dias &&
-    new Date(l.dataVencimento) >= hoje
+    new Date(l.dataVencimento) >= referencia
   );
 
-  const proximos30Dias = new Date();
+  const proximos30Dias = new Date(referencia.getTime());
   proximos30Dias.setDate(proximos30Dias.getDate() + 30);
   const pagarProximas30 = lancamentos.filter(l =>
     l.tipo === 'DESPESA' &&
     l.status === 'PENDENTE' &&
     new Date(l.dataVencimento) <= proximos30Dias &&
-    new Date(l.dataVencimento) >= hoje
+    new Date(l.dataVencimento) >= referencia
   );
 
   // Contas a receber hoje
   const receberHoje = lancamentos.filter(l =>
     l.tipo === 'RECEITA' &&
     l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento).toDateString() === hoje.toDateString()
+    new Date(l.dataVencimento).toDateString() === referencia.toDateString()
   );
 
   const receberProximas = lancamentos.filter(l =>
     l.tipo === 'RECEITA' &&
     l.status === 'PENDENTE' &&
     new Date(l.dataVencimento) <= proximos7Dias &&
-    new Date(l.dataVencimento) >= hoje
+    new Date(l.dataVencimento) >= referencia
   );
 
   const receberAtrasadas = lancamentos.filter(l =>
     l.tipo === 'RECEITA' &&
     l.status === 'PENDENTE' &&
-    new Date(l.dataVencimento) < hoje
+    new Date(l.dataVencimento) < referencia
   );
 
   const receitaMes = lancamentos.filter(l =>
@@ -1899,12 +1909,13 @@ export function getDashboardData() {
   );
 
   // Extratos pendentes
-  const kpisMes = getKPIsMensal(hoje.getMonth() + 1, hoje.getFullYear(), undefined);
+  const kpisMes = getKPIsMensal(targetMes, targetAno, filial, canal);
 
   const extratos = getExtratosFromSheet();
   const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
   const extratosConciliados = extratos.filter(e => (e.statusConciliacao || '').toUpperCase() === 'CONCILIADO');
   const conciliacaoTaxa = extratos.length > 0 ? Math.round((extratosConciliados.length / extratos.length) * 100) : 0;
+  const referenciaLabel = Utilities.formatDate(referencia, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   // Ultimos lancamentos (mantido para compatibilidade)
   const recentTransactions = lancamentos
@@ -1920,6 +1931,10 @@ export function getDashboardData() {
 
   // Alertas
   const alerts: Array<{ type: string; title: string; message: string }> = [];
+  const fluxoMesValor = sumValues(receitaMes) - sumValues(despesaMes);
+  const liquidez = Number(kpisMes?.liquidez?.liquidezCorrente?.valor || 0);
+  const margem = Number(kpisMes?.rentabilidade?.margemLiquida?.valor || 0);
+  const inad = Number(kpisMes?.crescimento?.inadimplencia?.valor || 0);
 
   if (pagarVencidas.length > 0) {
     alerts.push({
@@ -1937,15 +1952,63 @@ export function getDashboardData() {
     });
   }
 
-  if (extratosPendentes.length > 5) {
+  if (extratosPendentes.length > 5 || conciliacaoTaxa < 80) {
+    alerts.push({
+      type: 'warning',
+      title: 'Conciliacao Pendente',
+      message: `Conciliacao em ${conciliacaoTaxa}% com ${extratosPendentes.length} extratos pendentes`,
+    });
+  }
+
+  if (fluxoMesValor < 0) {
+    alerts.push({
+      type: 'warning',
+      title: 'Fluxo Mensal Negativo',
+      message: `Fluxo do periodo esta negativo em ${formatCurrency(Math.abs(fluxoMesValor))}`,
+    });
+  }
+
+  if (liquidez > 0 && liquidez < 1) {
+    alerts.push({
+      type: 'warning',
+      title: 'Liquidez Abaixo do Ideal',
+      message: `Liquidez corrente em ${liquidez.toFixed(2)} indica risco de curto prazo`,
+    });
+  }
+
+  if (margem < 0) {
     alerts.push({
       type: 'info',
-      title: 'Conciliacao Pendente',
-      message: `${extratosPendentes.length} extratos bancarios aguardando conciliacao`,
+      title: 'Margem Negativa',
+      message: 'Margem liquida negativa no periodo analisado',
+    });
+  }
+
+  if (inad > 5) {
+    alerts.push({
+      type: 'info',
+      title: 'Inadimplencia Elevada',
+      message: `Inadimplencia em ${inad.toFixed(1)}% no periodo`,
+    });
+  }
+
+  if (receberAtrasadas.length > 0) {
+    alerts.push({
+      type: 'info',
+      title: 'Recebimentos em Atraso',
+      message: `${receberAtrasadas.length} recebimentos pendentes em atraso`,
     });
   }
 
   return {
+    periodo: {
+      mes: targetMes,
+      ano: targetAno,
+      mesNome: getMesNome(targetMes),
+      filial: filial || 'Consolidado',
+      canal: canal || 'Todos',
+      referencia: referenciaLabel,
+    },
     pagarVencidas: {
       quantidade: pagarVencidas.length,
       valor: sumValues(pagarVencidas),
@@ -1981,7 +2044,7 @@ export function getDashboardData() {
       ticketMedio: despesaMes.length ? sumValues(despesaMes) / despesaMes.length : 0,
     },
     fluxoMes: {
-      valor: sumValues(receitaMes) - sumValues(despesaMes),
+      valor: fluxoMesValor,
     },
     conciliacaoPendentes: {
       quantidade: extratosPendentes.length,
@@ -4623,9 +4686,9 @@ function getPlanoContasMap(): Record<string, any> {
   }
 }
 
-export function getDREMensal(mes: number, ano: number, filial?: string): any {
+export function getDREMensal(mes: number, ano: number, filial?: string, canal?: string): any {
   enforcePermission('visualizarRelatorios', 'carregar DRE');
-  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}`;
+  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}:${canal || 'all'}`;
   return cacheGetOrLoad(CacheNamespace.DRE, cacheKey, () => {
   try {
     const lancamentos = getLancamentosFromSheet();
@@ -4639,8 +4702,9 @@ export function getDREMensal(mes: number, ano: number, filial?: string): any {
 
       const matchPeriodo = mesLanc === mes && anoLanc === ano;
       const matchFilial = !filial || l.filial === filial;
+      const matchCanal = !canal || l.canal === canal;
 
-      return matchPeriodo && matchFilial;
+      return matchPeriodo && matchFilial && matchCanal;
     });
 
     // Separar receitas e despesas
@@ -4710,7 +4774,8 @@ export function getDREMensal(mes: number, ano: number, filial?: string): any {
         mes,
         ano,
         mesNome: getMesNome(mes),
-        filial: filial || 'Consolidado'
+        filial: filial || 'Consolidado',
+        canal: canal || 'Todos'
       },
       valores: {
         receitaBruta,
@@ -4841,9 +4906,9 @@ function calcularEvolucao(valores: number[]): any {
 // FLUXO DE CAIXA (DFC)
 // ============================================================================
 
-export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, saldoInicial?: number): any {
+export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, canal?: string, saldoInicial?: number): any {
   enforcePermission('visualizarRelatorios', 'carregar fluxo de caixa');
-  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}:${Number(saldoInicial) || 0}`;
+  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}:${canal || 'all'}:${Number(saldoInicial) || 0}`;
   return cacheGetOrLoad(CacheNamespace.DFC, cacheKey, () => {
   try {
     const lancamentos = getLancamentosFromSheet();
@@ -4856,8 +4921,9 @@ export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, s
 
       const matchPeriodo = mesLanc === mes && anoLanc === ano;
       const matchFilial = !filial || l.filial === filial;
+      const matchCanal = !canal || l.canal === canal;
 
-      return matchPeriodo && matchFilial;
+      return matchPeriodo && matchFilial && matchCanal;
     });
 
     // Separar por tipo e status
@@ -4891,7 +4957,8 @@ export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, s
         mes,
         ano,
         mesNome: getMesNome(mes),
-        filial: filial || 'Consolidado'
+        filial: filial || 'Consolidado',
+        canal: canal || 'Todos'
       },
       valores: {
         saldoInicial: saldoInicialNum,
@@ -4969,9 +5036,9 @@ function agruparPorCategoria(lancamentos: any[]): any[] {
 // KPIs FINANCEIROS
 // ============================================================================
 
-export function getKPIsMensal(mes: number, ano: number, filial?: string): any {
+export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?: string): any {
   enforcePermission('visualizarRelatorios', 'carregar KPIs');
-  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}`;
+  const cacheKey = `mensal:${ano}-${mes}:${filial || 'all'}:${canal || 'all'}`;
   return cacheGetOrLoad(CacheNamespace.KPI, cacheKey, () => {
   try {
     const lancamentos = getLancamentosFromSheet();
@@ -4983,7 +5050,8 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string): any {
       const anoLanc = data.getFullYear();
       const matchPeriodo = mesLanc === mes && anoLanc === ano;
       const matchFilial = !filial || l.filial === filial;
-      return matchPeriodo && matchFilial;
+      const matchCanal = !canal || l.canal === canal;
+      return matchPeriodo && matchFilial && matchCanal;
     });
 
     // Filtrar lançamentos do mês anterior
@@ -4997,13 +5065,14 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string): any {
       const anoLanc = data.getFullYear();
       const matchPeriodo = mesLanc === mesAnterior && anoLanc === anoAnterior;
       const matchFilial = !filial || l.filial === filial;
-      return matchPeriodo && matchFilial;
+      const matchCanal = !canal || l.canal === canal;
+      return matchPeriodo && matchFilial && matchCanal;
     });
 
     // Calcular DRE do mês atual e anterior
-    const dreAtual = getDREMensal(mes, ano, filial);
-    const dreAnterior = getDREMensal(mesAnterior, anoAnterior, filial);
-    const fcAtual = getFluxoCaixaMensal(mes, ano, filial);
+    const dreAtual = getDREMensal(mes, ano, filial, canal);
+    const dreAnterior = getDREMensal(mesAnterior, anoAnterior, filial, canal);
+    const fcAtual = getFluxoCaixaMensal(mes, ano, filial, canal);
 
     // Separar receitas e despesas
     const receitas = lancamentosMes.filter(l => l.tipo === 'RECEITA');
@@ -5092,7 +5161,8 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string): any {
         mes,
         ano,
         mesNome: getMesNome(mes),
-        filial: filial || 'Consolidado'
+        filial: filial || 'Consolidado',
+        canal: canal || 'Todos'
       },
       rentabilidade: {
         margemBruta: {

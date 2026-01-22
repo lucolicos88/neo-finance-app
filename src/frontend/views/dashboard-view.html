@@ -1,6 +1,61 @@
 <div class="view-container" id="dashboard-view">
   <h1 class="view-title">Dashboard Financeiro</h1>
 
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Periodo de Analise</h2>
+      <div class="card-actions">
+        <button class="btn btn-outline" onclick="resetDashboardFilters()">Limpar</button>
+        <button class="btn btn-primary" onclick="applyDashboardFilters()">Aplicar filtros</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Mes</label>
+          <select class="form-control" id="dashboard-mes">
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Mar&ccedil;o</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ano</label>
+          <select class="form-control" id="dashboard-ano">
+            <option value="2024">2024</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Filial</label>
+          <select class="form-control" id="dashboard-filial">
+            <option value="">Consolidado</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Canal</label>
+          <select class="form-control" id="dashboard-canal">
+            <option value="">Todos</option>
+          </select>
+        </div>
+      </div>
+      <p class="text-muted" id="dashboard-period-label" style="margin: 0;">Periodo atual: --</p>
+    </div>
+  </div>
+
   <!-- Stats Grid -->
   <div class="stats-grid">
     <div class="stat-card">

@@ -531,8 +531,106 @@ function populateFilters() {
 // ============================================================================
 let dashboardViewMode = 'executiva';
 let dashboardLastData = null;
+let dashboardFiltersInitialized = false;
+let dashboardFilterState = {
+  mes: null,
+  ano: null,
+  filial: '',
+  canal: '',
+};
 
-function loadDashboardData() {
+function initDashboardFilters(force) {
+  if (dashboardFiltersInitialized && !force) return;
+  dashboardFiltersInitialized = true;
+
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+
+  const selectMes = document.getElementById('dashboard-mes');
+  const selectAno = document.getElementById('dashboard-ano');
+  const selectFilial = document.getElementById('dashboard-filial');
+  const selectCanal = document.getElementById('dashboard-canal');
+
+  if (!selectMes || !selectAno) return;
+
+  if (selectMes) selectMes.value = String(mesAtual);
+  if (selectAno) selectAno.value = String(anoAtual);
+
+  if (selectFilial) {
+    const options = ['<option value=\"\">Consolidado</option>'];
+    (appData.filiais || []).forEach(filial => {
+      options.push(`<option value=\"${escapeHtml(filial.codigo)}\">${escapeHtml(filial.nome)}</option>`);
+    });
+    selectFilial.innerHTML = options.join('');
+  }
+
+  if (selectCanal) {
+    const options = ['<option value=\"\">Todos</option>'];
+    (appData.canais || []).forEach(canal => {
+      options.push(`<option value=\"${escapeHtml(canal.codigo)}\">${escapeHtml(canal.nome)}</option>`);
+    });
+    selectCanal.innerHTML = options.join('');
+  }
+}
+
+function getDashboardFilterParams() {
+  const mes = parseInt(document.getElementById('dashboard-mes')?.value || '0', 10);
+  const ano = parseInt(document.getElementById('dashboard-ano')?.value || '0', 10);
+  const filial = document.getElementById('dashboard-filial')?.value || '';
+  const canal = document.getElementById('dashboard-canal')?.value || '';
+
+  return {
+    mes: mes || new Date().getMonth() + 1,
+    ano: ano || new Date().getFullYear(),
+    filial,
+    canal,
+  };
+}
+
+function updateDashboardPeriodLabel(filters, data) {
+  const label = document.getElementById('dashboard-period-label');
+  if (!label) return;
+
+  const mesNome = data?.periodo?.mesNome || '';
+  const ano = data?.periodo?.ano || filters.ano;
+  const filial = data?.periodo?.filial || (filters.filial ? filters.filial : 'Consolidado');
+  const canal = data?.periodo?.canal || (filters.canal ? filters.canal : 'Todos');
+  const referencia = data?.periodo?.referencia || '';
+
+  const baseLabel = `${mesNome || 'Periodo'} ${ano}`.trim();
+  const refLabel = referencia ? ` | Ref: ${referencia}` : '';
+  label.textContent = `Periodo atual: ${baseLabel} | Filial: ${filial} | Canal: ${canal}${refLabel}`;
+}
+
+function applyDashboardFilters() {
+  loadDashboardData(true);
+}
+
+function resetDashboardFilters() {
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+
+  const selectMes = document.getElementById('dashboard-mes');
+  const selectAno = document.getElementById('dashboard-ano');
+  const selectFilial = document.getElementById('dashboard-filial');
+  const selectCanal = document.getElementById('dashboard-canal');
+
+  if (selectMes) selectMes.value = String(mesAtual);
+  if (selectAno) selectAno.value = String(anoAtual);
+  if (selectFilial) selectFilial.value = '';
+  if (selectCanal) selectCanal.value = '';
+
+  loadDashboardData(true);
+}
+
+function loadDashboardData(force) {
+  initDashboardFilters(true);
+  const filters = getDashboardFilterParams();
+  dashboardFilterState = { ...filters };
+  updateDashboardPeriodLabel(filters);
+
   window.gasRun
     .withSuccessHandler(function(data) {
       if (!data) {
@@ -540,6 +638,7 @@ function loadDashboardData() {
         return;
       }
       dashboardLastData = data;
+      updateDashboardPeriodLabel(filters, data);
       updateDashboardViewButtons();
       applyDashboardViewMode();
 
@@ -565,7 +664,7 @@ function loadDashboardData() {
       renderDashboardAlerts(data.alerts);
     })
     .withFailureHandler(handleError)
-    .getDashboardData();
+    .getDashboardData(filters.mes, filters.ano, filters.filial || undefined, filters.canal || undefined);
 }
 
 function setDashboardViewMode(mode) {
@@ -614,23 +713,45 @@ function renderDashboardStory(data) {
   const fluxoMes = Number(data?.fluxoMes?.valor || 0);
   const concTaxa = Number(data?.conciliacaoTaxa || 0);
   const vencidas = Number(data?.pagarVencidas?.quantidade || 0);
+  const kpis = data?.kpisMes;
+  const liquidez = Number(kpis?.liquidez?.liquidezCorrente?.valor || 0);
+  const margem = Number(kpis?.rentabilidade?.margemLiquida?.valor || 0);
+  const inad = Number(kpis?.crescimento?.inadimplencia?.valor || 0);
 
   const balanceLabel = fluxoMes >= 0 ? 'positivo' : 'negativo';
   const riskLabel = vencidas > 0 ? 'atencao' : 'estavel';
+  const liquidityLabel = liquidez >= 1 ? 'confortavel' : 'apertada';
+  const margemLabel = margem >= 5 ? 'saudavel' : margem >= 0 ? 'neutra' : 'negativa';
 
   let intro = '';
+  let headline = '';
+  const bullets = [];
   if (dashboardViewMode === 'executiva') {
-    intro = `Resumo do mes: fluxo ${balanceLabel}, conciliacao em ${concTaxa}% e risco ${riskLabel}.`;
+    headline = `Fluxo ${balanceLabel} e margem ${margemLabel}.`;
+    intro = `Conciliacao em ${concTaxa}% com liquidez ${liquidityLabel}.`;
+    if (fluxoMes < 0) bullets.push('Rever despesas e priorizar caixa nos proximos 7 dias.');
+    if (liquidez < 1) bullets.push('Reforcar capital de giro para reduzir risco.');
+    if (inad > 5) bullets.push('Ativar cobranca ativa para reduzir inadimplencia.');
   } else if (dashboardViewMode === 'operacional') {
-    intro = 'Foco do dia: pagamentos, recebimentos e conciliacao para manter o caixa em dia.';
+    headline = 'Foco do dia: execucao do caixa.';
+    intro = 'Priorize vencimentos, recebimentos e conciliacao para evitar atrasos.';
+    if (vencidas > 0) bullets.push(`Regularizar ${vencidas} contas vencidas.`);
+    if (data?.receberHoje?.quantidade > 0) bullets.push('Acionar recebimentos previstos para hoje.');
+    if (data?.conciliacaoPendentes?.quantidade > 0) bullets.push('Conciliar extratos pendentes.');
   } else {
-    intro = 'Indicadores do dia baseados em vencimentos, status e conciliacao do periodo.';
+    headline = 'Leituras tecnicas do periodo.';
+    intro = 'KPIs alinhados a DRE/DFC e regras de vencimento/conciliacao.';
+    if (concTaxa < 80) bullets.push('Revisar regras de matching e fontes de extrato.');
+    if (inad > 5) bullets.push('Configurar alertas por cliente em atraso.');
   }
 
   container.innerHTML = `
     <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items:center;">
       <div style="flex:1; min-width: 240px;">
-        <strong>Resumo:</strong> ${intro}
+        <div class="text-muted" style="margin-bottom: 0.25rem;">Resumo do periodo</div>
+        <div style="font-weight: 700; font-size: 1.05rem;">${headline}</div>
+        <div style="margin-top: 0.35rem;">${intro}</div>
+        ${bullets.length ? `<ul style="margin: 0.6rem 0 0 1rem;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
       </div>
       <div class="stat-card" style="min-width: 220px;">
         <div class="stat-label">Receita do mes</div>
@@ -657,13 +778,23 @@ function renderDashboardHealth(data) {
   const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
   const receberHojeValor = Number(data?.receberHoje?.valor || 0);
   const pagarProxValor = Number(data?.pagarProximas?.valor || 0);
+  const inad = Number(data?.kpisMes?.crescimento?.inadimplencia?.valor || 0);
+  const liquidez = Number(data?.kpisMes?.liquidez?.liquidezCorrente?.valor || 0);
 
   let status = 'Estavel';
   let statusClass = 'success';
-  if (vencidas > 0) {
+  let score = 100;
+  score -= Math.min(vencidas * 3, 25);
+  score -= Math.min(concPend * 2, 20);
+  score -= Math.min(proximas * 1, 15);
+  score -= inad >= 10 ? 15 : inad >= 5 ? 8 : 0;
+  score -= liquidez > 0 && liquidez < 1 ? 12 : 0;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  if (score < 60) {
     status = 'Critica';
     statusClass = 'danger';
-  } else if (proximas > 0 || concPend > 0) {
+  } else if (score < 80) {
     status = 'Atencao';
     statusClass = 'warning';
   }
@@ -674,13 +805,18 @@ function renderDashboardHealth(data) {
   container.innerHTML = `
     <div class="alert alert-${statusClass}" style="padding: 1rem; border-left: 4px solid; border-radius: 4px;">
       <strong>Saude ${status}</strong>
-      <p style="margin: 0.4rem 0 0 0;">Indicador diario baseado em vencimentos, recebimentos e conciliacao.</p>
+      <p style="margin: 0.4rem 0 0 0;">Score ${score}/100 baseado em vencimentos, liquidez, conciliacao e inadimplencia.</p>
     </div>
     <div style="display:flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Fluxo curto prazo (7 dias)</div>
         <div class="stat-value">${formatCurrency(curtoPrazo)}</div>
         <div class="stat-change ${curtoPrazo >= 0 ? 'positive' : 'negative'}">${curtoPrazoLabel}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Liquidez Corrente</div>
+        <div class="stat-value">${liquidez ? liquidez.toFixed(2) : '-'}</div>
+        <div class="stat-change">${liquidez >= 1 ? 'Confortavel' : 'Ajustar'}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Risco de atraso</div>
@@ -831,28 +967,37 @@ function renderDashboardActions(data) {
   const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
   const receberHoje = Number(data?.receberHoje?.quantidade || 0);
   const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
+  const fluxoMes = Number(data?.fluxoMes?.valor || 0);
+  const liquidez = Number(data?.kpisMes?.liquidez?.liquidezCorrente?.valor || 0);
+  const inad = Number(data?.kpisMes?.crescimento?.inadimplencia?.valor || 0);
 
   if (dashboardViewMode === 'executiva') {
-    if (vencidas > 0) actions.push('Priorizar regularizacao de vencidos para reduzir risco.');
-    if (proximas > 0) actions.push('Confirmar capacidade de caixa para os proximos 7 dias.');
-    if (receberAtraso > 0) actions.push('Reforcar cobranca de atrasados para recuperar caixa.');
-    if (concPend > 0) actions.push('Fechar conciliacao para visao real de caixa.');
+    if (fluxoMes < 0) actions.push({ prio: 1, text: 'Fluxo mensal negativo: revisar despesas e renegociar prazos.' });
+    if (liquidez > 0 && liquidez < 1) actions.push({ prio: 1, text: 'Liquidez abaixo de 1: reforcar capital de giro.' });
+    if (vencidas > 0) actions.push({ prio: 2, text: 'Regularizar contas vencidas para reduzir risco financeiro.' });
+    if (inad > 5) actions.push({ prio: 2, text: 'Reforcar cobranca de atrasados e revisar politica de credito.' });
+    if (proximas > 0) actions.push({ prio: 3, text: 'Confirmar caixa para vencimentos dos proximos 7 dias.' });
+    if (concPend > 0) actions.push({ prio: 3, text: 'Fechar conciliacao para visao real do caixa.' });
   } else {
-    if (vencidas > 0) actions.push('Pagar vencidos hoje e registrar comprovantes.');
-    if (proximas > 0) actions.push('Agendar pagamentos dos proximos 7 dias.');
-    if (receberHoje > 0) actions.push('Acionar clientes com recebimento previsto hoje.');
-    if (receberAtraso > 0) actions.push('Executar rotina de cobranca para inadimplentes.');
-    if (concPend > 0) actions.push('Conciliar extratos pendentes.');
+    if (vencidas > 0) actions.push({ prio: 1, text: 'Pagar vencidos hoje e registrar comprovantes.' });
+    if (proximas > 0) actions.push({ prio: 2, text: 'Agendar pagamentos dos proximos 7 dias.' });
+    if (receberHoje > 0) actions.push({ prio: 2, text: 'Acionar clientes com recebimento previsto hoje.' });
+    if (receberAtraso > 0) actions.push({ prio: 1, text: 'Executar rotina de cobranca para inadimplentes.' });
+    if (concPend > 0) actions.push({ prio: 2, text: 'Conciliar extratos pendentes.' });
   }
 
-  if (actions.length === 0) {
+  const ordered = actions
+    .sort((a, b) => (a.prio || 9) - (b.prio || 9))
+    .map(a => a.text);
+
+  if (ordered.length === 0) {
     container.innerHTML = '<p class="text-muted">Nenhuma acao critica hoje. Mantenha o acompanhamento diario.</p>';
     return;
   }
 
   container.innerHTML = `
     <ul style="margin: 0; padding-left: 1.1rem;">
-      ${actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+      ${ordered.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
     </ul>
   `;
 }
@@ -866,19 +1011,26 @@ function renderDashboardInsights(data) {
   const proximas = Number(data?.pagarProximas?.quantidade || 0);
   const receberHoje = Number(data?.receberHoje?.quantidade || 0);
   const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
+  const fluxoMes = Number(data?.fluxoMes?.valor || 0);
+  const kpis = data?.kpisMes;
+  const liquidez = Number(kpis?.liquidez?.liquidezCorrente?.valor || 0);
+  const margem = Number(kpis?.rentabilidade?.margemLiquida?.valor || 0);
 
   insights.push('Ative Insights com IA para detectar desvios e oportunidades automaticamente.');
   if (dashboardViewMode === 'executiva') {
+    if (fluxoMes < 0) insights.push('Fluxo negativo indica necessidade de ajuste no mix de custos.');
+    if (liquidez > 0 && liquidez < 1) insights.push('Liquidez abaixo do ideal: risco de curto prazo.');
+    if (margem < 0) insights.push('Margem liquida negativa: priorizar rentabilidade.');
     if (concPend > 0) insights.push('Conciliacao pendente reduz confiabilidade do caixa.');
-    if (proximas > 0) insights.push('Vencimentos proximos exigem reserva de liquidez.');
-    if (receberAtraso > 0) insights.push('Atrasos podem pressionar capital de giro.');
   } else if (dashboardViewMode === 'operacional') {
     if (concPend > 0) insights.push('Concilie extratos para liberar fechamento diario.');
     if (receberHoje > 0) insights.push('Priorize cobrancas de hoje para evitar atraso.');
+    if (receberAtraso > 0) insights.push('Inadimplentes aumentam o risco de caixa.');
   } else {
     insights.push('Com IA, seria possivel detectar anomalias e outliers automaticamente.');
     if (concPend > 0) insights.push('Sugestao tecnica: revisar regras de matching de conciliacao.');
     if (receberAtraso > 0) insights.push('Sugestao tecnica: criar flags de risco por cliente.');
+    if (proximas > 0) insights.push('Sugestao tecnica: antecipar avisos de vencimento automatico.');
   }
 
   container.innerHTML = `
@@ -897,11 +1049,15 @@ function renderDashboardTechNotes(data) {
 
   const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
   const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
+  const periodo = data?.periodo;
+  const filial = periodo?.filial || 'Consolidado';
+  const canal = periodo?.canal || 'Todos';
 
   container.innerHTML = `
     <ul style="margin: 0; padding-left: 1.1rem;">
       <li>KPIs alinhados a DRE/DFC e calculados pelo mesmo motor da aba KPIs.</li>
       <li>Dados de curto prazo sao baseados em vencimentos e status.</li>
+      <li>Filtro aplicado: Filial ${escapeHtml(filial)}, Canal ${escapeHtml(canal)}.</li>
       <li>Conciliacao pendente: ${concPend} extratos.</li>
       <li>Recebimentos em atraso: ${receberAtraso} contas.</li>
     </ul>
@@ -2920,7 +3076,7 @@ function carregarFluxoCaixa() {
       renderFluxoCaixa(fc);
     })
     .withFailureHandler(handleError)
-    .getFluxoCaixaMensal(mes, ano, filial || undefined, saldoInicial);
+    .getFluxoCaixaMensal(mes, ano, filial || undefined, undefined, saldoInicial);
 }
 
 function renderFluxoCaixa(fc) {
@@ -3128,6 +3284,14 @@ function loadKPIsData() {
     });
   }
 
+  const selectCanal = document.getElementById('kpi-canal');
+  if (selectCanal && appData.canais.length > 0) {
+    selectCanal.innerHTML = '<option value="">Todos</option>';
+    appData.canais.forEach(canal => {
+      selectCanal.innerHTML += `<option value="${escapeHtml(canal.codigo)}">${escapeHtml(canal.nome)}</option>`;
+    });
+  }
+
   // Auto-load KPIs for current month
   setTimeout(() => carregarKPIs(), 300);
 }
@@ -3136,6 +3300,7 @@ function carregarKPIs() {
   const mes = parseInt(document.getElementById('kpi-mes').value);
   const ano = parseInt(document.getElementById('kpi-ano').value);
   const filial = document.getElementById('kpi-filial').value;
+  const canal = document.getElementById('kpi-canal')?.value || '';
 
   showLoading('Calculando KPIs...');
 
@@ -3145,13 +3310,14 @@ function carregarKPIs() {
       renderKPIs(kpis);
     })
     .withFailureHandler(handleError)
-    .getKPIsMensal(mes, ano, filial || undefined);
+    .getKPIsMensal(mes, ano, filial || undefined, canal || undefined);
 }
 
 function renderKPIs(kpis) {
   // Update title
+  const canalLabel = kpis.periodo.canal && kpis.periodo.canal !== 'Todos' ? ` - Canal ${kpis.periodo.canal}` : '';
   document.getElementById('kpi-titulo').textContent =
-    `KPIs - ${kpis.periodo.mesNome}/${kpis.periodo.ano} - ${kpis.periodo.filial}`;
+    `KPIs - ${kpis.periodo.mesNome}/${kpis.periodo.ano} - ${kpis.periodo.filial}${canalLabel}`;
 
   // Rentabilidade
   updateElement('kpi-margem-bruta', `${kpis.rentabilidade.margemBruta.valor.toFixed(1)}%`);
@@ -3184,7 +3350,7 @@ function renderKPIs(kpis) {
   updateElement('kpi-crescimento-receita-desc', `vs ${formatCurrency(kpis.crescimento.crescimentoReceita.mesAnterior)}`);
 
   updateElement('kpi-ticket-medio', formatCurrency(kpis.crescimento.ticketMedio.valor));
-  updateElement('kpi-ticket-medio-desc', `${kpis.crescimento.ticketMedio.qtdTransacoes} transações`);
+  updateElement('kpi-ticket-medio-desc', `${kpis.crescimento.ticketMedio.qtdTransacoes} transacoes`);
 
   updateElement('kpi-inadimplencia', `${kpis.crescimento.inadimplencia.valor.toFixed(1)}%`);
   updateElement('kpi-inadimplencia-class', kpis.crescimento.inadimplencia.classificacao);
