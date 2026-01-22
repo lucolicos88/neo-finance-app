@@ -62,6 +62,7 @@ function clearReportsCache(): void {
   cacheRemoveNamespace(CacheNamespace.DRE, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.DFC, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.KPI, CacheScope.SCRIPT);
+  cacheRemoveNamespace(CacheNamespace.CONCILIACAO, CacheScope.SCRIPT);
   invalidateLancamentosCache();
   invalidateExtratosCache();
 }
@@ -908,6 +909,7 @@ export function clearCaches(): { success: boolean; message: string } {
     cacheRemoveNamespace(CacheNamespace.DRE, CacheScope.SCRIPT);
     cacheRemoveNamespace(CacheNamespace.DFC, CacheScope.SCRIPT);
     cacheRemoveNamespace(CacheNamespace.KPI, CacheScope.SCRIPT);
+    cacheRemoveNamespace(CacheNamespace.CONCILIACAO, CacheScope.SCRIPT);
     appendAuditLog('clearCaches', {}, true);
     return { success: true, message: 'Caches limpos' };
   } catch (e: any) {
@@ -3766,6 +3768,7 @@ export function importarFc(
 
   appendRows(SHEET_TB_IMPORT_FC, values);
   appendAuditLog('importarFc', { tipo, imported, skipped }, true);
+  cacheRemoveNamespace(CacheNamespace.CONCILIACAO, CacheScope.SCRIPT);
   return {
     success: true,
     message: `Importado ${imported} linhas FC${skipped ? ` (ignoradas ${skipped} duplicadas)` : ''}`,
@@ -3893,6 +3896,7 @@ export function importarItau(
 
   appendRows(SHEET_TB_IMPORT_ITAU, values);
   appendAuditLog('importarItau', { imported, skippedDup, skippedNoMov }, true);
+  cacheRemoveNamespace(CacheNamespace.CONCILIACAO, CacheScope.SCRIPT);
 
   const notes = [] as string[];
   if (skippedDup) notes.push(`ignoradas ${skippedDup} duplicadas`);
@@ -3999,12 +4003,15 @@ export function importarSieg(
 
   appendRows(SHEET_TB_IMPORT_SIEG, values);
   appendAuditLog('importarSieg', { imported, skipped }, true);
+  cacheRemoveNamespace(CacheNamespace.CONCILIACAO, CacheScope.SCRIPT);
   return {
     success: true,
     message: `Importado ${imported} linhas SIEG${skipped ? ` (ignoradas ${skipped} duplicadas)` : ''}`,
     imported,
   };
 }
+
+const COMPARATIVO_CACHE_TTL_SECONDS = 60;
 
 export function getComparativoData(tipo: string): {
   success: boolean;
@@ -4026,6 +4033,10 @@ export function getComparativoData(tipo: string): {
   }
 
   try {
+    const cacheKey = `comparativo:${normalizedTipo}`;
+    const cached = cacheGet<any>(CacheNamespace.CONCILIACAO, cacheKey, CacheScope.SCRIPT);
+    if (cached) return cached;
+
     const fcRows = getImportFcRows(normalizedTipo);
     const itauRows = getImportItauRows();
     const siegRows = normalizedTipo === 'PAGAR' ? getImportSiegRows() : [];
@@ -4097,7 +4108,9 @@ export function getComparativoData(tipo: string): {
       siegTotal: siegRows.length,
     };
 
-    return { success: true, tipo: normalizedTipo, stats, counts, items };
+    const result = { success: true, tipo: normalizedTipo, stats, counts, items };
+    cacheSet(CacheNamespace.CONCILIACAO, cacheKey, result, COMPARATIVO_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+    return result;
   } catch (error: any) {
     return { success: false, message: `Erro ao montar comparativo: ${error?.message || error}` };
   }

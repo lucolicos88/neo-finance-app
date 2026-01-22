@@ -252,6 +252,7 @@ export const CacheNamespace = {
   DRE: 'dre',
   DFC: 'dfc',
   KPI: 'kpi',
+  CONCILIACAO: 'conciliacao',
   USERS: 'users',
   LANCAMENTOS: 'lancamentos',
   EXTRATOS: 'extratos',

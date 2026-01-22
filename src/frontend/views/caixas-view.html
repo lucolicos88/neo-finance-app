@@ -29,7 +29,7 @@
 
   <div class="card">
     <div class="card-header">
-      <h2 class="card-title">2. Movimentacoes do Dia</h2>
+      <h2 class="card-title">2. Movimenta&ccedil;&otilde;es do Dia</h2>
     </div>
     <div class="card-body">
       <input type="hidden" id="mov-id" value="">
@@ -48,7 +48,7 @@
           <label class="form-label">Natureza</label>
           <select class="form-control" id="mov-natureza">
             <option value="ENTRADA">Entrada</option>
-            <option value="SAIDA">Saida</option>
+            <option value="SAIDA">Sa&iacute;da</option>
           </select>
         </div>
         <div class="form-group">
@@ -56,11 +56,11 @@
           <input type="number" class="form-control" id="mov-valor" step="0.01" placeholder="0,00">
         </div>
         <div class="form-group">
-          <label class="form-label">Observacoes</label>
-          <textarea class="form-control" id="mov-observacoes" rows="2" placeholder="Observacoes da movimentacao"></textarea>
+          <label class="form-label">Observa&ccedil;&otilde;es</label>
+          <textarea class="form-control" id="mov-observacoes" rows="2" placeholder="Observa&ccedil;&otilde;es da movimenta&ccedil;&atilde;o"></textarea>
         </div>
         <div class="form-group">
-          <label class="form-label">Comprovante (quando necessario)</label>
+          <label class="form-label">Comprovante (quando necess&aacute;rio)</label>
           <div class="dropzone" id="mov-file-drop">
             <div class="dropzone-text">Arraste o arquivo aqui ou clique para selecionar</div>
             <div class="dropzone-name" id="mov-file-name">Nenhum arquivo selecionado</div>
@@ -69,7 +69,7 @@
           <div class="text-muted" id="mov-file-hint" style="margin-top: 0.35rem; font-size: 0.85rem;"></div>
         </div>
       </div>
-      <button class="btn btn-primary" onclick="salvarMovimentoUi()">Salvar Movimentacao</button>
+      <button class="btn btn-primary" onclick="salvarMovimentoUi()">Salvar Movimenta&ccedil;&atilde;o</button>
     </div>
     <div class="table-container">
       <table>
@@ -78,10 +78,10 @@
             <th>Tipo</th>
             <th>Natureza</th>
             <th>Valor</th>
-            <th>Observacoes</th>
+            <th>Observa&ccedil;&otilde;es</th>
             <th>Comprovante</th>
             <th>Status</th>
-            <th>Acoes</th>
+            <th>A&ccedil;&otilde;es</th>
           </tr>
         </thead>
         <tbody id="table-movimentos">
@@ -134,7 +134,7 @@
           <table>
             <thead>
               <tr>
-                <th>Descricao</th>
+                <th>Descri&ccedil;&atilde;o</th>
                 <th class="caixa-report-value">Valor</th>
               </tr>
             </thead>
@@ -145,11 +145,11 @@
         </div>
 
         <div class="caixa-report-observacoes">
-          <label class="label" for="caixa-observacoes-entradas">Observacoes / Outras Entradas:</label>
+          <label class="label" for="caixa-observacoes-entradas">Observa&ccedil;&otilde;es / Outras Entradas:</label>
           <textarea class="form-control" id="caixa-observacoes-entradas" rows="3" placeholder="Detalhe as outras entradas"></textarea>
         </div>
         <div class="caixa-report-observacoes">
-          <label class="label" for="caixa-observacoes-saidas">Observacoes / Outras Saidas:</label>
+          <label class="label" for="caixa-observacoes-saidas">Observa&ccedil;&otilde;es / Outras Sa&iacute;das:</label>
           <textarea class="form-control" id="caixa-observacoes-saidas" rows="3" placeholder="Detalhe as outras saidas"></textarea>
         </div>
         <div class="caixa-report-observacoes">
@@ -178,8 +178,8 @@
             <th>Data Fechamento</th>
             <th>Total Recebido</th>
             <th>Sistema FC</th>
-            <th>Diferenca</th>
-            <th>Acoes</th>
+            <th>Diferen&ccedil;a</th>
+            <th>A&ccedil;&otilde;es</th>
           </tr>
         </thead>
         <tbody id="table-caixas">
@@ -191,7 +191,7 @@
 
   <div class="card">
     <div class="card-header">
-      <h2 class="card-title">Relatorio de Caixa</h2>
+      <h2 class="card-title">Relat&oacute;rio de Caixa</h2>
       <div class="card-actions">
         <button class="btn btn-outline" onclick="gerarRelatorioCaixa()">Gerar</button>
       </div>

@@ -1,6 +1,6 @@
 <div class="page-header">
-  <h1 class="page-title">Configura??es</h1>
-  <p class="page-subtitle">Gerencie os dados de refer?ncia do sistema</p>
+  <h1 class="page-title">Configura&ccedil;&otilde;es</h1>
+  <p class="page-subtitle">Gerencie os dados de refer&ecirc;ncia do sistema</p>
 </div>
 
 <div class="tabs-container">
@@ -10,9 +10,9 @@
     <button class="tab" data-tab-group="config" data-tab="canais">Canais de Venda</button>
     <button class="tab" data-tab-group="config" data-tab="caixas">Caixas</button>
     <button class="tab" data-tab-group="config" data-tab="filiais">Filiais</button>
-    <button class="tab" data-tab-group="config" data-tab="usuarios">Usu?rios</button>
+    <button class="tab" data-tab-group="config" data-tab="usuarios">Usu&aacute;rios</button>
     <button class="tab" data-tab-group="config" data-tab="logs">Logs</button>
-    <button class="tab" data-tab-group="config" data-tab="diagnosticos">Diagn?sticos</button>
+    <button class="tab" data-tab-group="config" data-tab="diagnosticos">Diagn&oacute;sticos</button>
   </div>
 </div>
 
@@ -26,12 +26,12 @@
     <div class="card-body">
       <div class="table-responsive table-no-scroll">
         <table class="table table-plano-contas">
-                    <thead>
+          <thead>
             <tr>
-              <th>Código</th>
+              <th>C&oacute;digo</th>
               <th>Nome</th>
               <th>Status</th>
-              <th class="text-right">Ações</th>
+              <th class="text-right">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody id="table-centros-custo">
@@ -50,18 +50,18 @@
       <h3>Logs (Auditoria)</h3>
     </div>
     <div class="card-body">
-      <p class="text-muted" style="margin-bottom: 1rem;">Dispon├¡vel apenas para administradores.</p>
+      <p class="text-muted" style="margin-bottom: 1rem;">Dispon&iacute;vel apenas para administradores.</p>
       <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 1rem;">
         <div>
           <label class="form-label" for="logs-query">Pesquisar</label>
-          <input id="logs-query" class="form-control" type="text" placeholder="email, a├º├úo, mensagem..." oninput="applyLogsFilter()" />
+          <input id="logs-query" class="form-control" type="text" placeholder="email, a&ccedil;&atilde;o, mensagem..." oninput="applyLogsFilter()" />
         </div>
         <div>
           <label class="form-label" for="logs-email">Email</label>
           <input id="logs-email" class="form-control" type="text" placeholder="usuario@empresa.com" oninput="applyLogsFilter()" />
         </div>
         <div>
-          <label class="form-label" for="logs-action">A??o</label>
+          <label class="form-label" for="logs-action">A&ccedil;&atilde;o</label>
           <input id="logs-action" class="form-control" type="text" placeholder="ex: salvarLancamento" oninput="applyLogsFilter()" />
         </div>
         <div>
@@ -88,7 +88,7 @@
             <tr>
               <th>Timestamp</th>
               <th>Email</th>
-              <th>A??o</th>
+              <th>A&ccedil;&atilde;o</th>
               <th>Status</th>
               <th>Ref</th>
               <th>Mensagem</th>
@@ -107,14 +107,14 @@
 <div class="tab-content" data-tab-content="config" data-content="diagnosticos">
 <div class="card" style="margin-top: 1.25rem;">
   <div class="card-header">
-    <h3>Diagn├│sticos</h3>
+    <h3>Diagn&oacute;sticos</h3>
     <div style="display:flex; gap: 0.5rem; margin-left:auto;">
       <button class="btn btn-primary" onclick="runSmokeTestsUi()">Rodar Smoke Tests</button>
       <button class="btn btn-secondary" onclick="copySmokeTestsOutput()">Copiar Resultado</button>
     </div>
   </div>
   <div class="card-body">
-    <p class="text-muted" style="margin-bottom: 0.75rem;">Use para validar rapidamente o backend (ADMIN). Se falhar, envie o resultado para an├ílise.</p>
+    <p class="text-muted" style="margin-bottom: 0.75rem;">Use para validar rapidamente o backend (ADMIN). Se falhar, envie o resultado para an&aacute;lise.</p>
     <div style="display:flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 0.75rem;">
       <div>
         <label class="form-label">ENABLE_DEBUG_API</label>
@@ -127,7 +127,7 @@
         <label class="form-label">ENABLE_SEED_DATA</label>
         <div style="display:flex; gap:0.5rem; align-items:center;">
           <input id="flag-enable-seed-data" type="checkbox" onchange="toggleAdminFlag('ENABLE_SEED_DATA', this.checked)" />
-          <span class="text-muted" style="font-size:0.85rem;">Permite seed autom├ítico em abas vazias</span>
+          <span class="text-muted" style="font-size:0.85rem;">Permite seed autom&aacute;tico em abas vazias</span>
         </div>
       </div>
       <div style="margin-left:auto; display:flex; gap:0.5rem;">
@@ -146,15 +146,15 @@
 <div class="tab-content" data-tab-content="config" data-content="plano-contas">
   <div class="card">
     <div class="card-header">
-      <h3>Plano de Contas Cont├íbil</h3>
-      <button class="btn btn-primary" onclick="openModalNovaConta()">+ Nova Conta Cont├íbil</button>
+      <h3>Plano de Contas Cont&aacute;bil</h3>
+      <button class="btn btn-primary" onclick="openModalNovaConta()">+ Nova Conta Cont&aacute;bil</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
         <table class="table">
           <thead>
             <tr>
-              <th>C?digo</th>
+              <th>C&oacute;digo</th>
               <th>Nome</th>
               <th>Tipo</th>
               <th>Grupo DRE</th>
@@ -162,7 +162,7 @@
               <th>Grupo DFC</th>
               <th>Var./Fixa</th>
               <th>CMA/CMV</th>
-              <th class="text-right">A??es</th>
+              <th class="text-right">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody id="table-plano-contas">
@@ -186,10 +186,10 @@
         <table class="table">
           <thead>
             <tr>
-              <th>C?digo</th>
+              <th>C&oacute;digo</th>
               <th>Nome</th>
               <th>Status</th>
-              <th class="text-right">A??es</th>
+              <th class="text-right">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody id="table-canais">
@@ -223,7 +223,7 @@
   </div>
   <div class="card" style="margin-top: 1rem;">
     <div class="card-header">
-      <h3>Tipos de Movimentacao</h3>
+      <h3>Tipos de Movimenta&ccedil;&atilde;o</h3>
       <button class="btn btn-primary" onclick="openModalNovoCaixaTipo()">+ Novo Tipo</button>
     </div>
     <div class="card-body">
@@ -235,9 +235,9 @@
               <th>Natureza</th>
               <th>Requer Arquivo</th>
               <th>Sistema FC</th>
-              <th>Conta Reforço</th>
+              <th>Conta Refor&ccedil;o</th>
               <th>Status</th>
-              <th class="text-right">Ações</th>
+              <th class="text-right">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody id="table-caixa-tipos">
@@ -259,14 +259,14 @@
     <div class="card-body">
       <div class="table-responsive">
         <table class="table">
-                    <thead>
+          <thead>
             <tr>
-              <th>Código</th>
+              <th>C&oacute;digo</th>
               <th>Nome</th>
-              <th>SIEG Relatório</th>
+              <th>SIEG Relat&oacute;rio</th>
               <th>SIEG Contabilidade</th>
               <th>Status</th>
-              <th class="text-right">Ações</th>
+              <th class="text-right">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody id="table-filiais">
@@ -278,12 +278,12 @@
   </div>
 </div>
 
-<!-- Usu├írios -->
+<!-- Usu&aacute;rios -->
 <div class="tab-content" data-tab-content="config" data-content="usuarios">
   <div class="card">
     <div class="card-header">
-      <h3>Usu├írios e Permiss├Áes</h3>
-      <button class="btn btn-primary" onclick="openModalNovoUsuario()">+ Novo Usu├írio</button>
+      <h3>Usu&aacute;rios e Permiss&otilde;es</h3>
+      <button class="btn btn-primary" onclick="openModalNovoUsuario()">+ Novo Usu&aacute;rio</button>
     </div>
     <div class="card-body">
       <div class="table-responsive">
@@ -295,8 +295,8 @@
               <th>Perfil</th>
               <th>Canal</th>
               <th>Status</th>
-              <th>Último Acesso</th>
-              <th class="text-right">Ações</th>
+              <th>&Uacute;ltimo Acesso</th>
+              <th class="text-right">A&ccedil;&otilde;es</th>
             </tr>
           </thead>
           <tbody id="table-usuarios">
@@ -312,24 +312,24 @@
     <div class="card-body">
       <div style="display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 1rem;">
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #D72C0D;">­ƒææ Administrador</h4>
-          <p style="font-size: 0.9rem; color: #666;">Acesso total ao sistema. Pode gerenciar usu├írios, configura├º├Áes e todas as funcionalidades.</p>
+          <h4 style="margin-bottom: 0.5rem; color: #D72C0D;">Administrador</h4>
+          <p style="font-size: 0.9rem; color: #666;">Acesso total ao sistema. Pode gerenciar usu&aacute;rios, configura&ccedil;&otilde;es e todas as funcionalidades.</p>
         </div>
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #FF6B35;">­ƒº¡ Gestor Financeiro</h4>
-          <p style="font-size: 0.9rem; color: #666;">Pode visualizar e editar lan├ºamentos, aprovar contas, gerar relat├│rios.</p>
+          <h4 style="margin-bottom: 0.5rem; color: #FF6B35;">Gestor Financeiro</h4>
+          <p style="font-size: 0.9rem; color: #666;">Pode visualizar e editar lan&ccedil;amentos, aprovar contas, gerar relat&oacute;rios.</p>
         </div>
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #4ECDC4;">­ƒöº Operacional</h4>
-          <p style="font-size: 0.9rem; color: #666;">Pode criar e editar lan├ºamentos, mas n├úo aprovar ou excluir.</p>
+          <h4 style="margin-bottom: 0.5rem; color: #4ECDC4;">Operacional</h4>
+          <p style="font-size: 0.9rem; color: #666;">Pode criar e editar lan&ccedil;amentos, mas n&atilde;o aprovar ou excluir.</p>
         </div>
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #2E7D32;">­ƒÆ░ Caixa</h4>
-          <p style="font-size: 0.9rem; color: #666;">Acesso ao m├│dulo Caixas para fechamento e upload de comprovantes.</p>
+          <h4 style="margin-bottom: 0.5rem; color: #2E7D32;">Caixa</h4>
+          <p style="font-size: 0.9rem; color: #666;">Acesso ao m&oacute;dulo Caixas para fechamento e upload de comprovantes.</p>
         </div>
         <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h4 style="margin-bottom: 0.5rem; color: #95E1D3;">­ƒæü Visualizador</h4>
-          <p style="font-size: 0.9rem; color: #666;">Apenas leitura. Pode visualizar relat├│rios e dashboards.</p>
+          <h4 style="margin-bottom: 0.5rem; color: #95E1D3;">Visualizador</h4>
+          <p style="font-size: 0.9rem; color: #666;">Apenas leitura. Pode visualizar relat&oacute;rios e dashboards.</p>
         </div>
       </div>
     </div>

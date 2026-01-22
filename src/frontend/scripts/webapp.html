@@ -968,7 +968,7 @@ function renderComparativo(items, tipo, counts) {
     const itauTotal = counts?.itauTotal || 0;
     const siegTotal = counts?.siegTotal || 0;
     if (fcTotal === 0 && (itauTotal > 0 || siegTotal > 0)) {
-      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Importe o Relatorio FC para comparar com banco/SIEG.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Importe o Relat\u00f3rio FC para comparar com banco/SIEG.</td></tr>';
     } else {
       tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Nenhum dado importado</td></tr>';
     }
@@ -1061,7 +1061,7 @@ function importarFc() {
   const sheetValue = sheetInput ? String(sheetInput.value || '').trim() : '';
   const fileName = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0].name : '';
   const detail = sheetValue ? `Planilha: ${sheetValue}` : `Arquivo: ${fileName || 'N/A'}`;
-  openConfirmModal({ title: `Importar Relatorio FC (${tipo})`, message: detail }).then(ok => {
+  openConfirmModal({ title: `Importar Relat\u00f3rio FC (${tipo})`, message: detail }).then(ok => {
     if (!ok) return;
     readRowsFromSource('fc-file', 'fc-sheet').then(rows => {
       if (!rows) return;
@@ -1309,7 +1309,7 @@ function fcHeaderMap() {
     historico: ['historico', 'hist?rico'],
     fornecedor: ['fornecedor'],
     valor: ['valor'],
-    descricao: ['descricao', 'descri??o'],
+    descricao: ['descricao', 'descri\u00e7\u00e3o'],
     dataBaixa: ['dt_baixa', 'data baixa', 'dt baixa'],
     flagBaixa: ['flagbxa', 'flag baixa', 'flag bxa'],
     dataVencimento: ['dt_vencimento', 'data vencimento', 'dt vencimento'],
@@ -2260,7 +2260,7 @@ function printCaixaReport() {
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Relatorio de Caixa</title>
+        <title>Relat\u00f3rio de Caixa</title>
         <style>${styles ? styles.textContent : ''}</style>
       </head>
       <body>
