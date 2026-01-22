@@ -547,8 +547,10 @@ function loadDashboardData() {
       updateElement('stat-conciliacao-pendentes', data.conciliacaoPendentes.quantidade);
       updateElement('stat-conciliacao-valor', formatCurrency(data.conciliacaoPendentes.valor));
 
-      // Render recent transactions
-      renderDashboardTransactions(data.recentTransactions);
+      // Render guidance blocks
+      renderDashboardHealth(data);
+      renderDashboardActions(data);
+      renderDashboardInsights(data);
 
       // Render alerts
       renderDashboardAlerts(data.alerts);
@@ -557,27 +559,103 @@ function loadDashboardData() {
     .getDashboardData();
 }
 
-function renderDashboardTransactions(transactions) {
-  const tbody = document.getElementById('dashboard-transactions');
-  if (!tbody) return;
+function renderDashboardHealth(data) {
+  const container = document.getElementById('dashboard-health');
+  if (!container) return;
 
-  if (!transactions || transactions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum lançamento encontrado</td></tr>';
+  const vencidas = Number(data?.pagarVencidas?.quantidade || 0);
+  const proximas = Number(data?.pagarProximas?.quantidade || 0);
+  const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
+  const receberHoje = Number(data?.receberHoje?.valor || 0);
+  const pagarProxValor = Number(data?.pagarProximas?.valor || 0);
+
+  let status = 'Estavel';
+  let statusClass = 'success';
+  if (vencidas > 0) {
+    status = 'Critica';
+    statusClass = 'danger';
+  } else if (proximas > 0 || concPend > 0) {
+    status = 'Atencao';
+    statusClass = 'warning';
+  }
+
+  const curtoPrazo = receberHoje - pagarProxValor;
+  const curtoPrazoLabel = curtoPrazo >= 0 ? 'Positivo' : 'Negativo';
+
+  container.innerHTML = `
+    <div class="alert alert-${statusClass}" style="padding: 1rem; border-left: 4px solid; border-radius: 4px;">
+      <strong>Saude ${status}</strong>
+      <p style="margin: 0.4rem 0 0 0;">Resumo diario com foco em vencimentos, recebimentos e conciliacao.</p>
+    </div>
+    <div style="display:flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Fluxo curto prazo (7 dias)</div>
+        <div class="stat-value">${formatCurrency(curtoPrazo)}</div>
+        <div class="stat-change ${curtoPrazo >= 0 ? 'positive' : 'negative'}">${curtoPrazoLabel}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Risco de atraso</div>
+        <div class="stat-value">${vencidas}</div>
+        <div class="stat-change">contas vencidas</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Conciliacao pendente</div>
+        <div class="stat-value">${concPend}</div>
+        <div class="stat-change">extratos pendentes</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDashboardActions(data) {
+  const container = document.getElementById('dashboard-actions');
+  if (!container) return;
+
+  const actions = [];
+  const vencidas = Number(data?.pagarVencidas?.quantidade || 0);
+  const proximas = Number(data?.pagarProximas?.quantidade || 0);
+  const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
+  const receberHoje = Number(data?.receberHoje?.quantidade || 0);
+
+  if (vencidas > 0) actions.push('Regularizar contas vencidas hoje.');
+  if (proximas > 0) actions.push('Programar pagamentos dos proximos 7 dias.');
+  if (receberHoje > 0) actions.push('Cobrar recebimentos previstos para hoje.');
+  if (concPend > 0) actions.push('Executar conciliacao bancaria pendente.');
+
+  if (actions.length === 0) {
+    container.innerHTML = '<p class="text-muted">Nenhuma acao critica hoje. Mantenha o acompanhamento diario.</p>';
     return;
   }
 
-  tbody.innerHTML = transactions.map(t => `
-    <tr>
-      <td>${formatDate(t.data)}</td>
-      <td>${escapeHtml(t.descricao)}</td>
-      <td><span class="badge ${t.tipo === 'RECEITA' ? 'badge-success' : 'badge-danger'}">${escapeHtml(t.tipo)}</span></td>
-      <td class="${t.tipo === 'RECEITA' ? 'text-success' : 'text-danger'}">${formatCurrency(t.valor)}</td>
-      <td><span class="badge badge-${getStatusClass(t.status)}">${escapeHtml(t.status)}</span></td>
-      <td>
-        <button class="btn btn-outline btn-sm" onclick="viewTransaction(${JSON.stringify(String(t.id))})">Ver</button>
-      </td>
-    </tr>
-  `).join('');
+  container.innerHTML = `
+    <ul style="margin: 0; padding-left: 1.1rem;">
+      ${actions.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+    </ul>
+  `;
+}
+
+function renderDashboardInsights(data) {
+  const container = document.getElementById('dashboard-insights');
+  if (!container) return;
+
+  const insights = [];
+  const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
+  const proximas = Number(data?.pagarProximas?.quantidade || 0);
+  const receberHoje = Number(data?.receberHoje?.quantidade || 0);
+
+  insights.push('Ative Insights com IA para detectar desvios e oportunidades automaticamente.');
+  if (concPend > 0) insights.push('Conciliacao pendente pode atrasar a visao real de caixa.');
+  if (proximas > 0) insights.push('Planeje o caixa para vencimentos proximos e evite juros.');
+  if (receberHoje > 0) insights.push('Antecipe recebimentos para reforcar o saldo diario.');
+
+  container.innerHTML = `
+    <ul style="margin: 0; padding-left: 1.1rem;">
+      ${insights.map(i => `<li>${escapeHtml(i)}</li>`).join('')}
+    </ul>
+    <div style="margin-top: 0.75rem;">
+      <button class="btn btn-primary" onclick="showToast('Insights de IA em breve', 'info')">Ativar Insights IA</button>
+    </div>
+  `;
 }
 
 function renderDashboardAlerts(alerts) {
