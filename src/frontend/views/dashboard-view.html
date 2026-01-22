@@ -28,25 +28,31 @@
     </div>
   </div>
 
-  <!-- Storytelling -->
-  <div class="card">
+  <div class="card" id="dashboard-views">
     <div class="card-header">
-      <h2 class="card-title">Resumo do Dia</h2>
+      <h2 class="card-title">Vis&atilde;o do Dashboard</h2>
       <div class="card-actions">
+        <button class="btn btn-outline" id="dash-mode-executiva" onclick="setDashboardViewMode('executiva')">Executiva</button>
+        <button class="btn btn-outline" id="dash-mode-operacional" onclick="setDashboardViewMode('operacional')">Operacional</button>
+        <button class="btn btn-outline" id="dash-mode-tecnica" onclick="setDashboardViewMode('tecnica')">T&eacute;cnica</button>
         <button class="btn btn-outline" onclick="refreshDashboard()">&#128257; Atualizar</button>
       </div>
     </div>
-    <div style="display:flex; gap: 0.5rem; flex-wrap: wrap; margin: 0 1rem 0.75rem 1rem;">
-      <button class="btn btn-outline" id="dash-mode-executiva" onclick="setDashboardViewMode('executiva')">Vis&atilde;o Executiva</button>
-      <button class="btn btn-outline" id="dash-mode-operacional" onclick="setDashboardViewMode('operacional')">Vis&atilde;o Operacional</button>
-      <button class="btn btn-outline" id="dash-mode-tecnica" onclick="setDashboardViewMode('tecnica')">Vis&atilde;o T&eacute;cnica</button>
+    <div class="card-body">
+      <p class="text-muted" style="margin: 0;">Escolha o foco do painel para orientar decis&atilde;o, execu&ccedil;&atilde;o ou an&aacute;lise t&eacute;cnica.</p>
+    </div>
+  </div>
+
+  <div class="card" data-dashboard-section="all">
+    <div class="card-header">
+      <h2 class="card-title">Resumo do Dia</h2>
     </div>
     <div id="dashboard-story">
       <p class="text-muted">Carregando...</p>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-dashboard-section="all">
     <div class="card-header">
       <h2 class="card-title">Sa&uacute;de da Empresa</h2>
     </div>
@@ -55,7 +61,16 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-dashboard-section="executiva,tecnica">
+    <div class="card-header">
+      <h2 class="card-title">KPIs do M&ecirc;s (alinhados)</h2>
+    </div>
+    <div id="dashboard-kpis">
+      <p class="text-muted">Carregando...</p>
+    </div>
+  </div>
+
+  <div class="card" data-dashboard-section="executiva,tecnica">
     <div class="card-header">
       <h2 class="card-title">Resumo do M&ecirc;s</h2>
     </div>
@@ -64,7 +79,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-dashboard-section="operacional">
     <div class="card-header">
       <h2 class="card-title">Curto Prazo (7 dias)</h2>
     </div>
@@ -73,7 +88,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-dashboard-section="executiva,operacional">
     <div class="card-header">
       <h2 class="card-title">A&ccedil;&otilde;es Recomendadas</h2>
     </div>
@@ -82,7 +97,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-dashboard-section="executiva,tecnica">
     <div class="card-header">
       <h2 class="card-title">Insights (IA)</h2>
     </div>
@@ -91,8 +106,16 @@
     </div>
   </div>
 
-  <!-- Alerts -->
-  <div class="card">
+  <div class="card" data-dashboard-section="tecnica">
+    <div class="card-header">
+      <h2 class="card-title">Notas T&eacute;cnicas</h2>
+    </div>
+    <div id="dashboard-tech">
+      <p class="text-muted">Carregando...</p>
+    </div>
+  </div>
+
+  <div class="card" data-dashboard-section="all">
     <div class="card-header">
       <h2 class="card-title">Alertas e Pend&ecirc;ncias</h2>
     </div>

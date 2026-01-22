@@ -99,6 +99,34 @@
         </div>
       </div>
 
+      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">Valores do Resultado</h3>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Receita L&iacute;quida</div>
+          <div class="stat-value" id="kpi-receita-liquida">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Custos / CMV</div>
+          <div class="stat-value" id="kpi-custos">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Despesas Operacionais</div>
+          <div class="stat-value" id="kpi-desp-operacionais">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">EBITDA (R$)</div>
+          <div class="stat-value" id="kpi-ebitda-valor">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Lucro L&iacute;quido (R$)</div>
+          <div class="stat-value" id="kpi-lucro-liquido-valor">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Capital de Giro</div>
+          <div class="stat-value" id="kpi-capital-giro">-</div>
+        </div>
+      </div>
+
       <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">Indicadores de Liquidez</h3>
       <div class="stats-grid">
         <div class="stat-card">
@@ -182,7 +210,6 @@
     </div>
   </div>
 
-  <!-- Analise Detalhada -->
   <div class="card">
     <div class="card-header">
       <h2 class="card-title">An&aacute;lise Detalhada dos Indicadores</h2>
@@ -210,7 +237,7 @@
 </div>
 
 <script>
-// Inicializar m&ecirc;s atual
+// Inicializar mes atual
 document.addEventListener('DOMContentLoaded', function() {
   const hoje = new Date();
   const mesAtual = hoje.getMonth() + 1;

@@ -3,11 +3,109 @@
 
   <div class="card">
     <div class="card-header">
+      <h2 class="card-title">Guia R&aacute;pido</h2>
+    </div>
+    <div class="card-body">
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Dashboard</strong>
+          <p class="text-muted" style="margin: 0.4rem 0 0 0;">Leitura di&aacute;ria e decis&otilde;es r&aacute;pidas.</p>
+        </div>
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>KPIs</strong>
+          <p class="text-muted" style="margin: 0.4rem 0 0 0;">Resumo mensal para an&aacute;lise e impress&atilde;o.</p>
+        </div>
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Concilia&ccedil;&atilde;o</strong>
+          <p class="text-muted" style="margin: 0.4rem 0 0 0;">Garante consist&ecirc;ncia entre banco e lan&ccedil;amentos.</p>
+        </div>
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Configura&ccedil;&otilde;es</strong>
+          <p class="text-muted" style="margin: 0.4rem 0 0 0;">Cadastros, usu&aacute;rios e padr&otilde;es do sistema.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Dashboard e KPIs</h2>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">O Dashboard mostra o dia a dia com storytelling. A aba KPIs resume o m&ecirc;s com filtros e exporta&ccedil;&atilde;o. Os KPIs do Dashboard s&atilde;o os mesmos da aba KPIs (m&ecirc;s atual).</p>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-top: 0.75rem;">
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Dashboard (hoje)</strong>
+          <ul style="margin: 0.5rem 0 0 1rem;">
+            <li>Curto prazo (7 e 30 dias).</li>
+            <li>Sa&uacute;de do dia e a&ccedil;&otilde;es recomendadas.</li>
+            <li>Vis&otilde;es Executiva, Operacional e T&eacute;cnica.</li>
+          </ul>
+        </div>
+        <div style="padding: 1rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>KPIs (mensal)</strong>
+          <ul style="margin: 0.5rem 0 0 1rem;">
+            <li>Resumo por m&ecirc;s/ano/filial.</li>
+            <li>Rentabilidade, liquidez, crescimento e opera&ccedil;&atilde;o.</li>
+            <li>Pronto para impress&atilde;o e apresenta&ccedil;&atilde;o.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">Como os KPIs s&atilde;o calculados</h2>
+    </div>
+    <div class="card-body">
+      <p class="text-muted">Os KPIs s&atilde;o calculados com base nos lan&ccedil;amentos do per&iacute;odo (data de compet&ecirc;ncia) e na filial selecionada.</p>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+        <div style="padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Rentabilidade</strong>
+          <ul style="margin: 0.5rem 0 0 1rem;">
+            <li>Margem Bruta = (Receita L&iacute;quida - Custos/CMV) / Receita L&iacute;quida.</li>
+            <li>Margem EBITDA = EBITDA / Receita L&iacute;quida.</li>
+            <li>Margem L&iacute;quida = Lucro L&iacute;quido / Receita L&iacute;quida.</li>
+            <li>ROI = Lucro L&iacute;quido / Receita L&iacute;quida (modelo atual).</li>
+          </ul>
+        </div>
+        <div style="padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Liquidez</strong>
+          <ul style="margin: 0.5rem 0 0 1rem;">
+            <li>Liquidez Corrente = (A Receber + Saldo de Caixa) / A Pagar.</li>
+            <li>Saldo de Caixa = saldo final do Fluxo de Caixa.</li>
+            <li>Burn Rate = |Lucro L&iacute;quido| quando negativo.</li>
+            <li>Runway = Saldo de Caixa / Burn Rate (meses).</li>
+          </ul>
+        </div>
+        <div style="padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Crescimento</strong>
+          <ul style="margin: 0.5rem 0 0 1rem;">
+            <li>Receita MoM = (Receita Atual - Receita M&ecirc;s Anterior) / Receita M&ecirc;s Anterior.</li>
+            <li>Ticket M&eacute;dio = Receita L&iacute;quida / N&uacute;mero de Receitas.</li>
+            <li>Inadimpl&ecirc;ncia = Receitas Pendentes Vencidas / Total de Receitas.</li>
+            <li>PMR = m&eacute;dia de dias entre vencimento e pagamento.</li>
+          </ul>
+        </div>
+        <div style="padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <strong>Opera&ccedil;&atilde;o</strong>
+          <ul style="margin: 0.5rem 0 0 1rem;">
+            <li>CAC = despesas de marketing / n&uacute;mero de receitas.</li>
+            <li>Despesas Operacionais/Receita = Desp. Operacionais / Receita L&iacute;quida.</li>
+            <li>Break Even = Desp. Operacionais / (Margem Bruta / Receita L&iacute;quida).</li>
+            <li>PMP = m&eacute;dia de dias entre vencimento e pagamento.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
       <h2 class="card-title">Como o acesso funciona</h2>
     </div>
-    <p class="text-muted" style="margin: 0;">
-      O acesso &eacute; definido apenas pelo perfil do usu&aacute;rio.
-    </p>
+    <p class="text-muted" style="margin: 0;">O acesso &eacute; definido apenas pelo perfil do usu&aacute;rio.</p>
   </div>
 
   <div class="stats-grid">
@@ -73,107 +171,8 @@
 
   <div class="card">
     <div class="card-header">
-      <h2 class="card-title">Principais funcionalidades por &aacute;rea</h2>
-    </div>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th>&Aacute;rea</th>
-            <th>Funcionalidades</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Contas a pagar/receber</td>
-            <td>Cadastro, filtro, edi&ccedil;&atilde;o, pagamentos/recebimentos em lote.</td>
-          </tr>
-          <tr>
-            <td>Concilia&ccedil;&atilde;o</td>
-            <td>Concilia itens, desfaz concilia&ccedil;&atilde;o e faz sugest&otilde;es autom&aacute;ticas.</td>
-          </tr>
-          <tr>
-            <td>Caixas</td>
-            <td>Registro de fechamento di&aacute;rio, movimenta&ccedil;&otilde;es e upload de comprovantes.</td>
-          </tr>
-          <tr>
-            <td>Relat&oacute;rios</td>
-            <td>DRE, DFC, KPIs e exporta&ccedil;&atilde;o em PDF.</td>
-          </tr>
-          <tr>
-            <td>Configura&ccedil;&otilde;es</td>
-            <td>Planos de conta, filiais, canais, centros de custo e usu&aacute;rios.</td>
-          </tr>
-          <tr>
-            <td>Auditoria</td>
-            <td>Log de eventos, refer&ecirc;ncia de erro e rastreabilidade.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Dashboard e KPIs</h2>
-    </div>
-    <div class="card-body">
-      <p class="text-muted">O Dashboard &eacute; a vis&atilde;o di&aacute;ria (storytelling), enquanto a aba KPIs &eacute; o resumo mensal com filtros para impress&atilde;o.</p>
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 0.75rem;">
-        <div style="padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <strong>Dashboard (hoje)</strong>
-          <ul style="margin: 0.5rem 0 0 1rem;">
-            <li>Foco em curto prazo (7 e 30 dias).</li>
-            <li>Sa&uacute;de do dia e a&ccedil;&otilde;es recomendadas.</li>
-            <li>Indicadores ligados a vencimentos, recebimentos e concilia&ccedil;&atilde;o.</li>
-          </ul>
-        </div>
-        <div style="padding: 0.75rem; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <strong>KPIs (mensal)</strong>
-          <ul style="margin: 0.5rem 0 0 1rem;">
-            <li>Resumo do per&iacute;odo selecionado (m&ecirc;s/ano/filial).</li>
-            <li>Indicadores de rentabilidade, liquidez, crescimento e opera&ccedil;&atilde;o.</li>
-            <li>Pronto para exporta&ccedil;&atilde;o e apresenta&ccedil;&atilde;o.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">Como os KPIs s&atilde;o calculados</h2>
-    </div>
-    <div class="card-body">
-      <p class="text-muted">Os KPIs s&atilde;o calculados com base nos lan&ccedil;amentos do per&iacute;odo (data de compet&ecirc;ncia) e na filial selecionada.</p>
-      <ul style="margin: 0.5rem 0 0 1rem;">
-        <li><strong>Margem Bruta:</strong> (Receita L&iacute;quida - Custos/CMV) / Receita L&iacute;quida.</li>
-        <li><strong>Margem EBITDA:</strong> EBITDA / Receita L&iacute;quida.</li>
-        <li><strong>Margem L&iacute;quida:</strong> Lucro L&iacute;quido / Receita L&iacute;quida.</li>
-        <li><strong>ROI:</strong> Lucro L&iacute;quido / Receita L&iacute;quida (conforme modelo atual).</li>
-        <li><strong>Liquidez Corrente:</strong> (Contas a Receber Pendentes + Saldo de Caixa) / Contas a Pagar Pendentes.</li>
-        <li><strong>Saldo de Caixa:</strong> Saldo final do Fluxo de Caixa do per&iacute;odo.</li>
-        <li><strong>Burn Rate:</strong> |Lucro L&iacute;quido| quando negativo.</li>
-        <li><strong>Runway:</strong> Saldo de Caixa / Burn Rate (meses).</li>
-        <li><strong>Crescimento de Receita (MoM):</strong> (Receita Atual - Receita M&ecirc;s Anterior) / Receita M&ecirc;s Anterior.</li>
-        <li><strong>Ticket M&eacute;dio:</strong> Receita L&iacute;quida / N&uacute;mero de Receitas.</li>
-        <li><strong>Taxa de Inadimpl&ecirc;ncia:</strong> Receitas Pendentes Vencidas / Total de Receitas.</li>
-        <li><strong>PMR:</strong> M&eacute;dia de dias entre vencimento e pagamento das receitas.</li>
-        <li><strong>CAC:</strong> Despesas de Marketing (centros MKT/COM) / N&uacute;mero de Receitas.</li>
-        <li><strong>Despesas Operacionais/Receita:</strong> Despesas Operacionais / Receita L&iacute;quida.</li>
-        <li><strong>Break Even:</strong> Despesas Operacionais / (Margem Bruta / Receita L&iacute;quida).</li>
-        <li><strong>PMP:</strong> M&eacute;dia de dias entre vencimento e pagamento das despesas.</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header">
       <h2 class="card-title">Precisa de acesso?</h2>
     </div>
-    <p class="text-muted" style="margin: 0;">
-      Fale com o administrador para ajustar perfil e permiss&otilde;es. Se aparecer "Sem permiss&atilde;o", informe o hor&aacute;rio e o que tentou fazer.
-    </p>
+    <p class="text-muted" style="margin: 0;">Fale com o administrador para ajustar perfil e permiss&otilde;es. Se aparecer "Sem permiss&atilde;o", informe o hor&aacute;rio e o que tentou fazer.</p>
   </div>
 </div>

@@ -1899,6 +1899,8 @@ export function getDashboardData() {
   );
 
   // Extratos pendentes
+  const kpisMes = getKPIsMensal(hoje.getMonth() + 1, hoje.getFullYear(), undefined);
+
   const extratos = getExtratosFromSheet();
   const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
   const extratosConciliados = extratos.filter(e => (e.statusConciliacao || '').toUpperCase() === 'CONCILIADO');
@@ -1986,6 +1988,7 @@ export function getDashboardData() {
       valor: extratosPendentes.reduce((sum, e) => sum + parseFloat(String(e.valor || 0)), 0),
     },
     conciliacaoTaxa,
+    kpisMes,
     recentTransactions,
     alerts,
   };
