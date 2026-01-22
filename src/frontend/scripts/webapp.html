@@ -548,7 +548,10 @@ function loadDashboardData() {
       updateElement('stat-conciliacao-valor', formatCurrency(data.conciliacaoPendentes.valor));
 
       // Render guidance blocks
+      renderDashboardStory(data);
       renderDashboardHealth(data);
+      renderDashboardMonth(data);
+      renderDashboardShortTerm(data);
       renderDashboardActions(data);
       renderDashboardInsights(data);
 
@@ -559,6 +562,40 @@ function loadDashboardData() {
     .getDashboardData();
 }
 
+function renderDashboardStory(data) {
+  const container = document.getElementById('dashboard-story');
+  if (!container) return;
+
+  const receitaMes = Number(data?.receitaMes?.valor || 0);
+  const despesaMes = Number(data?.despesaMes?.valor || 0);
+  const fluxoMes = Number(data?.fluxoMes?.valor || 0);
+  const concTaxa = Number(data?.conciliacaoTaxa || 0);
+  const vencidas = Number(data?.pagarVencidas?.quantidade || 0);
+
+  const balanceLabel = fluxoMes >= 0 ? 'positivo' : 'negativo';
+  const riskLabel = vencidas > 0 ? 'atencao' : 'estavel';
+
+  container.innerHTML = `
+    <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items:center;">
+      <div style="flex:1; min-width: 240px;">
+        <strong>Resumo:</strong> fluxo do mes ${balanceLabel}, conciliacao em ${concTaxa}% e risco ${riskLabel}.
+      </div>
+      <div class="stat-card" style="min-width: 220px;">
+        <div class="stat-label">Receita do mes</div>
+        <div class="stat-value">${formatCurrency(receitaMes)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px;">
+        <div class="stat-label">Despesa do mes</div>
+        <div class="stat-value">${formatCurrency(despesaMes)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px;">
+        <div class="stat-label">Fluxo do mes</div>
+        <div class="stat-value">${formatCurrency(fluxoMes)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboardHealth(data) {
   const container = document.getElementById('dashboard-health');
   if (!container) return;
@@ -566,7 +603,7 @@ function renderDashboardHealth(data) {
   const vencidas = Number(data?.pagarVencidas?.quantidade || 0);
   const proximas = Number(data?.pagarProximas?.quantidade || 0);
   const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
-  const receberHoje = Number(data?.receberHoje?.valor || 0);
+  const receberHojeValor = Number(data?.receberHoje?.valor || 0);
   const pagarProxValor = Number(data?.pagarProximas?.valor || 0);
 
   let status = 'Estavel';
@@ -579,13 +616,13 @@ function renderDashboardHealth(data) {
     statusClass = 'warning';
   }
 
-  const curtoPrazo = receberHoje - pagarProxValor;
+  const curtoPrazo = receberHojeValor - pagarProxValor;
   const curtoPrazoLabel = curtoPrazo >= 0 ? 'Positivo' : 'Negativo';
 
   container.innerHTML = `
     <div class="alert alert-${statusClass}" style="padding: 1rem; border-left: 4px solid; border-radius: 4px;">
       <strong>Saude ${status}</strong>
-      <p style="margin: 0.4rem 0 0 0;">Resumo diario com foco em vencimentos, recebimentos e conciliacao.</p>
+      <p style="margin: 0.4rem 0 0 0;">Indicador diario baseado em vencimentos, recebimentos e conciliacao.</p>
     </div>
     <div style="display:flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
       <div class="stat-card" style="min-width: 220px; flex:1;">
@@ -607,6 +644,75 @@ function renderDashboardHealth(data) {
   `;
 }
 
+function renderDashboardMonth(data) {
+  const container = document.getElementById('dashboard-kpis-month');
+  if (!container) return;
+
+  const receita = Number(data?.receitaMes?.valor || 0);
+  const despesa = Number(data?.despesaMes?.valor || 0);
+  const fluxo = Number(data?.fluxoMes?.valor || 0);
+  const margem = receita > 0 ? Math.round((fluxo / receita) * 100) : 0;
+  const ticketReceita = Number(data?.receitaMes?.ticketMedio || 0);
+  const ticketDespesa = Number(data?.despesaMes?.ticketMedio || 0);
+
+  container.innerHTML = `
+    <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Receitas no mes</div>
+        <div class="stat-value">${formatCurrency(receita)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Despesas no mes</div>
+        <div class="stat-value">${formatCurrency(despesa)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Fluxo do mes</div>
+        <div class="stat-value">${formatCurrency(fluxo)}</div>
+        <div class="stat-change ${fluxo >= 0 ? 'positive' : 'negative'}">Margem ${margem}%</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Ticket medio receita</div>
+        <div class="stat-value">${formatCurrency(ticketReceita)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Ticket medio despesa</div>
+        <div class="stat-value">${formatCurrency(ticketDespesa)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDashboardShortTerm(data) {
+  const container = document.getElementById('dashboard-kpis-short');
+  if (!container) return;
+
+  const pagar7 = Number(data?.pagarProximas?.valor || 0);
+  const receber7 = Number(data?.receberProximas?.valor || 0);
+  const receberAtraso = Number(data?.receberAtrasadas?.valor || 0);
+  const pagar30 = Number(data?.pagarProximas30?.valor || 0);
+
+  container.innerHTML = `
+    <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">A pagar (7 dias)</div>
+        <div class="stat-value">${formatCurrency(pagar7)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">A receber (7 dias)</div>
+        <div class="stat-value">${formatCurrency(receber7)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">Receber em atraso</div>
+        <div class="stat-value">${formatCurrency(receberAtraso)}</div>
+      </div>
+      <div class="stat-card" style="min-width: 220px; flex:1;">
+        <div class="stat-label">A pagar (30 dias)</div>
+        <div class="stat-value">${formatCurrency(pagar30)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboardActions(data) {
   const container = document.getElementById('dashboard-actions');
   if (!container) return;
@@ -616,10 +722,12 @@ function renderDashboardActions(data) {
   const proximas = Number(data?.pagarProximas?.quantidade || 0);
   const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
   const receberHoje = Number(data?.receberHoje?.quantidade || 0);
+  const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
 
   if (vencidas > 0) actions.push('Regularizar contas vencidas hoje.');
   if (proximas > 0) actions.push('Programar pagamentos dos proximos 7 dias.');
   if (receberHoje > 0) actions.push('Cobrar recebimentos previstos para hoje.');
+  if (receberAtraso > 0) actions.push('Atacar recebimentos em atraso para reduzir inadimplencia.');
   if (concPend > 0) actions.push('Executar conciliacao bancaria pendente.');
 
   if (actions.length === 0) {
@@ -642,11 +750,13 @@ function renderDashboardInsights(data) {
   const concPend = Number(data?.conciliacaoPendentes?.quantidade || 0);
   const proximas = Number(data?.pagarProximas?.quantidade || 0);
   const receberHoje = Number(data?.receberHoje?.quantidade || 0);
+  const receberAtraso = Number(data?.receberAtrasadas?.quantidade || 0);
 
   insights.push('Ative Insights com IA para detectar desvios e oportunidades automaticamente.');
   if (concPend > 0) insights.push('Conciliacao pendente pode atrasar a visao real de caixa.');
   if (proximas > 0) insights.push('Planeje o caixa para vencimentos proximos e evite juros.');
   if (receberHoje > 0) insights.push('Antecipe recebimentos para reforcar o saldo diario.');
+  if (receberAtraso > 0) insights.push('Sugestao: crie rotina de cobranca para inadimplentes.');
 
   container.innerHTML = `
     <ul style="margin: 0; padding-left: 1.1rem;">

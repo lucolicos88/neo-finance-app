@@ -1828,6 +1828,20 @@ export function getDashboardData() {
   const lancamentos = getLancamentosFromSheet();
   const hoje = new Date();
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+
+  const toDate = (value: any): Date | null => {
+    const norm = normalizeDateInput(value);
+    if (!norm) return null;
+    const d = new Date(norm);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const inRange = (value: any, start: Date, end: Date): boolean => {
+    const d = toDate(value);
+    if (!d) return false;
+    return d >= start && d < end;
+  };
 
   // Contas a pagar vencidas
   const pagarVencidas = lancamentos.filter(l =>
@@ -1838,13 +1852,22 @@ export function getDashboardData() {
     )
   );
 
-  // Contas a pagar próximos 7 dias
+  // Contas a pagar proximos 7 dias
   const proximos7Dias = new Date();
   proximos7Dias.setDate(proximos7Dias.getDate() + 7);
   const pagarProximas = lancamentos.filter(l =>
     l.tipo === 'DESPESA' &&
     l.status === 'PENDENTE' &&
     new Date(l.dataVencimento) <= proximos7Dias &&
+    new Date(l.dataVencimento) >= hoje
+  );
+
+  const proximos30Dias = new Date();
+  proximos30Dias.setDate(proximos30Dias.getDate() + 30);
+  const pagarProximas30 = lancamentos.filter(l =>
+    l.tipo === 'DESPESA' &&
+    l.status === 'PENDENTE' &&
+    new Date(l.dataVencimento) <= proximos30Dias &&
     new Date(l.dataVencimento) >= hoje
   );
 
@@ -1855,11 +1878,33 @@ export function getDashboardData() {
     new Date(l.dataVencimento).toDateString() === hoje.toDateString()
   );
 
+  const receberProximas = lancamentos.filter(l =>
+    l.tipo === 'RECEITA' &&
+    l.status === 'PENDENTE' &&
+    new Date(l.dataVencimento) <= proximos7Dias &&
+    new Date(l.dataVencimento) >= hoje
+  );
+
+  const receberAtrasadas = lancamentos.filter(l =>
+    l.tipo === 'RECEITA' &&
+    l.status === 'PENDENTE' &&
+    new Date(l.dataVencimento) < hoje
+  );
+
+  const receitaMes = lancamentos.filter(l =>
+    l.tipo === 'RECEITA' && inRange(l.dataCompetencia || l.dataVencimento, inicioMes, fimMes)
+  );
+  const despesaMes = lancamentos.filter(l =>
+    l.tipo === 'DESPESA' && inRange(l.dataCompetencia || l.dataVencimento, inicioMes, fimMes)
+  );
+
   // Extratos pendentes
   const extratos = getExtratosFromSheet();
   const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
+  const extratosConciliados = extratos.filter(e => (e.statusConciliacao || '').toUpperCase() === 'CONCILIADO');
+  const conciliacaoTaxa = extratos.length > 0 ? Math.round((extratosConciliados.length / extratos.length) * 100) : 0;
 
-  // Últimos lançamentos
+  // Ultimos lancamentos (mantido para compatibilidade)
   const recentTransactions = lancamentos
     .slice(0, 10)
     .map(l => ({
@@ -1878,23 +1923,23 @@ export function getDashboardData() {
     alerts.push({
       type: 'danger',
       title: 'Contas Vencidas',
-      message: `Você tem ${pagarVencidas.length} contas a pagar vencidas no valor de ${formatCurrency(sumValues(pagarVencidas))}`,
+      message: `Voce tem ${pagarVencidas.length} contas a pagar vencidas no valor de ${formatCurrency(sumValues(pagarVencidas))}`,
     });
   }
 
   if (pagarProximas.length > 0) {
     alerts.push({
       type: 'warning',
-      title: 'Vencimentos Próximos',
-      message: `${pagarProximas.length} contas a pagar vencem nos próximos 7 dias`,
+      title: 'Vencimentos Proximos',
+      message: `${pagarProximas.length} contas a pagar vencem nos proximos 7 dias`,
     });
   }
 
   if (extratosPendentes.length > 5) {
     alerts.push({
       type: 'info',
-      title: 'Conciliação Pendente',
-      message: `${extratosPendentes.length} extratos bancários aguardando conciliação`,
+      title: 'Conciliacao Pendente',
+      message: `${extratosPendentes.length} extratos bancarios aguardando conciliacao`,
     });
   }
 
@@ -1907,18 +1952,45 @@ export function getDashboardData() {
       quantidade: pagarProximas.length,
       valor: sumValues(pagarProximas),
     },
+    pagarProximas30: {
+      quantidade: pagarProximas30.length,
+      valor: sumValues(pagarProximas30),
+    },
     receberHoje: {
       quantidade: receberHoje.length,
       valor: sumValues(receberHoje),
+    },
+    receberProximas: {
+      quantidade: receberProximas.length,
+      valor: sumValues(receberProximas),
+    },
+    receberAtrasadas: {
+      quantidade: receberAtrasadas.length,
+      valor: sumValues(receberAtrasadas),
+    },
+    receitaMes: {
+      quantidade: receitaMes.length,
+      valor: sumValues(receitaMes),
+      ticketMedio: receitaMes.length ? sumValues(receitaMes) / receitaMes.length : 0,
+    },
+    despesaMes: {
+      quantidade: despesaMes.length,
+      valor: sumValues(despesaMes),
+      ticketMedio: despesaMes.length ? sumValues(despesaMes) / despesaMes.length : 0,
+    },
+    fluxoMes: {
+      valor: sumValues(receitaMes) - sumValues(despesaMes),
     },
     conciliacaoPendentes: {
       quantidade: extratosPendentes.length,
       valor: extratosPendentes.reduce((sum, e) => sum + parseFloat(String(e.valor || 0)), 0),
     },
+    conciliacaoTaxa,
     recentTransactions,
     alerts,
   };
 }
+
 
 export function getLancamentoDetalhes(id: string): any {
   enforcePermission('visualizarRelatorios', 'ver lanÇõamento');
