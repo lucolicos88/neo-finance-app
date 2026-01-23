@@ -62,6 +62,7 @@ function clearReportsCache(): void {
   cacheRemoveNamespace(CacheNamespace.DRE, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.DFC, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.KPI, CacheScope.SCRIPT);
+  cacheRemoveNamespace(CacheNamespace.DASHBOARD, CacheScope.SCRIPT);
   cacheRemoveNamespace(CacheNamespace.CONCILIACAO, CacheScope.SCRIPT);
   invalidateLancamentosCache();
   invalidateExtratosCache();
@@ -1832,13 +1833,15 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
   const fimMes = new Date(targetAno, targetMes, 1);
   const isCurrent = targetMes === hoje.getMonth() + 1 && targetAno === hoje.getFullYear();
   const referencia = isCurrent ? hoje : new Date(targetAno, targetMes, 0);
+  const cacheKey = `dash:${targetAno}-${targetMes}:${filial || 'all'}:${canal || 'all'}`;
 
-  const lancamentosBase = getLancamentosFromSheet();
-  const lancamentos = lancamentosBase.filter(l => {
-    const matchFilial = !filial || l.filial === filial;
-    const matchCanal = !canal || l.canal === canal;
-    return matchFilial && matchCanal;
-  });
+  return cacheGetOrLoad(CacheNamespace.DASHBOARD, cacheKey, () => {
+    const lancamentosBase = getLancamentosFromSheet();
+    const lancamentos = lancamentosBase.filter(l => {
+      const matchFilial = !filial || l.filial === filial;
+      const matchCanal = !canal || l.canal === canal;
+      return matchFilial && matchCanal;
+    });
 
   const toDate = (value: any): Date | null => {
     const norm = normalizeDateInput(value);
@@ -2000,15 +2003,15 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     });
   }
 
-  return {
-    periodo: {
-      mes: targetMes,
-      ano: targetAno,
-      mesNome: getMesNome(targetMes),
-      filial: filial || 'Consolidado',
-      canal: canal || 'Todos',
-      referencia: referenciaLabel,
-    },
+    return {
+      periodo: {
+        mes: targetMes,
+        ano: targetAno,
+        mesNome: getMesNome(targetMes),
+        filial: filial || 'Consolidado',
+        canal: canal || 'Todos',
+        referencia: referenciaLabel,
+      },
     pagarVencidas: {
       quantidade: pagarVencidas.length,
       valor: sumValues(pagarVencidas),
@@ -2053,8 +2056,9 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     conciliacaoTaxa,
     kpisMes,
     recentTransactions,
-    alerts,
-  };
+      alerts,
+    };
+  }, 120, CacheScope.SCRIPT);
 }
 
 
@@ -5165,6 +5169,18 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
         canal: canal || 'Todos'
       },
       rentabilidade: {
+        receitaLiquida: {
+          valor: dreAtual.valores.receitaLiquida
+        },
+        custos: {
+          valor: dreAtual.valores.custos
+        },
+        ebitdaValor: {
+          valor: dreAtual.valores.ebitda
+        },
+        lucroLiquidoValor: {
+          valor: dreAtual.valores.lucroLiquido
+        },
         margemBruta: {
           valor: margemBruta,
           classificacao: classificarIndicador(margemBruta, 'margem_bruta')
@@ -5186,6 +5202,9 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
         liquidezCorrente: {
           valor: liquidezCorrente,
           classificacao: classificarLiquidez(liquidezCorrente)
+        },
+        capitalGiro: {
+          valor: ativoCirculante - passivoCirculante
         },
         saldoCaixa: {
           valor: saldoCaixa,
@@ -5219,6 +5238,9 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
         }
       },
       operacional: {
+        despesasOperacionais: {
+          valor: dreAtual.valores.despesasOperacionais.total
+        },
         cac: {
           valor: cac,
           descricao: `Custo por cliente`

@@ -529,7 +529,6 @@ function populateFilters() {
 // ============================================================================
 // DASHBOARD
 // ============================================================================
-let dashboardViewMode = 'executiva';
 let dashboardLastData = null;
 let dashboardFiltersInitialized = false;
 let dashboardFilterState = {
@@ -639,8 +638,6 @@ function loadDashboardData(force) {
       }
       dashboardLastData = data;
       updateDashboardPeriodLabel(filters, data);
-      updateDashboardViewButtons();
-      applyDashboardViewMode();
 
       // Update stats
       updateElement('stat-pagar-vencidas', formatCurrency(data.pagarVencidas.valor));
@@ -667,43 +664,6 @@ function loadDashboardData(force) {
     .getDashboardData(filters.mes, filters.ano, filters.filial || undefined, filters.canal || undefined);
 }
 
-function setDashboardViewMode(mode) {
-  const next = String(mode || '').toLowerCase();
-  if (!['executiva', 'operacional', 'tecnica'].includes(next)) return;
-  dashboardViewMode = next;
-  updateDashboardViewButtons();
-  applyDashboardViewMode();
-  if (dashboardLastData) {
-    renderDashboardStory(dashboardLastData);
-    renderDashboardActions(dashboardLastData);
-    renderDashboardInsights(dashboardLastData);
-  }
-}
-
-function updateDashboardViewButtons() {
-  const modes = ['executiva', 'operacional', 'tecnica'];
-  modes.forEach(m => {
-    const btn = document.getElementById(`dash-mode-${m}`);
-    if (!btn) return;
-    btn.classList.remove('btn-primary');
-    btn.classList.add('btn-outline');
-    if (m === dashboardViewMode) {
-      btn.classList.add('btn-primary');
-      btn.classList.remove('btn-outline');
-    }
-  });
-}
-
-function applyDashboardViewMode() {
-  const sections = document.querySelectorAll('[data-dashboard-section]');
-  sections.forEach(sec => {
-    const raw = sec.getAttribute('data-dashboard-section') || 'all';
-    const allowed = raw.split(',').map(s => s.trim());
-    const visible = allowed.includes('all') || allowed.includes(dashboardViewMode);
-    sec.style.display = visible ? '' : 'none';
-  });
-}
-
 function renderDashboardStory(data) {
   const container = document.getElementById('dashboard-story');
   if (!container) return;
@@ -723,27 +683,13 @@ function renderDashboardStory(data) {
   const liquidityLabel = liquidez >= 1 ? 'confortavel' : 'apertada';
   const margemLabel = margem >= 5 ? 'saudavel' : margem >= 0 ? 'neutra' : 'negativa';
 
-  let intro = '';
-  let headline = '';
+  const headline = `Fluxo ${balanceLabel} e margem ${margemLabel}.`;
+  const intro = `Conciliacao em ${concTaxa}% com liquidez ${liquidityLabel}.`;
   const bullets = [];
-  if (dashboardViewMode === 'executiva') {
-    headline = `Fluxo ${balanceLabel} e margem ${margemLabel}.`;
-    intro = `Conciliacao em ${concTaxa}% com liquidez ${liquidityLabel}.`;
-    if (fluxoMes < 0) bullets.push('Rever despesas e priorizar caixa nos proximos 7 dias.');
-    if (liquidez < 1) bullets.push('Reforcar capital de giro para reduzir risco.');
-    if (inad > 5) bullets.push('Ativar cobranca ativa para reduzir inadimplencia.');
-  } else if (dashboardViewMode === 'operacional') {
-    headline = 'Foco do dia: execucao do caixa.';
-    intro = 'Priorize vencimentos, recebimentos e conciliacao para evitar atrasos.';
-    if (vencidas > 0) bullets.push(`Regularizar ${vencidas} contas vencidas.`);
-    if (data?.receberHoje?.quantidade > 0) bullets.push('Acionar recebimentos previstos para hoje.');
-    if (data?.conciliacaoPendentes?.quantidade > 0) bullets.push('Conciliar extratos pendentes.');
-  } else {
-    headline = 'Leituras tecnicas do periodo.';
-    intro = 'KPIs alinhados a DRE/DFC e regras de vencimento/conciliacao.';
-    if (concTaxa < 80) bullets.push('Revisar regras de matching e fontes de extrato.');
-    if (inad > 5) bullets.push('Configurar alertas por cliente em atraso.');
-  }
+  if (fluxoMes < 0) bullets.push('Rever despesas e priorizar caixa nos proximos 7 dias.');
+  if (liquidez < 1) bullets.push('Reforcar capital de giro para reduzir risco.');
+  if (inad > 5) bullets.push('Ativar cobranca ativa para reduzir inadimplencia.');
+  if (vencidas > 0) bullets.push(`Regularizar ${vencidas} contas vencidas.`);
 
   container.innerHTML = `
     <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items:center;">
@@ -836,7 +782,7 @@ function renderDashboardKpis(data) {
   const container = document.getElementById('dashboard-kpis');
   if (!container) return;
   const kpis = data?.kpisMes;
-  if (!kpis) {
+  if (!kpis || !kpis.rentabilidade || !kpis.liquidez || !kpis.crescimento) {
     container.innerHTML = '<p class="text-muted">KPIs indisponiveis.</p>';
     return;
   }
@@ -845,43 +791,43 @@ function renderDashboardKpis(data) {
     <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Margem Bruta</div>
-        <div class="stat-value">${kpis.rentabilidade.margemBruta.valor.toFixed(1)}%</div>
-        <div class="stat-change">${kpis.rentabilidade.margemBruta.classificacao}</div>
+        <div class="stat-value">${Number(kpis.rentabilidade?.margemBruta?.valor || 0).toFixed(1)}%</div>
+        <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemBruta?.classificacao || '-'))}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Margem EBITDA</div>
-        <div class="stat-value">${kpis.rentabilidade.margemEbitda.valor.toFixed(1)}%</div>
-        <div class="stat-change">${kpis.rentabilidade.margemEbitda.classificacao}</div>
+        <div class="stat-value">${Number(kpis.rentabilidade?.margemEbitda?.valor || 0).toFixed(1)}%</div>
+        <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemEbitda?.classificacao || '-'))}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Margem Liquida</div>
-        <div class="stat-value">${kpis.rentabilidade.margemLiquida.valor.toFixed(1)}%</div>
-        <div class="stat-change">${kpis.rentabilidade.margemLiquida.classificacao}</div>
+        <div class="stat-value">${Number(kpis.rentabilidade?.margemLiquida?.valor || 0).toFixed(1)}%</div>
+        <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemLiquida?.classificacao || '-'))}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Liquidez Corrente</div>
-        <div class="stat-value">${kpis.liquidez.liquidezCorrente.valor.toFixed(2)}</div>
-        <div class="stat-change">${kpis.liquidez.liquidezCorrente.classificacao}</div>
+        <div class="stat-value">${Number(kpis.liquidez?.liquidezCorrente?.valor || 0).toFixed(2)}</div>
+        <div class="stat-change">${escapeHtml(String(kpis.liquidez?.liquidezCorrente?.classificacao || '-'))}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Inadimplencia</div>
-        <div class="stat-value">${kpis.crescimento.inadimplencia.valor.toFixed(1)}%</div>
-        <div class="stat-change">${kpis.crescimento.inadimplencia.classificacao}</div>
+        <div class="stat-value">${Number(kpis.crescimento?.inadimplencia?.valor || 0).toFixed(1)}%</div>
+        <div class="stat-change">${escapeHtml(String(kpis.crescimento?.inadimplencia?.classificacao || '-'))}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Ticket Medio</div>
-        <div class="stat-value">${formatCurrency(kpis.crescimento.ticketMedio.valor)}</div>
-        <div class="stat-change">${kpis.crescimento.ticketMedio.qtdTransacoes} transacoes</div>
+        <div class="stat-value">${formatCurrency(Number(kpis.crescimento?.ticketMedio?.valor || 0))}</div>
+        <div class="stat-change">${Number(kpis.crescimento?.ticketMedio?.qtdTransacoes || 0)} transacoes</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Burn Rate</div>
-        <div class="stat-value">${formatCurrency(kpis.liquidez.burnRate.valor)}</div>
-        <div class="stat-change">${kpis.liquidez.burnRate.descricao}</div>
+        <div class="stat-value">${formatCurrency(Number(kpis.liquidez?.burnRate?.valor || 0))}</div>
+        <div class="stat-change">${escapeHtml(String(kpis.liquidez?.burnRate?.descricao || '-'))}</div>
       </div>
       <div class="stat-card" style="min-width: 220px; flex:1;">
         <div class="stat-label">Runway</div>
-        <div class="stat-value">${kpis.liquidez.runway.valor.toFixed(0)} meses</div>
-        <div class="stat-change">${kpis.liquidez.runway.descricao}</div>
+        <div class="stat-value">${Number(kpis.liquidez?.runway?.valor || 0).toFixed(0)} meses</div>
+        <div class="stat-change">${escapeHtml(String(kpis.liquidez?.runway?.descricao || '-'))}</div>
       </div>
     </div>
   `;
@@ -894,15 +840,15 @@ function renderDashboardMonth(data) {
   if (!container) return;
 
   const kpis = data?.kpisMes;
-  if (!kpis) {
+  if (!kpis || !kpis.rentabilidade || !kpis.operacional) {
     container.innerHTML = '<p class="text-muted">KPIs indisponiveis.</p>';
     return;
   }
 
-  const receita = Number(kpis.rentabilidade.receitaLiquida.valor || 0);
-  const despesasOp = Number(kpis.operacional.despesasOperacionais.valor || 0);
-  const ebitdaValor = Number(kpis.rentabilidade.ebitdaValor.valor || 0);
-  const lucroLiquido = Number(kpis.rentabilidade.lucroLiquidoValor.valor || 0);
+  const receita = Number(kpis.rentabilidade?.receitaLiquida?.valor || 0);
+  const despesasOp = Number(kpis.operacional?.despesasOperacionais?.valor || 0);
+  const ebitdaValor = Number(kpis.rentabilidade?.ebitdaValor?.valor || 0);
+  const lucroLiquido = Number(kpis.rentabilidade?.lucroLiquidoValor?.valor || 0);
 
   container.innerHTML = `
     <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
@@ -971,20 +917,14 @@ function renderDashboardActions(data) {
   const liquidez = Number(data?.kpisMes?.liquidez?.liquidezCorrente?.valor || 0);
   const inad = Number(data?.kpisMes?.crescimento?.inadimplencia?.valor || 0);
 
-  if (dashboardViewMode === 'executiva') {
-    if (fluxoMes < 0) actions.push({ prio: 1, text: 'Fluxo mensal negativo: revisar despesas e renegociar prazos.' });
-    if (liquidez > 0 && liquidez < 1) actions.push({ prio: 1, text: 'Liquidez abaixo de 1: reforcar capital de giro.' });
-    if (vencidas > 0) actions.push({ prio: 2, text: 'Regularizar contas vencidas para reduzir risco financeiro.' });
-    if (inad > 5) actions.push({ prio: 2, text: 'Reforcar cobranca de atrasados e revisar politica de credito.' });
-    if (proximas > 0) actions.push({ prio: 3, text: 'Confirmar caixa para vencimentos dos proximos 7 dias.' });
-    if (concPend > 0) actions.push({ prio: 3, text: 'Fechar conciliacao para visao real do caixa.' });
-  } else {
-    if (vencidas > 0) actions.push({ prio: 1, text: 'Pagar vencidos hoje e registrar comprovantes.' });
-    if (proximas > 0) actions.push({ prio: 2, text: 'Agendar pagamentos dos proximos 7 dias.' });
-    if (receberHoje > 0) actions.push({ prio: 2, text: 'Acionar clientes com recebimento previsto hoje.' });
-    if (receberAtraso > 0) actions.push({ prio: 1, text: 'Executar rotina de cobranca para inadimplentes.' });
-    if (concPend > 0) actions.push({ prio: 2, text: 'Conciliar extratos pendentes.' });
-  }
+  if (fluxoMes < 0) actions.push({ prio: 1, text: 'Fluxo mensal negativo: revisar despesas e renegociar prazos.' });
+  if (liquidez > 0 && liquidez < 1) actions.push({ prio: 1, text: 'Liquidez abaixo de 1: reforcar capital de giro.' });
+  if (vencidas > 0) actions.push({ prio: 2, text: 'Regularizar contas vencidas para reduzir risco financeiro.' });
+  if (inad > 5) actions.push({ prio: 2, text: 'Reforcar cobranca de atrasados e revisar politica de credito.' });
+  if (proximas > 0) actions.push({ prio: 3, text: 'Confirmar caixa para vencimentos dos proximos 7 dias.' });
+  if (concPend > 0) actions.push({ prio: 3, text: 'Fechar conciliacao para visao real do caixa.' });
+  if (receberHoje > 0) actions.push({ prio: 3, text: 'Acionar clientes com recebimento previsto hoje.' });
+  if (receberAtraso > 0) actions.push({ prio: 2, text: 'Executar rotina de cobranca para inadimplentes.' });
 
   const ordered = actions
     .sort((a, b) => (a.prio || 9) - (b.prio || 9))
@@ -1017,21 +957,12 @@ function renderDashboardInsights(data) {
   const margem = Number(kpis?.rentabilidade?.margemLiquida?.valor || 0);
 
   insights.push('Ative Insights com IA para detectar desvios e oportunidades automaticamente.');
-  if (dashboardViewMode === 'executiva') {
-    if (fluxoMes < 0) insights.push('Fluxo negativo indica necessidade de ajuste no mix de custos.');
-    if (liquidez > 0 && liquidez < 1) insights.push('Liquidez abaixo do ideal: risco de curto prazo.');
-    if (margem < 0) insights.push('Margem liquida negativa: priorizar rentabilidade.');
-    if (concPend > 0) insights.push('Conciliacao pendente reduz confiabilidade do caixa.');
-  } else if (dashboardViewMode === 'operacional') {
-    if (concPend > 0) insights.push('Concilie extratos para liberar fechamento diario.');
-    if (receberHoje > 0) insights.push('Priorize cobrancas de hoje para evitar atraso.');
-    if (receberAtraso > 0) insights.push('Inadimplentes aumentam o risco de caixa.');
-  } else {
-    insights.push('Com IA, seria possivel detectar anomalias e outliers automaticamente.');
-    if (concPend > 0) insights.push('Sugestao tecnica: revisar regras de matching de conciliacao.');
-    if (receberAtraso > 0) insights.push('Sugestao tecnica: criar flags de risco por cliente.');
-    if (proximas > 0) insights.push('Sugestao tecnica: antecipar avisos de vencimento automatico.');
-  }
+  if (fluxoMes < 0) insights.push('Fluxo negativo indica necessidade de ajuste no mix de custos.');
+  if (liquidez > 0 && liquidez < 1) insights.push('Liquidez abaixo do ideal: risco de curto prazo.');
+  if (margem < 0) insights.push('Margem liquida negativa: priorizar rentabilidade.');
+  if (concPend > 0) insights.push('Conciliacao pendente reduz confiabilidade do caixa.');
+  if (receberAtraso > 0) insights.push('Inadimplentes aumentam o risco de caixa.');
+  if (proximas > 0) insights.push('Vencimentos proximos exigem planejamento diario.');
 
   container.innerHTML = `
     <ul style="margin: 0; padding-left: 1.1rem;">
@@ -3314,6 +3245,12 @@ function carregarKPIs() {
 }
 
 function renderKPIs(kpis) {
+  if (!kpis || !kpis.periodo || !kpis.rentabilidade || !kpis.liquidez || !kpis.crescimento || !kpis.operacional) {
+    const title = document.getElementById('kpi-titulo');
+    if (title) title.textContent = 'KPIs - dados indisponiveis';
+    showToast('Nao foi possivel carregar os KPIs. Tente novamente.', 'error');
+    return;
+  }
   // Update title
   const canalLabel = kpis.periodo.canal && kpis.periodo.canal !== 'Todos' ? ` - Canal ${kpis.periodo.canal}` : '';
   document.getElementById('kpi-titulo').textContent =
