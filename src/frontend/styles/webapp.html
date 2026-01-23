@@ -146,15 +146,31 @@ body.app-busy button {
 }
 
 .dashboard-section-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 1.2rem;
   margin-bottom: 1.5rem;
 }
 
+.dashboard-section-grid .card {
+  flex: 1 1 320px;
+  min-width: 320px;
+}
+
+.dashboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.9rem;
+}
+
+.dashboard-kpi-grid .stat-card {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 @media (max-width: 1100px) {
-  .dashboard-section-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dashboard-section-grid .card {
+    flex: 1 1 48%;
   }
 }
 

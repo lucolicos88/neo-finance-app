@@ -1860,6 +1860,8 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
   const buildSnapshot = (ref: Date) => {
     const next7 = new Date(ref.getTime());
     next7.setDate(next7.getDate() + 7);
+    const next30 = new Date(ref.getTime());
+    next30.setDate(next30.getDate() + 30);
     const pagarVencidasSnap = lancamentos.filter(l =>
       l.tipo === 'DESPESA' &&
       (
@@ -1878,6 +1880,23 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
       l.status === 'PENDENTE' &&
       new Date(l.dataVencimento).toDateString() === ref.toDateString()
     );
+    const pagarProximas30Snap = lancamentos.filter(l =>
+      l.tipo === 'DESPESA' &&
+      l.status === 'PENDENTE' &&
+      new Date(l.dataVencimento) <= next30 &&
+      new Date(l.dataVencimento) >= ref
+    );
+    const receberProximasSnap = lancamentos.filter(l =>
+      l.tipo === 'RECEITA' &&
+      l.status === 'PENDENTE' &&
+      new Date(l.dataVencimento) <= next7 &&
+      new Date(l.dataVencimento) >= ref
+    );
+    const receberAtrasadasSnap = lancamentos.filter(l =>
+      l.tipo === 'RECEITA' &&
+      l.status === 'PENDENTE' &&
+      new Date(l.dataVencimento) < ref
+    );
     const extratosPendentesSnap = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
     return {
       pagarVencidas: {
@@ -1891,6 +1910,18 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
       receberHoje: {
         quantidade: receberHojeSnap.length,
         valor: sumValues(receberHojeSnap),
+      },
+      pagarProximas30: {
+        quantidade: pagarProximas30Snap.length,
+        valor: sumValues(pagarProximas30Snap),
+      },
+      receberProximas: {
+        quantidade: receberProximasSnap.length,
+        valor: sumValues(receberProximasSnap),
+      },
+      receberAtrasadas: {
+        quantidade: receberAtrasadasSnap.length,
+        valor: sumValues(receberAtrasadasSnap),
       },
       conciliacaoPendentes: {
         quantidade: extratosPendentesSnap.length,

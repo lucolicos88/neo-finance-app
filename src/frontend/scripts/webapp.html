@@ -700,12 +700,31 @@ function updateDashboardStatDelta(idBase, current, prev, useValue) {
   const currentVal = useValue ? Number(current.valor || 0) : Number(current.quantidade || 0);
   const prevVal = useValue ? Number(prev.valor || 0) : Number(prev.quantidade || 0);
   const delta = currentVal - prevVal;
-  const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '●';
+  const arrow = delta > 0 ? '&#9650;' : delta < 0 ? '&#9660;' : '&#9679;';
   const cls = delta > 0 ? 'stat-sub delta-up' : delta < 0 ? 'stat-sub delta-down' : 'stat-sub delta-flat';
   deltaEl.className = cls;
   const formatted = useValue ? formatCurrency(Math.abs(delta)) : Math.abs(delta);
   const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
-  deltaEl.textContent = `Variacao: ${arrow} ${sign}${formatted}`;
+  deltaEl.innerHTML = `Variacao: ${arrow} ${sign}${formatted}`;
+}
+
+function renderDashboardDeltaLines(current, prev, formatter) {
+  if (prev === null || typeof prev === 'undefined') {
+    return `
+      <div class="stat-sub">Mes anterior: -</div>
+      <div class="stat-sub">Variacao: -</div>
+    `;
+  }
+  const delta = Number(current || 0) - Number(prev || 0);
+  const arrow = delta > 0 ? '&#9650;' : delta < 0 ? '&#9660;' : '&#9679;';
+  const cls = delta > 0 ? 'stat-sub delta-up' : delta < 0 ? 'stat-sub delta-down' : 'stat-sub delta-flat';
+  const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+  const prevText = formatter(prev);
+  const deltaText = formatter(Math.abs(delta));
+  return `
+    <div class="stat-sub">Mes anterior: ${prevText}</div>
+    <div class="${cls}">Variacao: ${arrow} ${sign}${deltaText}</div>
+  `;
 }
 
 function loadDashboardKpis(filters) {
@@ -735,6 +754,12 @@ function renderDashboardStory(data) {
   const concTaxa = Number(data?.conciliacaoTaxa || 0);
   const vencidas = Number(data?.pagarVencidas?.quantidade || 0);
   const kpis = data?.kpisMes;
+  const prevComp = kpis?.comparativo?.mesAnterior || {};
+  const prevReceita = prevComp?.receitaLiquida;
+  const prevDespesa = prevComp?.despesasOperacionais;
+  const prevFluxo = (typeof prevReceita !== 'undefined' && typeof prevDespesa !== 'undefined')
+    ? Number(prevReceita || 0) - Number(prevDespesa || 0)
+    : null;
   const liquidez = Number(kpis?.liquidez?.liquidezCorrente?.valor || 0);
   const margem = Number(kpis?.rentabilidade?.margemLiquida?.valor || 0);
   const inad = Number(kpis?.crescimento?.inadimplencia?.valor || 0);
@@ -761,20 +786,23 @@ function renderDashboardStory(data) {
         <div style="margin-top: 0.35rem;">${intro}</div>
         ${bullets.length ? `<ul style="margin: 0.6rem 0 0 1rem;">${bullets.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : ''}
       </div>
-      <div class="stat-card" style="min-width: 220px;">
-        <div class="stat-label">Receita do mes</div>
-        <div class="stat-value">${formatCurrency(receitaMes)}</div>
+        <div class="stat-card">
+          <div class="stat-label">Receita do mes</div>
+          <div class="stat-value">${formatCurrency(receitaMes)}</div>
+          ${renderDashboardDeltaLines(receitaMes, prevReceita, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Despesa do mes</div>
+          <div class="stat-value">${formatCurrency(despesaMes)}</div>
+          ${renderDashboardDeltaLines(despesaMes, prevDespesa, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Fluxo do mes</div>
+          <div class="stat-value">${formatCurrency(fluxoMes)}</div>
+          ${renderDashboardDeltaLines(fluxoMes, prevFluxo, v => formatCurrency(Number(v)))}
+        </div>
       </div>
-      <div class="stat-card" style="min-width: 220px;">
-        <div class="stat-label">Despesa do mes</div>
-        <div class="stat-value">${formatCurrency(despesaMes)}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px;">
-        <div class="stat-label">Fluxo do mes</div>
-        <div class="stat-value">${formatCurrency(fluxoMes)}</div>
-      </div>
-    </div>
-  `;
+    `;
 }
 
 function renderDashboardHealth(data) {
@@ -788,6 +816,12 @@ function renderDashboardHealth(data) {
   const pagarProxValor = Number(data?.pagarProximas?.valor || 0);
   const inad = Number(data?.kpisMes?.crescimento?.inadimplencia?.valor || 0);
   const liquidez = Number(data?.kpisMes?.liquidez?.liquidezCorrente?.valor || 0);
+  const prevComp = data?.kpisMes?.comparativo?.mesAnterior || {};
+  const prevLiquidez = prevComp?.liquidezCorrente;
+  const prevSnapshot = data?.prev || {};
+  const prevCurtoPrazo = (typeof prevSnapshot?.receberHoje?.valor === 'undefined' || typeof prevSnapshot?.pagarProximas?.valor === 'undefined')
+    ? null
+    : Number(prevSnapshot.receberHoje.valor || 0) - Number(prevSnapshot.pagarProximas.valor || 0);
 
   let status = 'Estavel';
   let statusClass = 'success';
@@ -815,29 +849,33 @@ function renderDashboardHealth(data) {
       <strong>Saude ${status}</strong>
       <p style="margin: 0.4rem 0 0 0;">Score ${score}/100 baseado em vencimentos, liquidez, conciliacao e inadimplencia.</p>
     </div>
-    <div style="display:flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Fluxo curto prazo (7 dias)</div>
-        <div class="stat-value">${formatCurrency(curtoPrazo)}</div>
-        <div class="stat-change ${curtoPrazo >= 0 ? 'positive' : 'negative'}">${curtoPrazoLabel}</div>
+      <div class="dashboard-kpi-grid" style="margin-top: 0.75rem;">
+        <div class="stat-card">
+          <div class="stat-label">Fluxo curto prazo (7 dias)</div>
+          <div class="stat-value">${formatCurrency(curtoPrazo)}</div>
+          <div class="stat-change ${curtoPrazo >= 0 ? 'positive' : 'negative'}">${curtoPrazoLabel}</div>
+          ${renderDashboardDeltaLines(curtoPrazo, prevCurtoPrazo, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Liquidez Corrente</div>
+          <div class="stat-value">${liquidez ? liquidez.toFixed(2) : '-'}</div>
+          <div class="stat-change">${liquidez >= 1 ? 'Confortavel' : 'Ajustar'}</div>
+          ${renderDashboardDeltaLines(liquidez, prevLiquidez, v => Number(v).toFixed(2))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Risco de atraso</div>
+          <div class="stat-value">${vencidas}</div>
+          <div class="stat-change">contas vencidas</div>
+          ${renderDashboardDeltaLines(vencidas, prevSnapshot?.pagarVencidas?.quantidade, v => Math.round(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Conciliacao pendente</div>
+          <div class="stat-value">${concPend}</div>
+          <div class="stat-change">extratos pendentes</div>
+          ${renderDashboardDeltaLines(concPend, prevSnapshot?.conciliacaoPendentes?.quantidade, v => Math.round(Number(v)))}
+        </div>
       </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Liquidez Corrente</div>
-        <div class="stat-value">${liquidez ? liquidez.toFixed(2) : '-'}</div>
-        <div class="stat-change">${liquidez >= 1 ? 'Confortavel' : 'Ajustar'}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Risco de atraso</div>
-        <div class="stat-value">${vencidas}</div>
-        <div class="stat-change">contas vencidas</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Conciliacao pendente</div>
-        <div class="stat-value">${concPend}</div>
-        <div class="stat-change">extratos pendentes</div>
-      </div>
-    </div>
-  `;
+    `;
 }
 
 function renderDashboardKpis(data) {
@@ -849,50 +887,64 @@ function renderDashboardKpis(data) {
     return;
   }
 
+  const prev = kpis.comparativo?.mesAnterior || {};
+  const fmtPct = (v) => `${Number(v).toFixed(1)}%`;
+  const fmtMoney = (v) => formatCurrency(Number(v));
+  const fmtNum = (v) => Number(v).toFixed(2);
+  const fmtMeses = (v) => `${Number(v).toFixed(0)} meses`;
+
   const html = `
-    <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Margem Bruta</div>
-        <div class="stat-value">${Number(kpis.rentabilidade?.margemBruta?.valor || 0).toFixed(1)}%</div>
-        <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemBruta?.classificacao || '-'))}</div>
+      <div class="dashboard-kpi-grid">
+        <div class="stat-card">
+          <div class="stat-label">Margem Bruta</div>
+          <div class="stat-value">${Number(kpis.rentabilidade?.margemBruta?.valor || 0).toFixed(1)}%</div>
+          <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemBruta?.classificacao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.rentabilidade?.margemBruta?.valor, prev.margemBruta, fmtPct)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Margem EBITDA</div>
+          <div class="stat-value">${Number(kpis.rentabilidade?.margemEbitda?.valor || 0).toFixed(1)}%</div>
+          <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemEbitda?.classificacao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.rentabilidade?.margemEbitda?.valor, prev.margemEbitda, fmtPct)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Margem Liquida</div>
+          <div class="stat-value">${Number(kpis.rentabilidade?.margemLiquida?.valor || 0).toFixed(1)}%</div>
+          <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemLiquida?.classificacao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.rentabilidade?.margemLiquida?.valor, prev.margemLiquida, fmtPct)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Liquidez Corrente</div>
+          <div class="stat-value">${Number(kpis.liquidez?.liquidezCorrente?.valor || 0).toFixed(2)}</div>
+          <div class="stat-change">${escapeHtml(String(kpis.liquidez?.liquidezCorrente?.classificacao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.liquidez?.liquidezCorrente?.valor, prev.liquidezCorrente, fmtNum)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Inadimplencia</div>
+          <div class="stat-value">${Number(kpis.crescimento?.inadimplencia?.valor || 0).toFixed(1)}%</div>
+          <div class="stat-change">${escapeHtml(String(kpis.crescimento?.inadimplencia?.classificacao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.crescimento?.inadimplencia?.valor, prev.inadimplencia, fmtPct)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Ticket Medio</div>
+          <div class="stat-value">${formatCurrency(Number(kpis.crescimento?.ticketMedio?.valor || 0))}</div>
+          <div class="stat-change">${Number(kpis.crescimento?.ticketMedio?.qtdTransacoes || 0)} transacoes</div>
+          ${renderDashboardDeltaLines(kpis.crescimento?.ticketMedio?.valor, prev.ticketMedio, fmtMoney)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Burn Rate</div>
+          <div class="stat-value">${formatCurrency(Number(kpis.liquidez?.burnRate?.valor || 0))}</div>
+          <div class="stat-change">${escapeHtml(String(kpis.liquidez?.burnRate?.descricao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.liquidez?.burnRate?.valor, prev.burnRate, fmtMoney)}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Runway</div>
+          <div class="stat-value">${Number(kpis.liquidez?.runway?.valor || 0).toFixed(0)} meses</div>
+          <div class="stat-change">${escapeHtml(String(kpis.liquidez?.runway?.descricao || '-'))}</div>
+          ${renderDashboardDeltaLines(kpis.liquidez?.runway?.valor, prev.runway, fmtMeses)}
+        </div>
       </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Margem EBITDA</div>
-        <div class="stat-value">${Number(kpis.rentabilidade?.margemEbitda?.valor || 0).toFixed(1)}%</div>
-        <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemEbitda?.classificacao || '-'))}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Margem Liquida</div>
-        <div class="stat-value">${Number(kpis.rentabilidade?.margemLiquida?.valor || 0).toFixed(1)}%</div>
-        <div class="stat-change">${escapeHtml(String(kpis.rentabilidade?.margemLiquida?.classificacao || '-'))}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Liquidez Corrente</div>
-        <div class="stat-value">${Number(kpis.liquidez?.liquidezCorrente?.valor || 0).toFixed(2)}</div>
-        <div class="stat-change">${escapeHtml(String(kpis.liquidez?.liquidezCorrente?.classificacao || '-'))}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Inadimplencia</div>
-        <div class="stat-value">${Number(kpis.crescimento?.inadimplencia?.valor || 0).toFixed(1)}%</div>
-        <div class="stat-change">${escapeHtml(String(kpis.crescimento?.inadimplencia?.classificacao || '-'))}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Ticket Medio</div>
-        <div class="stat-value">${formatCurrency(Number(kpis.crescimento?.ticketMedio?.valor || 0))}</div>
-        <div class="stat-change">${Number(kpis.crescimento?.ticketMedio?.qtdTransacoes || 0)} transacoes</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Burn Rate</div>
-        <div class="stat-value">${formatCurrency(Number(kpis.liquidez?.burnRate?.valor || 0))}</div>
-        <div class="stat-change">${escapeHtml(String(kpis.liquidez?.burnRate?.descricao || '-'))}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Runway</div>
-        <div class="stat-value">${Number(kpis.liquidez?.runway?.valor || 0).toFixed(0)} meses</div>
-        <div class="stat-change">${escapeHtml(String(kpis.liquidez?.runway?.descricao || '-'))}</div>
-      </div>
-    </div>
-  `;
+    `;
 
   container.innerHTML = html;
 }
@@ -911,27 +963,32 @@ function renderDashboardMonth(data) {
   const despesasOp = Number(kpis.operacional?.despesasOperacionais?.valor || 0);
   const ebitdaValor = Number(kpis.rentabilidade?.ebitdaValor?.valor || 0);
   const lucroLiquido = Number(kpis.rentabilidade?.lucroLiquidoValor?.valor || 0);
+  const prev = kpis.comparativo?.mesAnterior || {};
 
   container.innerHTML = `
-    <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Receita Liquida</div>
-        <div class="stat-value">${formatCurrency(receita)}</div>
+      <div class="dashboard-kpi-grid">
+        <div class="stat-card">
+          <div class="stat-label">Receita Liquida</div>
+          <div class="stat-value">${formatCurrency(receita)}</div>
+          ${renderDashboardDeltaLines(receita, prev.receitaLiquida, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Despesas Operacionais</div>
+          <div class="stat-value">${formatCurrency(despesasOp)}</div>
+          ${renderDashboardDeltaLines(despesasOp, prev.despesasOperacionais, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">EBITDA (R$)</div>
+          <div class="stat-value">${formatCurrency(ebitdaValor)}</div>
+          ${renderDashboardDeltaLines(ebitdaValor, prev.ebitdaValor, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Lucro Liquido (R$)</div>
+          <div class="stat-value">${formatCurrency(lucroLiquido)}</div>
+          ${renderDashboardDeltaLines(lucroLiquido, prev.lucroLiquidoValor, v => formatCurrency(Number(v)))}
+        </div>
       </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Despesas Operacionais</div>
-        <div class="stat-value">${formatCurrency(despesasOp)}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">EBITDA (R$)</div>
-        <div class="stat-value">${formatCurrency(ebitdaValor)}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Lucro Liquido (R$)</div>
-        <div class="stat-value">${formatCurrency(lucroLiquido)}</div>
-      </div>
-    </div>
-  `;
+    `;
 }
 
 function renderDashboardShortTerm(data) {
@@ -942,27 +999,32 @@ function renderDashboardShortTerm(data) {
   const receber7 = Number(data?.receberProximas?.valor || 0);
   const receberAtraso = Number(data?.receberAtrasadas?.valor || 0);
   const pagar30 = Number(data?.pagarProximas30?.valor || 0);
+  const prev = data?.prev || {};
 
   container.innerHTML = `
-    <div style="display:flex; gap: 1rem; flex-wrap: wrap;">
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">A pagar (7 dias)</div>
-        <div class="stat-value">${formatCurrency(pagar7)}</div>
+      <div class="dashboard-kpi-grid">
+        <div class="stat-card">
+          <div class="stat-label">A pagar (7 dias)</div>
+          <div class="stat-value">${formatCurrency(pagar7)}</div>
+          ${renderDashboardDeltaLines(pagar7, prev.pagarProximas?.valor, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">A receber (7 dias)</div>
+          <div class="stat-value">${formatCurrency(receber7)}</div>
+          ${renderDashboardDeltaLines(receber7, prev.receberProximas?.valor, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Receber em atraso</div>
+          <div class="stat-value">${formatCurrency(receberAtraso)}</div>
+          ${renderDashboardDeltaLines(receberAtraso, prev.receberAtrasadas?.valor, v => formatCurrency(Number(v)))}
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">A pagar (30 dias)</div>
+          <div class="stat-value">${formatCurrency(pagar30)}</div>
+          ${renderDashboardDeltaLines(pagar30, prev.pagarProximas30?.valor, v => formatCurrency(Number(v)))}
+        </div>
       </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">A receber (7 dias)</div>
-        <div class="stat-value">${formatCurrency(receber7)}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">Receber em atraso</div>
-        <div class="stat-value">${formatCurrency(receberAtraso)}</div>
-      </div>
-      <div class="stat-card" style="min-width: 220px; flex:1;">
-        <div class="stat-label">A pagar (30 dias)</div>
-        <div class="stat-value">${formatCurrency(pagar30)}</div>
-      </div>
-    </div>
-  `;
+    `;
 }
 
 function renderDashboardActions(data) {
@@ -3401,7 +3463,7 @@ function renderKPIs(kpis) {
       ? '-'
       : (fmt ? fmt(deltaNum) : String(deltaNum));
 
-    const arrow = deltaNum === null ? '' : (deltaNum > 0 ? '▲' : deltaNum < 0 ? '▼' : '●');
+    const arrow = deltaNum === null ? '' : (deltaNum > 0 ? '&#9650;' : deltaNum < 0 ? '&#9660;' : '&#9679;');
     const deltaClass = deltaNum === null ? 'stat-sub' : (deltaNum > 0 ? 'stat-sub delta-up' : deltaNum < 0 ? 'stat-sub delta-down' : 'stat-sub delta-flat');
     const signText = (deltaNum !== null && deltaNum > 0) ? '+' : '';
 
