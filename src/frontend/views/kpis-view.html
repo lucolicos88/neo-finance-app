@@ -14,7 +14,6 @@
     <div class="filters">
       <div class="d-flex justify-between align-center mb-2">
         <h3 class="filters-title">Selecionar Per&iacute;odo</h3>
-        <button class="btn btn-outline" onclick="voltarRelatorios()">&#8592; Voltar</button>
       </div>
 
       <div class="form-row">
@@ -59,9 +58,12 @@
           </select>
         </div>
 
-        <div class="form-group" style="display: flex; align-items: flex-end;">
+        <div class="form-group" style="display: flex; align-items: flex-end; gap: 0.5rem;">
           <button class="btn btn-primary" onclick="carregarKPIs()" style="width: 100%;">
             Gerar KPIs
+          </button>
+          <button class="btn btn-outline" onclick="exportarKPIs()" style="white-space: nowrap;">
+            Exportar PDF
           </button>
         </div>
       </div>
@@ -72,9 +74,7 @@
   <div class="card">
     <div class="card-header">
       <h2 class="card-title" id="kpi-titulo">KPIs - Aguardando sele&ccedil;&atilde;o</h2>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="exportarKPIs()">Exportar PDF</button>
-      </div>
+      <div class="card-actions"></div>
     </div>
 
     <div style="padding: 1.5rem;" id="kpis-report-content">
@@ -259,7 +259,4 @@ document.addEventListener('DOMContentLoaded', function() {
   if (selectAno) selectAno.value = anoAtual;
 });
 
-function voltarRelatorios() {
-  navigateTo('relatorios');
-}
 </script>
