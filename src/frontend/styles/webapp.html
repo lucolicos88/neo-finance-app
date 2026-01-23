@@ -147,19 +147,18 @@ body.app-busy button {
 
 .dashboard-section-grid {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 1.2rem;
   margin-bottom: 1.5rem;
 }
 
 .dashboard-section-grid .card {
-  flex: 1 1 320px;
-  min-width: 320px;
+  width: 100%;
 }
 
 .dashboard-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.9rem;
 }
 
@@ -168,15 +167,31 @@ body.app-busy button {
   margin-bottom: 0;
 }
 
+.dashboard-kpi-grid .stat-label {
+  font-size: 0.85rem;
+}
+
+.dashboard-kpi-grid .stat-value {
+  font-size: 1.4rem;
+  line-height: 1.1;
+  word-break: break-word;
+}
+
 @media (max-width: 1100px) {
-  .dashboard-section-grid .card {
-    flex: 1 1 48%;
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-kpi-grid {
+    grid-template-columns: 1fr;
   }
 }
 
