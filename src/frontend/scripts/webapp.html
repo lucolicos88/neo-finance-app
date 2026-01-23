@@ -3368,12 +3368,18 @@ function renderKPIs(kpis) {
     const prevText = (prevVal === null || typeof prevVal === 'undefined')
       ? '-'
       : (fmt ? fmt(prevVal) : String(prevVal));
-    const varText = (prevVal === null || typeof prevVal === 'undefined')
+    const deltaNum = (prevVal === null || typeof prevVal === 'undefined') ? null : (current - prevVal);
+    const deltaText = (deltaNum === null)
       ? '-'
-      : (fmt ? fmt(current - prevVal) : String(current - prevVal));
+      : (fmt ? fmt(deltaNum) : String(deltaNum));
+
+    const arrow = deltaNum === null ? '' : (deltaNum > 0 ? '▲' : deltaNum < 0 ? '▼' : '●');
+    const deltaClass = deltaNum === null ? 'stat-sub' : (deltaNum > 0 ? 'stat-sub delta-up' : deltaNum < 0 ? 'stat-sub delta-down' : 'stat-sub delta-flat');
+    const signText = (deltaNum !== null && deltaNum > 0) ? '+' : '';
 
     prevEl.textContent = `Mes anterior: ${prevText}`;
-    varEl.textContent = `Variacao: ${varText}`;
+    varEl.className = deltaClass;
+    varEl.innerHTML = `Variacao: ${arrow} ${signText}${deltaText}`;
   };
 
   const fmtPct = (v) => `${Number(v).toFixed(1)}%`;
@@ -3426,16 +3432,25 @@ function exportarKPIs() {
   }
 
   const safeTitle = escapeHtml(titleText);
+  const logoUrl = 'https://neoformula.com.br/cdn/shop/files/Logotipo-NeoFormula-Manipulacao-Homeopatia_76b2fa98-5ffa-4cc3-ac0a-6d41e1bc8810.png?height=120&v=1677088468';
+  const generatedAt = new Date().toLocaleDateString('pt-BR');
   const styles = `
     <style>
       body { font-family: Arial, sans-serif; color: #1a1a1a; padding: 24px; }
-      h1 { font-size: 20px; margin-bottom: 16px; }
-      h3 { margin: 12px 0 8px; font-size: 13px; color: #2c3e50; page-break-after: avoid; }
+      .report-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+      .report-logo { height: 38px; }
+      .report-title { font-size: 18px; font-weight: 700; color: #0b5345; }
+      .report-sub { font-size: 11px; color: #6c757d; margin-top: 2px; }
+      h3 { margin: 10px 0 6px; font-size: 13px; color: #2c3e50; page-break-after: avoid; border-bottom: 1px solid #e8eef2; padding-bottom: 4px; }
       .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-      .stat-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; page-break-inside: avoid; }
+      .stat-card { border: 1px solid #e0e0e0; border-left: 3px solid #008E6C; border-radius: 8px; padding: 10px; page-break-inside: avoid; }
       .stat-label { font-size: 11px; color: #6c757d; margin-bottom: 4px; }
       .stat-value { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
       .stat-change { font-size: 11px; color: #6c757d; }
+      .stat-sub { font-size: 10px; color: #7a8790; margin-top: 2px; }
+      .delta-up { color: #008060; font-weight: 700; }
+      .delta-down { color: #D72C0D; font-weight: 700; }
+      .delta-flat { color: #6c757d; font-weight: 700; }
       table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
       th, td { border: 1px solid #e0e0e0; padding: 6px; text-align: left; }
       th { background: #f8f9fa; text-transform: uppercase; font-size: 10px; }
@@ -3462,7 +3477,13 @@ function exportarKPIs() {
         ${styles}
       </head>
       <body>
-        <h1>${safeTitle}</h1>
+        <div class="report-header">
+          <img src="${logoUrl}" class="report-logo" alt="NeoFinance">
+          <div>
+            <div class="report-title">${safeTitle}</div>
+            <div class="report-sub">Gerado em ${generatedAt}</div>
+          </div>
+        </div>
         ${report.innerHTML}
       </body>
     </html>

@@ -5346,6 +5346,7 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
           prazoMedioRecebimento: prazoMedioRecebimentoPrev,
           cac: cacPrev,
           despOperacionaisReceita: despOperacionaisPercPrev,
+          despesasOperacionais: dreAnterior.valores.despesasOperacionais.total,
           breakEven: breakEvenPrev,
           prazoMedioPagamento: prazoMedioPagamentoPrev
         }
