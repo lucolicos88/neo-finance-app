@@ -5078,6 +5078,12 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
     const dreAtual = getDREMensal(mes, ano, filial, canal);
     const dreAnterior = getDREMensal(mesAnterior, anoAnterior, filial, canal);
     const fcAtual = getFluxoCaixaMensal(mes, ano, filial, canal);
+    const fcAnterior = getFluxoCaixaMensal(mesAnterior, anoAnterior, filial, canal);
+
+    const dataAnteriorAnterior = new Date(ano, mes - 3, 1);
+    const mesAnteriorAnterior = dataAnteriorAnterior.getMonth() + 1;
+    const anoAnteriorAnterior = dataAnteriorAnterior.getFullYear();
+    const dreAnteriorAnterior = getDREMensal(mesAnteriorAnterior, anoAnteriorAnterior, filial, canal);
 
     // Separar receitas e despesas
     const receitas = lancamentosMes.filter(l => l.tipo === 'RECEITA');
@@ -5095,13 +5101,21 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
     // KPIs de Liquidez
     const contasReceber = lancamentosMes.filter(l => l.tipo === 'RECEITA' && l.status === 'PENDENTE');
     const contasPagar = lancamentosMes.filter(l => l.tipo === 'DESPESA' && l.status === 'PENDENTE');
+    const contasReceberPrev = lancamentosMesAnterior.filter(l => l.tipo === 'RECEITA' && l.status === 'PENDENTE');
+    const contasPagarPrev = lancamentosMesAnterior.filter(l => l.tipo === 'DESPESA' && l.status === 'PENDENTE');
     const ativoCirculante = sumValues(contasReceber) + fcAtual.valores.saldoFinal;
     const passivoCirculante = sumValues(contasPagar);
     const liquidezCorrente = passivoCirculante > 0 ? ativoCirculante / passivoCirculante : 0;
+    const ativoCirculantePrev = sumValues(contasReceberPrev) + fcAnterior.valores.saldoFinal;
+    const passivoCirculantePrev = sumValues(contasPagarPrev);
+    const liquidezCorrentePrev = passivoCirculantePrev > 0 ? ativoCirculantePrev / passivoCirculantePrev : 0;
 
     const saldoCaixa = fcAtual.valores.saldoFinal;
     const burnRate = Math.abs(dreAtual.valores.lucroLiquido < 0 ? dreAtual.valores.lucroLiquido : 0);
     const runway = burnRate > 0 ? saldoCaixa / burnRate : 999;
+    const saldoCaixaPrev = fcAnterior.valores.saldoFinal;
+    const burnRatePrev = Math.abs(dreAnterior.valores.lucroLiquido < 0 ? dreAnterior.valores.lucroLiquido : 0);
+    const runwayPrev = burnRatePrev > 0 ? saldoCaixaPrev / burnRatePrev : 999;
 
     // KPIs de Crescimento
     const receitaAtual = dreAtual.valores.receitaLiquida;
@@ -5109,16 +5123,31 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
     const crescimentoReceita = receitaAnteriorVal > 0
       ? ((receitaAtual - receitaAnteriorVal) / receitaAnteriorVal) * 100
       : 0;
+    const receitaAnteriorAnteriorVal = dreAnteriorAnterior.valores.receitaLiquida;
+    const crescimentoReceitaPrev = receitaAnteriorAnteriorVal > 0
+      ? ((receitaAnteriorVal - receitaAnteriorAnteriorVal) / receitaAnteriorAnteriorVal) * 100
+      : 0;
 
     const ticketMedio = receitas.length > 0 ? receitaAtual / receitas.length : 0;
+
+    const referenciaAtual = new Date(ano, mes - 1, 1);
+    const referenciaAnterior = new Date(anoAnterior, mesAnterior - 1, 1);
 
     const receitasVencidas = lancamentosMes.filter(l => {
       if (l.tipo !== 'RECEITA' || l.status !== 'PENDENTE') return false;
       const vencimento = new Date(l.dataVencimento);
       return vencimento < new Date();
     });
+    const receitasVencidasPrev = lancamentosMesAnterior.filter(l => {
+      if (l.tipo !== 'RECEITA' || l.status !== 'PENDENTE') return false;
+      const vencimento = new Date(l.dataVencimento);
+      return vencimento < referenciaAnterior;
+    });
     const taxaInadimplencia = receitas.length > 0
       ? (receitasVencidas.length / receitas.length) * 100
+      : 0;
+    const taxaInadimplenciaPrev = receitasAnterior.length > 0
+      ? (receitasVencidasPrev.length / receitasAnterior.length) * 100
       : 0;
 
     // Prazo médio de recebimento
@@ -5134,17 +5163,39 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
       });
       prazoMedioRecebimento = prazos.reduce((a, b) => a + b, 0) / prazos.length;
     }
+    const receitasRecebidasPrev = lancamentosMesAnterior.filter(l =>
+      l.tipo === 'RECEITA' && (l.status === 'PAGO' || l.status === 'RECEBIDO')
+    );
+    let prazoMedioRecebimentoPrev = 0;
+    if (receitasRecebidasPrev.length > 0) {
+      const prazosPrev = receitasRecebidasPrev.map(r => {
+        const venc = new Date(r.dataVencimento);
+        const pag = new Date(r.dataPagamento || r.dataCompetencia);
+        return Math.floor((pag.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+      });
+      prazoMedioRecebimentoPrev = prazosPrev.reduce((a, b) => a + b, 0) / prazosPrev.length;
+    }
 
     // KPIs Operacionais
     const despesasMarketing = despesas.filter(d => d.centroCusto === 'MKT' || d.centroCusto === 'COM');
+    const despesasMarketingPrev = lancamentosMesAnterior.filter(d =>
+      d.tipo === 'DESPESA' && (d.centroCusto === 'MKT' || d.centroCusto === 'COM')
+    );
     const cac = receitas.length > 0 ? sumValues(despesasMarketing) / receitas.length : 0;
+    const cacPrev = receitasAnterior.length > 0 ? sumValues(despesasMarketingPrev) / receitasAnterior.length : 0;
 
     const despOperacionaisPerc = dreAtual.valores.receitaLiquida > 0
       ? (dreAtual.valores.despesasOperacionais.total / dreAtual.valores.receitaLiquida) * 100
       : 0;
+    const despOperacionaisPercPrev = dreAnterior.valores.receitaLiquida > 0
+      ? (dreAnterior.valores.despesasOperacionais.total / dreAnterior.valores.receitaLiquida) * 100
+      : 0;
 
     const breakEven = dreAtual.valores.margemBruta > 0
       ? dreAtual.valores.despesasOperacionais.total / (dreAtual.valores.margemBruta / dreAtual.valores.receitaLiquida)
+      : 0;
+    const breakEvenPrev = dreAnterior.valores.margemBruta > 0
+      ? dreAnterior.valores.despesasOperacionais.total / (dreAnterior.valores.margemBruta / dreAnterior.valores.receitaLiquida)
       : 0;
 
     // Prazo médio de pagamento
@@ -5159,6 +5210,18 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
         return Math.floor((pag.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
       });
       prazoMedioPagamento = prazos.reduce((a, b) => a + b, 0) / prazos.length;
+    }
+    const despesasPagasPrev = lancamentosMesAnterior.filter(l =>
+      l.tipo === 'DESPESA' && l.status === 'PAGO'
+    );
+    let prazoMedioPagamentoPrev = 0;
+    if (despesasPagasPrev.length > 0) {
+      const prazosPrev = despesasPagasPrev.map(d => {
+        const venc = new Date(d.dataVencimento);
+        const pag = new Date(d.dataPagamento || d.dataCompetencia);
+        return Math.floor((pag.getTime() - venc.getTime()) / (1000 * 60 * 60 * 24));
+      });
+      prazoMedioPagamentoPrev = prazosPrev.reduce((a, b) => a + b, 0) / prazosPrev.length;
     }
 
     return {
@@ -5263,7 +5326,28 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
         mesAnterior: {
           receita: receitaAnteriorVal,
           margemBruta: dreAnterior.percentuais.margemBruta,
-          margemLiquida: dreAnterior.percentuais.lucroLiquido
+          margemEbitda: dreAnterior.percentuais.ebitda,
+          margemLiquida: dreAnterior.percentuais.lucroLiquido,
+          roi: dreAnterior.valores.receitaLiquida > 0
+            ? (dreAnterior.valores.lucroLiquido / dreAnterior.valores.receitaLiquida) * 100
+            : 0,
+          receitaLiquida: dreAnterior.valores.receitaLiquida,
+          custos: dreAnterior.valores.custos,
+          ebitdaValor: dreAnterior.valores.ebitda,
+          lucroLiquidoValor: dreAnterior.valores.lucroLiquido,
+          capitalGiro: ativoCirculantePrev - passivoCirculantePrev,
+          liquidezCorrente: liquidezCorrentePrev,
+          saldoCaixa: saldoCaixaPrev,
+          burnRate: burnRatePrev,
+          runway: runwayPrev,
+          crescimentoReceita: crescimentoReceitaPrev,
+          ticketMedio: receitasAnterior.length > 0 ? receitaAnteriorVal / receitasAnterior.length : 0,
+          inadimplencia: taxaInadimplenciaPrev,
+          prazoMedioRecebimento: prazoMedioRecebimentoPrev,
+          cac: cacPrev,
+          despOperacionaisReceita: despOperacionaisPercPrev,
+          breakEven: breakEvenPrev,
+          prazoMedioPagamento: prazoMedioPagamentoPrev
         }
       }
     };

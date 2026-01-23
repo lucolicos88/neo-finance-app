@@ -3282,12 +3282,10 @@ function renderKPIs(kpis) {
     showToast('Nao foi possivel carregar os KPIs. Tente novamente.', 'error');
     return;
   }
-  // Update title
   const canalLabel = kpis.periodo.canal && kpis.periodo.canal !== 'Todos' ? ` - Canal ${kpis.periodo.canal}` : '';
   document.getElementById('kpi-titulo').textContent =
     `KPIs - ${kpis.periodo.mesNome}/${kpis.periodo.ano} - ${kpis.periodo.filial}${canalLabel}`;
 
-  // Rentabilidade
   updateElement('kpi-margem-bruta', `${kpis.rentabilidade.margemBruta.valor.toFixed(1)}%`);
   updateElement('kpi-margem-bruta-class', kpis.rentabilidade.margemBruta.classificacao);
 
@@ -3300,7 +3298,6 @@ function renderKPIs(kpis) {
   updateElement('kpi-roi', `${kpis.rentabilidade.roi.valor.toFixed(1)}%`);
   updateElement('kpi-roi-desc', kpis.rentabilidade.roi.descricao);
 
-  // Liquidez
   updateElement('kpi-liquidez-corrente', kpis.liquidez.liquidezCorrente.valor.toFixed(2));
   updateElement('kpi-liquidez-corrente-class', kpis.liquidez.liquidezCorrente.classificacao);
 
@@ -3313,7 +3310,6 @@ function renderKPIs(kpis) {
   updateElement('kpi-runway', `${kpis.liquidez.runway.valor.toFixed(0)} meses`);
   updateElement('kpi-runway-desc', kpis.liquidez.runway.descricao);
 
-  // Crescimento
   updateElement('kpi-crescimento-receita', `${kpis.crescimento.crescimentoReceita.valor > 0 ? '+' : ''}${kpis.crescimento.crescimentoReceita.valor.toFixed(1)}%`);
   updateElement('kpi-crescimento-receita-desc', `vs ${formatCurrency(kpis.crescimento.crescimentoReceita.mesAnterior)}`);
 
@@ -3326,7 +3322,6 @@ function renderKPIs(kpis) {
   updateElement('kpi-pmr', `${Math.abs(kpis.crescimento.prazoMedioRecebimento.valor).toFixed(0)} dias`);
   updateElement('kpi-pmr-desc', kpis.crescimento.prazoMedioRecebimento.descricao);
 
-  // Operacional
   updateElement('kpi-cac', formatCurrency(kpis.operacional.cac.valor));
   updateElement('kpi-cac-desc', kpis.operacional.cac.descricao);
 
@@ -3339,8 +3334,6 @@ function renderKPIs(kpis) {
   updateElement('kpi-pmp', `${Math.abs(kpis.operacional.prazoMedioPagamento.valor).toFixed(0)} dias`);
   updateElement('kpi-pmp-desc', kpis.operacional.prazoMedioPagamento.descricao);
 
-  // Novos KPIs
-
   updateElement('kpi-receita-liquida', formatCurrency(kpis.rentabilidade.receitaLiquida.valor));
   updateElement('kpi-custos', formatCurrency(kpis.rentabilidade.custos.valor));
   updateElement('kpi-ebitda-valor', formatCurrency(kpis.rentabilidade.ebitdaValor.valor));
@@ -3348,59 +3341,75 @@ function renderKPIs(kpis) {
   updateElement('kpi-desp-operacionais', formatCurrency(kpis.operacional.despesasOperacionais.valor));
   updateElement('kpi-capital-giro', formatCurrency(kpis.liquidez.capitalGiro.valor));
 
+  const prev = kpis.comparativo?.mesAnterior || {};
+  const setDelta = (idBase, current, prevVal, fmt) => {
+    const cardValue = document.getElementById(idBase);
+    if (!cardValue) return;
+    const card = cardValue.closest('.stat-card');
+    if (!card) return;
+    const prevId = `${idBase}-prev`;
+    const varId = `${idBase}-var`;
 
-  // Render tabela detalhada
-  renderKPIsDetalhado(kpis);
-}
-
-function renderKPIsDetalhado(kpis) {
-  const tbody = document.getElementById('table-kpis-detalhado');
-
-  const indicadores = [
-    {
-      nome: 'Margem Bruta',
-      atual: `${kpis.rentabilidade.margemBruta.valor.toFixed(1)}%`,
-      anterior: `${kpis.comparativo.mesAnterior.margemBruta.toFixed(1)}%`,
-      variacao: kpis.rentabilidade.margemBruta.valor - kpis.comparativo.mesAnterior.margemBruta,
-      status: kpis.rentabilidade.margemBruta.classificacao
-    },
-    {
-      nome: 'Margem Líquida',
-      atual: `${kpis.rentabilidade.margemLiquida.valor.toFixed(1)}%`,
-      anterior: `${kpis.comparativo.mesAnterior.margemLiquida.toFixed(1)}%`,
-      variacao: kpis.rentabilidade.margemLiquida.valor - kpis.comparativo.mesAnterior.margemLiquida,
-      status: kpis.rentabilidade.margemLiquida.classificacao
-    },
-    {
-      nome: 'Liquidez Corrente',
-      atual: kpis.liquidez.liquidezCorrente.valor.toFixed(2),
-      anterior: '-',
-      variacao: 0,
-      status: kpis.liquidez.liquidezCorrente.classificacao
-    },
-    {
-      nome: 'Taxa de Inadimplência',
-      atual: `${kpis.crescimento.inadimplencia.valor.toFixed(1)}%`,
-      anterior: '-',
-      variacao: 0,
-      status: kpis.crescimento.inadimplencia.classificacao
+    let prevEl = document.getElementById(prevId);
+    let varEl = document.getElementById(varId);
+    if (!prevEl) {
+      prevEl = document.createElement('div');
+      prevEl.className = 'stat-sub';
+      prevEl.id = prevId;
+      card.appendChild(prevEl);
     }
-  ];
+    if (!varEl) {
+      varEl = document.createElement('div');
+      varEl.className = 'stat-sub';
+      varEl.id = varId;
+      card.appendChild(varEl);
+    }
 
-  tbody.innerHTML = indicadores.map(ind => `
-    <tr>
-      <td>${escapeHtml(ind.nome)}</td>
-      <td class="text-right">${ind.atual}</td>
-      <td class="text-right">${ind.anterior}</td>
-      <td class="text-right" style="color: ${ind.variacao > 0 ? '#008060' : ind.variacao < 0 ? '#D72C0D' : '#666'}">
-        ${ind.variacao !== 0 ? (ind.variacao > 0 ? '+' : '') + ind.variacao.toFixed(1) + ' p.p.' : '-'}
-      </td>
-      <td class="text-center">
-        <span class="badge badge-${getStatusBadge(ind.status)}">${escapeHtml(ind.status)}</span>
-      </td>
-    </tr>
-  `).join('');
+    const prevText = (prevVal === null || typeof prevVal === 'undefined')
+      ? '-'
+      : (fmt ? fmt(prevVal) : String(prevVal));
+    const varText = (prevVal === null || typeof prevVal === 'undefined')
+      ? '-'
+      : (fmt ? fmt(current - prevVal) : String(current - prevVal));
+
+    prevEl.textContent = `Mes anterior: ${prevText}`;
+    varEl.textContent = `Variacao: ${varText}`;
+  };
+
+  const fmtPct = (v) => `${Number(v).toFixed(1)}%`;
+  const fmtNum = (v) => Number(v).toFixed(2);
+  const fmtInt = (v) => `${Math.round(Number(v))} dias`;
+  const fmtMoney = (v) => formatCurrency(Number(v));
+
+  setDelta('kpi-margem-bruta', kpis.rentabilidade.margemBruta.valor, prev.margemBruta, fmtPct);
+  setDelta('kpi-margem-ebitda', kpis.rentabilidade.margemEbitda.valor, prev.margemEbitda, fmtPct);
+  setDelta('kpi-margem-liquida', kpis.rentabilidade.margemLiquida.valor, prev.margemLiquida, fmtPct);
+  setDelta('kpi-roi', kpis.rentabilidade.roi.valor, prev.roi, fmtPct);
+
+  setDelta('kpi-receita-liquida', kpis.rentabilidade.receitaLiquida.valor, prev.receitaLiquida, fmtMoney);
+  setDelta('kpi-custos', kpis.rentabilidade.custos.valor, prev.custos, fmtMoney);
+  setDelta('kpi-ebitda-valor', kpis.rentabilidade.ebitdaValor.valor, prev.ebitdaValor, fmtMoney);
+  setDelta('kpi-lucro-liquido-valor', kpis.rentabilidade.lucroLiquidoValor.valor, prev.lucroLiquidoValor, fmtMoney);
+  setDelta('kpi-desp-operacionais', kpis.operacional.despesasOperacionais.valor, prev.despesasOperacionais, fmtMoney);
+  setDelta('kpi-capital-giro', kpis.liquidez.capitalGiro.valor, prev.capitalGiro, fmtMoney);
+
+  setDelta('kpi-liquidez-corrente', kpis.liquidez.liquidezCorrente.valor, prev.liquidezCorrente, fmtNum);
+  setDelta('kpi-saldo-caixa', kpis.liquidez.saldoCaixa.valor, prev.saldoCaixa, fmtMoney);
+  setDelta('kpi-burn-rate', kpis.liquidez.burnRate.valor, prev.burnRate, fmtMoney);
+  setDelta('kpi-runway', kpis.liquidez.runway.valor, prev.runway, (v) => `${Number(v).toFixed(0)} meses`);
+
+  setDelta('kpi-crescimento-receita', kpis.crescimento.crescimentoReceita.valor, prev.crescimentoReceita, fmtPct);
+  setDelta('kpi-ticket-medio', kpis.crescimento.ticketMedio.valor, prev.ticketMedio, fmtMoney);
+  setDelta('kpi-inadimplencia', kpis.crescimento.inadimplencia.valor, prev.inadimplencia, fmtPct);
+  setDelta('kpi-pmr', kpis.crescimento.prazoMedioRecebimento.valor, prev.prazoMedioRecebimento, fmtInt);
+
+  setDelta('kpi-cac', kpis.operacional.cac.valor, prev.cac, fmtMoney);
+  setDelta('kpi-desp-op-receita', kpis.operacional.despOperacionaisReceita.valor, prev.despOperacionaisReceita, fmtPct);
+  setDelta('kpi-break-even', kpis.operacional.breakEven.valor, prev.breakEven, fmtMoney);
+  setDelta('kpi-pmp', kpis.operacional.prazoMedioPagamento.valor, prev.prazoMedioPagamento, fmtInt);
 }
+
+
 
 function exportarKPIs() {
   const titleText = document.getElementById('kpi-titulo')?.textContent || 'KPIs';
