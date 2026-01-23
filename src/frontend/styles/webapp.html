@@ -145,6 +145,35 @@ body.app-busy button {
   min-height: calc(100vh - 64px);
 }
 
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.kpi-sidebar .filters {
+  margin-bottom: 0;
+}
+
+.kpi-content .card {
+  margin-bottom: 1.2rem;
+}
+
 /* Cards */
 .card {
   background: white;
@@ -776,6 +805,12 @@ select.form-control {
   }
 
   .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid,
+  .dashboard-kpi-grid,
+  .kpi-layout {
     grid-template-columns: 1fr;
   }
 

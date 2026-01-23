@@ -1824,7 +1824,7 @@ export function toggleFilial(index: number, ativo: boolean): { success: boolean;
 // DASHBOARD
 // ============================================================================
 
-export function getDashboardData(mes?: number, ano?: number, filial?: string, canal?: string) {
+export function getDashboardData(mes?: number, ano?: number, filial?: string, canal?: string, includeKpis?: boolean) {
   enforcePermission('visualizarRelatorios', 'carregar dashboard');
   const hoje = new Date();
   const targetMes = Number(mes) || hoje.getMonth() + 1;
@@ -1833,7 +1833,8 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
   const fimMes = new Date(targetAno, targetMes, 1);
   const isCurrent = targetMes === hoje.getMonth() + 1 && targetAno === hoje.getFullYear();
   const referencia = isCurrent ? hoje : new Date(targetAno, targetMes, 0);
-  const cacheKey = `dash:${targetAno}-${targetMes}:${filial || 'all'}:${canal || 'all'}`;
+  const include = includeKpis !== false;
+  const cacheKey = `dash:${targetAno}-${targetMes}:${filial || 'all'}:${canal || 'all'}:${include ? 'full' : 'lite'}`;
 
   return cacheGetOrLoad(CacheNamespace.DASHBOARD, cacheKey, () => {
     const lancamentosBase = getLancamentosFromSheet();
@@ -1912,7 +1913,7 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
   );
 
   // Extratos pendentes
-  const kpisMes = getKPIsMensal(targetMes, targetAno, filial, canal);
+  const kpisMes = include ? getKPIsMensal(targetMes, targetAno, filial, canal) : null;
 
   const extratos = getExtratosFromSheet();
   const extratosPendentes = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
@@ -1935,9 +1936,9 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
   // Alertas
   const alerts: Array<{ type: string; title: string; message: string }> = [];
   const fluxoMesValor = sumValues(receitaMes) - sumValues(despesaMes);
-  const liquidez = Number(kpisMes?.liquidez?.liquidezCorrente?.valor || 0);
-  const margem = Number(kpisMes?.rentabilidade?.margemLiquida?.valor || 0);
-  const inad = Number(kpisMes?.crescimento?.inadimplencia?.valor || 0);
+  const liquidez = include ? Number(kpisMes?.liquidez?.liquidezCorrente?.valor || 0) : 0;
+  const margem = include ? Number(kpisMes?.rentabilidade?.margemLiquida?.valor || 0) : 0;
+  const inad = include ? Number(kpisMes?.crescimento?.inadimplencia?.valor || 0) : 0;
 
   if (pagarVencidas.length > 0) {
     alerts.push({
@@ -1971,7 +1972,7 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     });
   }
 
-  if (liquidez > 0 && liquidez < 1) {
+  if (include && liquidez > 0 && liquidez < 1) {
     alerts.push({
       type: 'warning',
       title: 'Liquidez Abaixo do Ideal',
@@ -1979,7 +1980,7 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     });
   }
 
-  if (margem < 0) {
+  if (include && margem < 0) {
     alerts.push({
       type: 'info',
       title: 'Margem Negativa',
@@ -1987,7 +1988,7 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     });
   }
 
-  if (inad > 5) {
+  if (include && inad > 5) {
     alerts.push({
       type: 'info',
       title: 'Inadimplencia Elevada',

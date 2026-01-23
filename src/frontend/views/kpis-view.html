@@ -10,75 +10,77 @@
     </div>
   </div>
 
-  <!-- Filtros -->
-  <div class="card">
-    <div class="filters">
-      <div class="d-flex justify-between align-center mb-2">
-        <h3 class="filters-title">Selecionar Per&iacute;odo</h3>
-        <button class="btn btn-outline" onclick="voltarRelatorios()">&#8592; Voltar</button>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">M&ecirc;s</label>
-          <select class="form-control" id="kpi-mes">
-            <option value="1">Janeiro</option>
-            <option value="2">Fevereiro</option>
-            <option value="3">Mar&ccedil;o</option>
-            <option value="4">Abril</option>
-            <option value="5">Maio</option>
-            <option value="6">Junho</option>
-            <option value="7">Julho</option>
-            <option value="8">Agosto</option>
-            <option value="9">Setembro</option>
-            <option value="10">Outubro</option>
-            <option value="11">Novembro</option>
-            <option value="12">Dezembro</option>
-          </select>
+  <div class="kpi-layout">
+    <!-- Filtros -->
+    <div class="card kpi-sidebar" data-print="hide">
+      <div class="filters">
+        <div class="d-flex justify-between align-center mb-2">
+          <h3 class="filters-title">Selecionar Per&iacute;odo</h3>
+          <button class="btn btn-outline" onclick="voltarRelatorios()">&#8592; Voltar</button>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Ano</label>
-          <select class="form-control" id="kpi-ano">
-            <option value="2024">2024</option>
-            <option value="2025" selected>2025</option>
-            <option value="2026">2026</option>
-          </select>
-        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">M&ecirc;s</label>
+            <select class="form-control" id="kpi-mes">
+              <option value="1">Janeiro</option>
+              <option value="2">Fevereiro</option>
+              <option value="3">Mar&ccedil;o</option>
+              <option value="4">Abril</option>
+              <option value="5">Maio</option>
+              <option value="6">Junho</option>
+              <option value="7">Julho</option>
+              <option value="8">Agosto</option>
+              <option value="9">Setembro</option>
+              <option value="10">Outubro</option>
+              <option value="11">Novembro</option>
+              <option value="12">Dezembro</option>
+            </select>
+          </div>
 
-        <div class="form-group">
-          <label class="form-label">Filial</label>
-          <select class="form-control" id="kpi-filial">
-            <option value="">Consolidado</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label class="form-label">Ano</label>
+            <select class="form-control" id="kpi-ano">
+              <option value="2024">2024</option>
+              <option value="2025" selected>2025</option>
+              <option value="2026">2026</option>
+            </select>
+          </div>
 
-        <div class="form-group">
-          <label class="form-label">Canal</label>
-          <select class="form-control" id="kpi-canal">
-            <option value="">Todos</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label class="form-label">Filial</label>
+            <select class="form-control" id="kpi-filial">
+              <option value="">Consolidado</option>
+            </select>
+          </div>
 
-        <div class="form-group" style="display: flex; align-items: flex-end;">
-          <button class="btn btn-primary" onclick="carregarKPIs()" style="width: 100%;">
-            Gerar KPIs
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
+          <div class="form-group">
+            <label class="form-label">Canal</label>
+            <select class="form-control" id="kpi-canal">
+              <option value="">Todos</option>
+            </select>
+          </div>
 
-  <!-- KPIs Principais -->
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title" id="kpi-titulo">KPIs - Aguardando sele&ccedil;&atilde;o</h2>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="exportarKPIs()">Exportar PDF</button>
+          <div class="form-group" style="display: flex; align-items: flex-end;">
+            <button class="btn btn-primary" onclick="carregarKPIs()" style="width: 100%;">
+              Gerar KPIs
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div style="padding: 1.5rem;">
+    <div class="kpi-content">
+      <!-- KPIs Principais -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title" id="kpi-titulo">KPIs - Aguardando sele&ccedil;&atilde;o</h2>
+          <div class="card-actions">
+            <button class="btn btn-outline" onclick="exportarKPIs()">Exportar PDF</button>
+          </div>
+        </div>
+
+        <div style="padding: 1.5rem;" id="kpis-report-content">
       <h3 style="margin-bottom: 1rem; font-size: 1.1rem; color: #2c3e50;">Indicadores de Rentabilidade</h3>
       <div class="stats-grid">
         <div class="stat-card">
@@ -217,28 +219,32 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header">
-      <h2 class="card-title">An&aacute;lise Detalhada dos Indicadores</h2>
-    </div>
+      </div>
 
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 30%;">Indicador</th>
-            <th style="width: 15%; text-align: right;">Valor Atual</th>
-            <th style="width: 15%; text-align: right;">M&ecirc;s Anterior</th>
-            <th style="width: 15%; text-align: right;">Varia&ccedil;&atilde;o</th>
-            <th style="width: 25%; text-align: center;">Status</th>
-          </tr>
-        </thead>
-        <tbody id="table-kpis-detalhado">
-          <tr>
-            <td colspan="5" class="text-center text-muted">Selecione um per&iacute;odo e clique em "Gerar KPIs"</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">An&aacute;lise Detalhada dos Indicadores</h2>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30%;">Indicador</th>
+                <th style="width: 15%; text-align: right;">Valor Atual</th>
+                <th style="width: 15%; text-align: right;">M&ecirc;s Anterior</th>
+                <th style="width: 15%; text-align: right;">Varia&ccedil;&atilde;o</th>
+                <th style="width: 25%; text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="table-kpis-detalhado">
+              <tr>
+                <td colspan="5" class="text-center text-muted">Selecione um per&iacute;odo e clique em "Gerar KPIs"</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -259,9 +265,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function voltarRelatorios() {
   navigateTo('relatorios');
-}
-
-function exportarKPIs() {
-  showToast('Exportacao em desenvolvimento', 'info');
 }
 </script>

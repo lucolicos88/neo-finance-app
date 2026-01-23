@@ -659,9 +659,31 @@ function loadDashboardData(force) {
       renderDashboardInsights(data);
       renderDashboardTechNotes(data);
       renderDashboardAlerts(data.alerts);
+
+      // Load KPIs in background for storytelling and KPI cards
+      loadDashboardKpis(filters);
     })
     .withFailureHandler(handleError)
-    .getDashboardData(filters.mes, filters.ano, filters.filial || undefined, filters.canal || undefined);
+    .getDashboardData(filters.mes, filters.ano, filters.filial || undefined, filters.canal || undefined, false);
+}
+
+function loadDashboardKpis(filters) {
+  window.gasRun
+    .withSuccessHandler(function(kpis) {
+      if (!dashboardLastData) return;
+      dashboardLastData.kpisMes = kpis;
+      renderDashboardStory(dashboardLastData);
+      renderDashboardHealth(dashboardLastData);
+      renderDashboardKpis(dashboardLastData);
+      renderDashboardMonth(dashboardLastData);
+      renderDashboardActions(dashboardLastData);
+      renderDashboardInsights(dashboardLastData);
+      renderDashboardTechNotes(dashboardLastData);
+    })
+    .withFailureHandler(function(err) {
+      console.warn('Nao foi possivel carregar KPIs do dashboard', err);
+    })
+    .getKPIsMensal(filters.mes, filters.ano, filters.filial || undefined, filters.canal || undefined);
 }
 
 function renderDashboardStory(data) {
@@ -677,18 +699,19 @@ function renderDashboardStory(data) {
   const liquidez = Number(kpis?.liquidez?.liquidezCorrente?.valor || 0);
   const margem = Number(kpis?.rentabilidade?.margemLiquida?.valor || 0);
   const inad = Number(kpis?.crescimento?.inadimplencia?.valor || 0);
+  const hasKpis = !!kpis;
 
   const balanceLabel = fluxoMes >= 0 ? 'positivo' : 'negativo';
   const riskLabel = vencidas > 0 ? 'atencao' : 'estavel';
   const liquidityLabel = liquidez >= 1 ? 'confortavel' : 'apertada';
   const margemLabel = margem >= 5 ? 'saudavel' : margem >= 0 ? 'neutra' : 'negativa';
 
-  const headline = `Fluxo ${balanceLabel} e margem ${margemLabel}.`;
-  const intro = `Conciliacao em ${concTaxa}% com liquidez ${liquidityLabel}.`;
+  const headline = hasKpis ? `Fluxo ${balanceLabel} e margem ${margemLabel}.` : `Fluxo ${balanceLabel} no periodo.`;
+  const intro = hasKpis ? `Conciliacao em ${concTaxa}% com liquidez ${liquidityLabel}.` : `Conciliacao em ${concTaxa}% e risco ${riskLabel}.`;
   const bullets = [];
   if (fluxoMes < 0) bullets.push('Rever despesas e priorizar caixa nos proximos 7 dias.');
-  if (liquidez < 1) bullets.push('Reforcar capital de giro para reduzir risco.');
-  if (inad > 5) bullets.push('Ativar cobranca ativa para reduzir inadimplencia.');
+  if (hasKpis && liquidez < 1) bullets.push('Reforcar capital de giro para reduzir risco.');
+  if (hasKpis && inad > 5) bullets.push('Ativar cobranca ativa para reduzir inadimplencia.');
   if (vencidas > 0) bullets.push(`Regularizar ${vencidas} contas vencidas.`);
 
   container.innerHTML = `
@@ -3222,9 +3245,6 @@ function loadKPIsData() {
       selectCanal.innerHTML += `<option value="${escapeHtml(canal.codigo)}">${escapeHtml(canal.nome)}</option>`;
     });
   }
-
-  // Auto-load KPIs for current month
-  setTimeout(() => carregarKPIs(), 300);
 }
 
 function carregarKPIs() {
@@ -3369,6 +3389,58 @@ function renderKPIsDetalhado(kpis) {
       </td>
     </tr>
   `).join('');
+}
+
+function exportarKPIs() {
+  const titleText = document.getElementById('kpi-titulo')?.textContent || 'KPIs';
+  const report = document.getElementById('kpis-report-content');
+  if (!report || report.innerHTML.trim() === '') {
+    showToast('Nenhum dado para exportar', 'warning');
+    return;
+  }
+
+  const win = window.open('', '_blank');
+  if (!win) {
+    showToast('Permita pop-ups para exportar o PDF', 'error');
+    return;
+  }
+
+  const safeTitle = escapeHtml(titleText);
+  const styles = `
+    <style>
+      body { font-family: Arial, sans-serif; color: #1a1a1a; padding: 24px; }
+      h1 { font-size: 20px; margin-bottom: 16px; }
+      h3 { margin: 16px 0 8px; font-size: 14px; color: #2c3e50; }
+      .stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .stat-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }
+      .stat-label { font-size: 12px; color: #6c757d; margin-bottom: 6px; }
+      .stat-value { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+      .stat-change { font-size: 12px; color: #6c757d; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+      th, td { border: 1px solid #e0e0e0; padding: 8px; text-align: left; }
+      th { background: #f8f9fa; text-transform: uppercase; font-size: 11px; }
+      @media print { body { padding: 0; } }
+    </style>
+  `;
+
+  win.document.open();
+  win.document.write(`
+    <html>
+      <head>
+        <title>${safeTitle}</title>
+        ${styles}
+      </head>
+      <body>
+        <h1>${safeTitle}</h1>
+        ${report.innerHTML}
+      </body>
+    </html>
+  `);
+  win.document.close();
+  win.focus();
+  setTimeout(() => {
+    win.print();
+  }, 400);
 }
 
 function getStatusBadge(status) {
