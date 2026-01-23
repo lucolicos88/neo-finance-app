@@ -636,7 +636,7 @@ function resetDashboardFilters() {
 }
 
 function loadDashboardData(force) {
-  initDashboardFilters(true);
+  initDashboardFilters();
   const filters = getDashboardFilterParams();
   dashboardFilterState = { ...filters };
   updateDashboardPeriodLabel(filters);
@@ -653,12 +653,16 @@ function loadDashboardData(force) {
       // Update stats
       updateElement('stat-pagar-vencidas', formatCurrency(data.pagarVencidas.valor));
       updateElement('stat-pagar-vencidas-qtd', `${data.pagarVencidas.quantidade} contas`);
+      updateDashboardStatDelta('stat-pagar-vencidas', data.pagarVencidas, data.prev?.pagarVencidas, true);
       updateElement('stat-pagar-proximas', formatCurrency(data.pagarProximas.valor));
       updateElement('stat-pagar-proximas-qtd', `${data.pagarProximas.quantidade} contas`);
+      updateDashboardStatDelta('stat-pagar-proximas', data.pagarProximas, data.prev?.pagarProximas, true);
       updateElement('stat-receber-hoje', formatCurrency(data.receberHoje.valor));
       updateElement('stat-receber-hoje-qtd', `${data.receberHoje.quantidade} contas`);
+      updateDashboardStatDelta('stat-receber-hoje', data.receberHoje, data.prev?.receberHoje, true);
       updateElement('stat-conciliacao-pendentes', data.conciliacaoPendentes.quantidade);
       updateElement('stat-conciliacao-valor', formatCurrency(data.conciliacaoPendentes.valor));
+      updateDashboardStatDelta('stat-conciliacao-pendentes', data.conciliacaoPendentes, data.prev?.conciliacaoPendentes, false);
 
       // Render sections
       renderDashboardStory(data);
@@ -667,8 +671,6 @@ function loadDashboardData(force) {
       renderDashboardMonth(data);
       renderDashboardShortTerm(data);
       renderDashboardActions(data);
-      renderDashboardInsights(data);
-      renderDashboardTechNotes(data);
       renderDashboardAlerts(data.alerts);
 
       // Load KPIs in background for storytelling and KPI cards
@@ -676,6 +678,34 @@ function loadDashboardData(force) {
     })
     .withFailureHandler(handleError)
     .getDashboardData(filters.mes, filters.ano, filters.filial || undefined, filters.canal || undefined, false);
+}
+
+function updateDashboardStatDelta(idBase, current, prev, useValue) {
+  const valueEl = document.getElementById(idBase);
+  if (!valueEl) return;
+  const card = valueEl.closest('.stat-card');
+  if (!card) return;
+  const deltaId = `${idBase}-delta`;
+  let deltaEl = document.getElementById(deltaId);
+  if (!deltaEl) {
+    deltaEl = document.createElement('div');
+    deltaEl.className = 'stat-sub';
+    deltaEl.id = deltaId;
+    card.appendChild(deltaEl);
+  }
+  if (!prev || typeof prev.valor === 'undefined') {
+    deltaEl.textContent = 'Variacao: -';
+    return;
+  }
+  const currentVal = useValue ? Number(current.valor || 0) : Number(current.quantidade || 0);
+  const prevVal = useValue ? Number(prev.valor || 0) : Number(prev.quantidade || 0);
+  const delta = currentVal - prevVal;
+  const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '●';
+  const cls = delta > 0 ? 'stat-sub delta-up' : delta < 0 ? 'stat-sub delta-down' : 'stat-sub delta-flat';
+  deltaEl.className = cls;
+  const formatted = useValue ? formatCurrency(Math.abs(delta)) : Math.abs(delta);
+  const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
+  deltaEl.textContent = `Variacao: ${arrow} ${sign}${formatted}`;
 }
 
 function loadDashboardKpis(filters) {
@@ -688,8 +718,6 @@ function loadDashboardKpis(filters) {
       renderDashboardKpis(dashboardLastData);
       renderDashboardMonth(dashboardLastData);
       renderDashboardActions(dashboardLastData);
-      renderDashboardInsights(dashboardLastData);
-      renderDashboardTechNotes(dashboardLastData);
     })
     .withFailureHandler(function(err) {
       console.warn('Nao foi possivel carregar KPIs do dashboard', err);
@@ -3432,6 +3460,7 @@ function exportarKPIs() {
   }
 
   const safeTitle = escapeHtml(titleText);
+  const filterText = escapeHtml(titleText.replace(/^KPIs\\s*-\\s*/i, ''));
   const logoUrl = 'https://neoformula.com.br/cdn/shop/files/Logotipo-NeoFormula-Manipulacao-Homeopatia_76b2fa98-5ffa-4cc3-ac0a-6d41e1bc8810.png?height=120&v=1677088468';
   const generatedAt = new Date().toLocaleDateString('pt-BR');
   const styles = `
@@ -3482,6 +3511,7 @@ function exportarKPIs() {
           <div>
             <div class="report-title">${safeTitle}</div>
             <div class="report-sub">Gerado em ${generatedAt}</div>
+            <div class="report-sub">Filtro: ${filterText}</div>
           </div>
         </div>
         ${report.innerHTML}

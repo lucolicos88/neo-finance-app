@@ -1857,6 +1857,48 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     return d >= start && d < end;
   };
 
+  const buildSnapshot = (ref: Date) => {
+    const next7 = new Date(ref.getTime());
+    next7.setDate(next7.getDate() + 7);
+    const pagarVencidasSnap = lancamentos.filter(l =>
+      l.tipo === 'DESPESA' &&
+      (
+        String(l.status || '').toUpperCase() === 'VENCIDA' ||
+        (String(l.status || '').toUpperCase() === 'PENDENTE' && new Date(l.dataVencimento) < ref)
+      )
+    );
+    const pagarProximasSnap = lancamentos.filter(l =>
+      l.tipo === 'DESPESA' &&
+      l.status === 'PENDENTE' &&
+      new Date(l.dataVencimento) <= next7 &&
+      new Date(l.dataVencimento) >= ref
+    );
+    const receberHojeSnap = lancamentos.filter(l =>
+      l.tipo === 'RECEITA' &&
+      l.status === 'PENDENTE' &&
+      new Date(l.dataVencimento).toDateString() === ref.toDateString()
+    );
+    const extratosPendentesSnap = extratos.filter(e => e.statusConciliacao === 'PENDENTE');
+    return {
+      pagarVencidas: {
+        quantidade: pagarVencidasSnap.length,
+        valor: sumValues(pagarVencidasSnap),
+      },
+      pagarProximas: {
+        quantidade: pagarProximasSnap.length,
+        valor: sumValues(pagarProximasSnap),
+      },
+      receberHoje: {
+        quantidade: receberHojeSnap.length,
+        valor: sumValues(receberHojeSnap),
+      },
+      conciliacaoPendentes: {
+        quantidade: extratosPendentesSnap.length,
+        valor: extratosPendentesSnap.reduce((sum, e) => sum + parseFloat(String(e.valor || 0)), 0),
+      }
+    };
+  };
+
   // Contas a pagar vencidas
   const pagarVencidas = lancamentos.filter(l =>
     l.tipo === 'DESPESA' &&
@@ -1920,6 +1962,9 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
   const extratosConciliados = extratos.filter(e => (e.statusConciliacao || '').toUpperCase() === 'CONCILIADO');
   const conciliacaoTaxa = extratos.length > 0 ? Math.round((extratosConciliados.length / extratos.length) * 100) : 0;
   const referenciaLabel = Utilities.formatDate(referencia, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const prevRef = new Date(targetAno, targetMes - 2, 1);
+  const prevEnd = new Date(prevRef.getFullYear(), prevRef.getMonth() + 1, 0);
+  const prevSnapshot = buildSnapshot(prevEnd);
 
   // Ultimos lancamentos (mantido para compatibilidade)
   const recentTransactions = lancamentos
@@ -2057,8 +2102,9 @@ export function getDashboardData(mes?: number, ano?: number, filial?: string, ca
     conciliacaoTaxa,
     kpisMes,
     recentTransactions,
-      alerts,
-    };
+    prev: prevSnapshot,
+    alerts,
+  };
   }, 120, CacheScope.SCRIPT);
 }
 

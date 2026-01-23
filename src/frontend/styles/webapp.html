@@ -158,6 +158,12 @@ body.app-busy button {
   }
 }
 
+@media (max-width: 1200px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .dashboard-filters .form-row {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
@@ -553,9 +559,9 @@ select.form-control {
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1.5rem;
 }
 
 .stat-card {
@@ -820,7 +826,7 @@ select.form-control {
 }
 
 .kpi-report-content {
-  padding: 1.1rem;
+  padding: 0.9rem;
 }
 
 .kpi-report-content .stats-grid {
