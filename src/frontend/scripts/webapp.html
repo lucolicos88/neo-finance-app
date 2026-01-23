@@ -598,8 +598,19 @@ function updateDashboardPeriodLabel(filters, data) {
   const referencia = data?.periodo?.referencia || '';
 
   const baseLabel = `${mesNome || 'Periodo'} ${ano}`.trim();
-  const refLabel = referencia ? ` | Ref: ${referencia}` : '';
+  const refLabel = referencia ? ` | Ref: ${formatDateBR(referencia)}` : '';
   label.textContent = `Periodo atual: ${baseLabel} | Filial: ${filial} | Canal: ${canal}${refLabel}`;
+}
+
+function formatDateBR(value) {
+  if (!value) return '';
+  const parts = String(value).split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('pt-BR');
 }
 
 function applyDashboardFilters() {

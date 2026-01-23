@@ -1,12 +1,13 @@
 <div class="view-container" id="dashboard-view">
   <h1 class="view-title">Dashboard Financeiro</h1>
 
-  <div class="card dashboard-intro">
+  <div class="card dashboard-filters">
     <div class="card-header">
       <h2 class="card-title">Periodo de Analise</h2>
       <div class="card-actions">
         <button class="btn btn-outline" onclick="resetDashboardFilters()">Limpar</button>
         <button class="btn btn-primary" onclick="applyDashboardFilters()">Aplicar filtros</button>
+        <button class="btn btn-outline" onclick="refreshDashboard()">&#128257; Atualizar</button>
       </div>
     </div>
     <div class="card-body">
@@ -83,19 +84,16 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card dashboard-intro">
     <div class="card-header">
       <h2 class="card-title">Painel Executivo</h2>
-      <div class="card-actions">
-        <button class="btn btn-outline" onclick="refreshDashboard()">&#128257; Atualizar</button>
-      </div>
     </div>
     <div class="card-body">
       <p class="text-muted" style="margin: 0;">Resumo geral com foco em saude financeira, riscos e acoes prioritarias.</p>
     </div>
   </div>
 
-  <div class="dashboard-grid">
+  <div class="dashboard-section-grid">
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">Resumo do Dia</h2>
@@ -122,18 +120,9 @@
         <p class="text-muted">Carregando...</p>
       </div>
     </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Alertas e Pend&ecirc;ncias</h2>
-      </div>
-      <div id="dashboard-alerts">
-        <p class="text-muted">Carregando alertas...</p>
-      </div>
-    </div>
   </div>
 
-  <div class="dashboard-kpi-grid">
+  <div class="dashboard-section-grid">
     <div class="card">
       <div class="card-header">
         <h2 class="card-title">KPIs do M&ecirc;s (alinhados)</h2>
@@ -158,6 +147,17 @@
       </div>
       <div id="dashboard-kpis-short">
         <p class="text-muted">Carregando...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-section-grid">
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">Alertas e Pend&ecirc;ncias</h2>
+      </div>
+      <div id="dashboard-alerts">
+        <p class="text-muted">Carregando alertas...</p>
       </div>
     </div>
 

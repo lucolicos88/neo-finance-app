@@ -145,23 +145,30 @@ body.app-busy button {
   min-height: calc(100vh - 64px);
 }
 
-.dashboard-grid {
+.dashboard-section-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.2rem;
   margin-bottom: 1.5rem;
 }
 
-.dashboard-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 1.2rem;
-  margin-bottom: 1.5rem;
+@media (max-width: 1100px) {
+  .dashboard-section-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dashboard-filters .form-row {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.dashboard-filters .card-actions {
+  flex-wrap: wrap;
 }
 
 .kpi-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) 1fr;
+  grid-template-columns: 1fr;
   gap: 1.5rem;
   align-items: start;
 }
@@ -808,8 +815,7 @@ select.form-control {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-grid,
-  .dashboard-kpi-grid,
+  .dashboard-section-grid,
   .kpi-layout {
     grid-template-columns: 1fr;
   }
