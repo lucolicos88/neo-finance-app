@@ -1279,11 +1279,11 @@ function pagarEmLote() {
     .pagarContasEmLote(selected);
 }
 
-function cancelarEmLote() {
-  const selected = getSelectedIds('cp');
-  if (selected.length === 0) {
-    showToast('Selecione ao menos uma conta', 'warning');
-    return;
+  function cancelarEmLote() {
+    const selected = getSelectedIds('cp');
+    if (selected.length === 0) {
+      showToast('Selecione ao menos uma conta', 'warning');
+      return;
   }
 
   if (!confirm(`Confirmar cancelamento de ${selected.length} contas?`)) return;
@@ -1300,8 +1300,46 @@ function cancelarEmLote() {
       }
     })
     .withFailureHandler(handleError)
-    .cancelarContasEmLote(selected);
-}
+      .cancelarContasEmLote(selected);
+  }
+
+  function importarContasPagasTxt() {
+    const fileInput = document.getElementById('cp-txt-file');
+    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+    if (!file) {
+      showToast('Selecione um arquivo .TXT', 'warning');
+      return;
+    }
+    openConfirmModal({ title: 'Importar Contas Pagas (.TXT)', message: `Arquivo: ${file.name}` }).then(ok => {
+      if (!ok) {
+        if (fileInput) fileInput.value = '';
+        return;
+      }
+      showLoading('Importando contas pagas...');
+      readFileText(file).then(content => {
+        if (!content) {
+          hideLoading();
+          return;
+        }
+        window.gasRun
+          .withSuccessHandler(function(result) {
+            hideLoading();
+            if (result && result.success) {
+              showToast(result.message || 'Importacao concluida', 'success');
+              if (fileInput) fileInput.value = '';
+              loadContasPagarData();
+            } else {
+              showToast(result?.message || 'Erro ao importar contas pagas', 'error');
+            }
+          })
+          .withFailureHandler(function(err) {
+            hideLoading();
+            handleError(err);
+          })
+          .importarContasPagasTxt(content, file.name);
+      });
+    });
+  }
 
 // ============================================================================
 // CONTAS A RECEBER
@@ -1796,11 +1834,11 @@ function fetchSheetData(sheetIdOrUrl) {
   });
 }
 
-function readFileRows(file) {
-  const ext = String(file.name || '').split('.').pop().toLowerCase();
-  if (ext === 'csv') {
-    return new Promise(resolve => {
-      Papa.parse(file, {
+  function readFileRows(file) {
+    const ext = String(file.name || '').split('.').pop().toLowerCase();
+    if (ext === 'csv') {
+      return new Promise(resolve => {
+        Papa.parse(file, {
         skipEmptyLines: true,
         complete: function(results) {
           resolve(results.data || []);
@@ -1829,10 +1867,24 @@ function readFileRows(file) {
       };
       reader.readAsArrayBuffer(file);
     });
+    }
+    showToast('Formato de arquivo nao suportado', 'warning');
+    return Promise.resolve(null);
   }
-  showToast('Formato de arquivo nao suportado', 'warning');
-  return Promise.resolve(null);
-}
+
+  function readFileText(file) {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        resolve(e.target.result ? String(e.target.result) : '');
+      };
+      reader.onerror = function() {
+        showToast('Erro ao ler TXT', 'error');
+        resolve('');
+      };
+      reader.readAsText(file, 'ISO-8859-1');
+    });
+  }
 
 function normalizeHeader(value) {
   return String(value || '')

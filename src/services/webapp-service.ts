@@ -4191,6 +4191,180 @@ export function getSheetData(
   }
 }
 
+
+
+type ParsedContaPaga = {
+  dataVencimento: string;
+  dataCompetencia: string;
+  dataPagamento: string;
+  contaContabil: string;
+  descricao: string;
+  valor: number;
+  tipo: 'DESPESA' | 'RECEITA';
+  filial: string;
+};
+
+function parseContasPagasTxt(content: string): ParsedContaPaga[] {
+  const lines = String(content || '').split(/\r?\n/);
+  const items: ParsedContaPaga[] = [];
+  let filialAtual = '';
+
+  const filialRegex = /^Filial:\s*(\d+)\s*-\s*([^\r]+?)\s{2,}/i;
+  const linhaRegex = /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s+(.+?)\s+([0-9.]+,[0-9]{2})\s+([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trimRight();
+    if (!line) continue;
+    const filialMatch = line.match(filialRegex);
+    if (filialMatch) {
+      const codigo = filialMatch[1];
+      const nome = filialMatch[2].trim();
+      filialAtual = `${codigo} - ${nome}`;
+      continue;
+    }
+    const match = line.match(linhaRegex);
+    if (!match) continue;
+
+    const dtVenc = normalizeDateInput(match[1]);
+    const dtOpe = normalizeDateInput(match[2]);
+    const conta = String(match[3] || '').trim();
+    const historico = String(match[4] || '').trim();
+    const valor = parseMoneyInput(match[5]);
+    const tipoFlag = String(match[6] || '').toUpperCase();
+    const dtBaixa = normalizeDateInput(match[8]);
+
+    const tipo = tipoFlag === 'D' ? 'DESPESA' : 'RECEITA';
+    if (!dtVenc || !dtOpe || !dtBaixa || !conta || !historico || !Number.isFinite(valor)) continue;
+
+    items.push({
+      dataVencimento: dtVenc,
+      dataCompetencia: dtOpe,
+      dataPagamento: dtBaixa,
+      contaContabil: conta,
+      descricao: historico,
+      valor,
+      tipo,
+      filial: filialAtual || 'N/A',
+    });
+  }
+
+  return items;
+}
+
+export function importarContasPagasTxt(content: string, fileName?: string): { success: boolean; message: string } {
+  try {
+    const denied = requirePermission('importarArquivos', 'importar contas pagas');
+    if (denied) return denied;
+
+    if (!content || !String(content).trim()) {
+      return { success: false, message: 'Arquivo vazio' };
+    }
+
+    const parsed = parseContasPagasTxt(content);
+    if (!parsed.length) {
+      return { success: false, message: 'Nenhuma linha valida para importar' };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+    if (!sheet) throw new Error('Aba de lan?amentos n?o encontrada');
+
+    const headers = getHeaderIndexMap(sheet);
+    const idCol = headers['ID'];
+    const dataPagCol = headers['Data Pagamento'];
+    const contaCol = headers['Conta Cont?bil'];
+    const valorCol = headers['Valor L?quido'];
+    const filialCol = headers['Filial'];
+    const descCol = headers['Descri??o'];
+    const tipoCol = headers['Tipo'];
+
+    if ([idCol, dataPagCol, contaCol, valorCol, filialCol, descCol, tipoCol].some(v => v === undefined)) {
+      throw new Error('Cabe?alhos obrigat?rios n?o encontrados em lan?amentos');
+    }
+
+    const lastRow = sheet.getLastRow();
+    const numRows = lastRow > 1 ? lastRow - 1 : 0;
+    const existingValues = numRows > 0
+      ? sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getDisplayValues()
+      : [];
+
+    const existingKeys = new Set<string>();
+    existingValues.forEach(row => {
+      const key = buildImportKey([
+        row[dataPagCol ?? 0],
+        row[contaCol ?? 0],
+        row[valorCol ?? 0],
+        row[filialCol ?? 0],
+        row[descCol ?? 0],
+        row[tipoCol ?? 0],
+      ]);
+      if (key) existingKeys.add(key);
+    });
+
+    const rowsToAppend: any[][] = [];
+    let skipped = 0;
+
+    parsed.forEach((item) => {
+      if (item.tipo !== 'DESPESA') return;
+      const status = item.tipo === 'DESPESA' ? 'PAGA' : 'RECEBIDA';
+      const key = buildImportKey([
+        item.dataPagamento,
+        item.contaContabil,
+        item.valor.toFixed(2),
+        item.filial,
+        item.descricao,
+        item.tipo,
+      ]);
+      if (existingKeys.has(key)) {
+        skipped++;
+        return;
+      }
+      existingKeys.add(key);
+
+      const id = `CP-ERP-${Utilities.getUuid()}`;
+      const row = [
+        sanitizeSheetString(id),
+        sanitizeSheetString(item.dataCompetencia),
+        sanitizeSheetString(item.dataVencimento),
+        sanitizeSheetString(item.dataPagamento),
+        sanitizeSheetString(item.tipo),
+        sanitizeSheetString(item.filial),
+        '',
+        '',
+        sanitizeSheetString(item.contaContabil),
+        '',
+        '',
+        sanitizeSheetString(item.descricao),
+        item.valor,
+        0,
+        0,
+        0,
+        item.valor,
+        sanitizeSheetString(status),
+        '',
+        sanitizeSheetString('ERP_TXT'),
+        sanitizeSheetString(`Importado de ${fileName || 'TXT'}`),
+      ];
+
+      rowsToAppend.push(row);
+    });
+
+    if (!rowsToAppend.length) {
+      return { success: false, message: 'Nenhuma linha nova para importar' };
+    }
+
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+
+    invalidateLancamentosCache();
+    appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped }, true);
+    return { success: true, message: `${rowsToAppend.length} contas pagas importadas (${skipped} duplicadas)` };
+  } catch (error: any) {
+    appendAuditLog('importarContasPagasTxt', { fileName }, false, error?.message);
+    return { success: false, message: error.message };
+  }
+}
+
 export function importarItau(
   rows: Array<any>,
   meta?: { modelo?: string; filialFc?: string; conta?: string }

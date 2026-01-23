@@ -34,6 +34,7 @@ import {
   importarFc,
   importarItau,
   importarSieg,
+  importarContasPagasTxt,
   getSheetData,
   toggleCentroCusto,
   seedPlanoContasFromList,
