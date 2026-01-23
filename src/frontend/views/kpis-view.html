@@ -10,13 +10,13 @@
     </div>
   </div>
 
-  <div class="card" data-print="hide">
+  <div class="card kpi-filters-card" data-print="hide">
     <div class="filters">
       <div class="d-flex justify-between align-center mb-2">
         <h3 class="filters-title">Selecionar Per&iacute;odo</h3>
       </div>
 
-      <div class="form-row">
+      <div class="form-row kpi-filter-row">
         <div class="form-group">
           <label class="form-label">M&ecirc;s</label>
           <select class="form-control" id="kpi-mes">
@@ -58,8 +58,8 @@
           </select>
         </div>
 
-        <div class="form-group" style="display: flex; align-items: flex-end; gap: 0.5rem;">
-          <button class="btn btn-primary" onclick="carregarKPIs()" style="width: 100%;">
+        <div class="form-group kpi-filter-actions" style="display: flex; align-items: flex-end; gap: 0.5rem;">
+          <button class="btn btn-primary" onclick="carregarKPIs()">
             Gerar KPIs
           </button>
           <button class="btn btn-outline" onclick="exportarKPIs()" style="white-space: nowrap;">
@@ -78,7 +78,7 @@
     </div>
 
     <div style="padding: 1.5rem;" id="kpis-report-content">
-      <h3 style="margin-bottom: 1rem; font-size: 1.1rem; color: #2c3e50;">Indicadores de Rentabilidade</h3>
+      <h3 class="kpi-section-title">Indicadores de Rentabilidade</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Margem Bruta</div>
@@ -105,7 +105,7 @@
         </div>
       </div>
 
-      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">Valores do Resultado</h3>
+      <h3 class="kpi-section-title">Valores do Resultado</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Receita L&iacute;quida</div>
@@ -133,7 +133,7 @@
         </div>
       </div>
 
-      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">Indicadores de Liquidez</h3>
+      <h3 class="kpi-section-title">Indicadores de Liquidez</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Liquidez Corrente</div>
@@ -160,7 +160,7 @@
         </div>
       </div>
 
-      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">Indicadores de Crescimento</h3>
+      <h3 class="kpi-section-title">Indicadores de Crescimento</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Crescimento de Receita (MoM)</div>
@@ -187,7 +187,7 @@
         </div>
       </div>
 
-      <h3 style="margin: 2rem 0 1rem; font-size: 1.1rem; color: #2c3e50;">Indicadores Operacionais</h3>
+      <h3 class="kpi-section-title">Indicadores Operacionais</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Custo de Aquisi&ccedil;&atilde;o (CAC)</div>
