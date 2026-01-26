@@ -1338,6 +1338,7 @@ function pagarEmLote() {
                     <th style="padding:6px 8px; text-align:right;">Valor</th>
                     <th style="padding:6px 8px; text-align:left;">Filial</th>
                     <th style="padding:6px 8px; text-align:left;">Mapeamento</th>
+                    <th style="padding:6px 8px; text-align:left;">Rateio</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1350,6 +1351,7 @@ function pagarEmLote() {
                       <td style="padding:6px 8px; text-align:right;">${formatCurrency(Number(r.valor || 0))}</td>
                       <td style="padding:6px 8px;">${escapeHtml(r.filialOriginal)}</td>
                       <td style="padding:6px 8px;">${escapeHtml(r.filialMapeada)}</td>
+                      <td style="padding:6px 8px;">${r.rateio ? `Sim (${r.rateioCount || 0})` : 'Nao'}</td>
                     </tr>
                   `).join('')}
                 </tbody>

@@ -4204,6 +4204,8 @@ type ParsedContaPaga = {
   filialOriginal: string;
   filialMapeada: string;
   filialMapeadaOrigem: string;
+  rateio: boolean;
+  rateioCount: number;
 };
 
 function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; nome: string }> = []): ParsedContaPaga[] {
@@ -4243,6 +4245,8 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
     if (!dtVenc || !dtOpe || !dtBaixa || !conta || !historico || !Number.isFinite(valor)) continue;
 
     const mapping = mapFilialTxt(filialAtual || '', filiais);
+    const rateio = isRateioFilial(filialAtual) || isRateioFilial(mapping.codigo);
+    const rateioTargets = rateio ? getRateioTargets() : [];
     items.push({
       dataVencimento: dtVenc,
       dataCompetencia: dtOpe,
@@ -4254,6 +4258,8 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
       filialOriginal: filialAtual || 'N/A',
       filialMapeada: mapping.codigo,
       filialMapeadaOrigem: mapping.origem,
+      rateio,
+      rateioCount: rateioTargets.length,
     });
   }
 
@@ -4262,6 +4268,7 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
 
 function mapFilialTxt(filialTxt: string, filiais: Array<{ codigo: string; nome: string }>): { codigo: string; origem: string } {
   const fallback = filialTxt || 'N/A';
+  if (isRateioFilial(filialTxt)) return { codigo: 'RATEIO', origem: 'rateio' };
   if (!filiais || !filiais.length) return { codigo: fallback, origem: 'fallback' };
 
   const normalize = (v: string) => normalizeKey(v || '');
@@ -4301,6 +4308,11 @@ function mapFilialTxt(filialTxt: string, filiais: Array<{ codigo: string; nome: 
   return { codigo: fallback, origem: 'fallback' };
 }
 
+function isRateioFilial(value: string): boolean {
+  const key = normalizeKey(value || '');
+  return key.includes('rateio');
+}
+
 function getFiliaisForMapping(): Array<{ codigo: string; nome: string }> {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetFiliais = ss.getSheetByName(SHEET_REF_FILIAIS);
@@ -4312,7 +4324,41 @@ function getFiliaisForMapping(): Array<{ codigo: string; nome: string }> {
     .map((row) => ({
       codigo: String(row[0]),
       nome: String(row[1] || ''),
-    }));
+      }));
+}
+
+function getRateioTargets(): Array<{ codigo: string; nome: string }> {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetFiliais = ss.getSheetByName(SHEET_REF_FILIAIS);
+  if (!sheetFiliais) return [];
+  ensureRefFiliaisSchema(sheetFiliais);
+  const data = sheetFiliais.getDataRange().getValues().slice(1);
+  const targets = data
+    .filter((row) => row[0])
+    .map((row) => ({
+      codigo: String(row[0]),
+      nome: String(row[1] || ''),
+      ativo: row[3] !== false && String(row[3]).toUpperCase() !== 'FALSE'
+    }))
+    .filter((row) => row.ativo && !isRateioFilial(row.codigo) && !isRateioFilial(row.nome));
+  return targets.map(t => ({ codigo: t.codigo, nome: t.nome }));
+}
+
+function splitRateio(valor: number, count: number): number[] {
+  if (!count || count <= 1) return [Number(valor || 0)];
+  const total = Number(valor || 0);
+  const base = Math.round((total / count) * 100) / 100;
+  const splits = Array(count).fill(base);
+  const currentSum = Math.round(splits.reduce((sum, v) => sum + v, 0) * 100) / 100;
+  const diff = Math.round((total - currentSum) * 100) / 100;
+  splits[count - 1] = Math.round((splits[count - 1] + diff) * 100) / 100;
+  return splits;
+}
+
+function findHeaderIndexByAliases(headers: string[], aliases: string[]): number {
+  const normalized = headers.map(h => normalizeKey(h));
+  const aliasSet = new Set(aliases.map(a => normalizeKey(a)));
+  return normalized.findIndex(h => aliasSet.has(h));
 }
 
 export function previewContasPagasTxt(content: string): {
@@ -4365,17 +4411,17 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
     if (!sheet) throw new Error('Aba de lan?amentos n?o encontrada');
 
-    const headers = getHeaderIndexMap(sheet);
-    const idCol = headers['ID'];
-    const dataPagCol = headers['Data Pagamento'];
-    const contaCol = headers['Conta Cont?bil'];
-    const valorCol = headers['Valor L?quido'];
-    const filialCol = headers['Filial'];
-    const descCol = headers['Descri??o'];
-    const tipoCol = headers['Tipo'];
+    const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
+    const idCol = findHeaderIndexByAliases(headerRow, ['id']);
+    const dataPagCol = findHeaderIndexByAliases(headerRow, ['data pagamento', 'dt pagamento', 'data pgto', 'dt pgto']);
+    const contaCol = findHeaderIndexByAliases(headerRow, ['conta contabil', 'conta']);
+    const valorCol = findHeaderIndexByAliases(headerRow, ['valor liquido', 'valor']);
+    const filialCol = findHeaderIndexByAliases(headerRow, ['filial']);
+    const descCol = findHeaderIndexByAliases(headerRow, ['descricao', 'historico']);
+    const tipoCol = findHeaderIndexByAliases(headerRow, ['tipo']);
 
-    if ([idCol, dataPagCol, contaCol, valorCol, filialCol, descCol, tipoCol].some(v => v === undefined)) {
-      throw new Error('Cabe?alhos obrigat?rios n?o encontrados em lan?amentos');
+    if ([idCol, dataPagCol, contaCol, valorCol, filialCol, descCol, tipoCol].some(v => v == -1)) {
+      throw new Error(`Cabecalhos obrigatorios nao encontrados em lancamentos: ${headerRow.join(' | ')}`);
     }
 
     const lastRow = sheet.getLastRow();
@@ -4400,49 +4446,64 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     const rowsToAppend: any[][] = [];
     let skipped = 0;
 
+    const rateioTargets = getRateioTargets();
     parsed.forEach((item) => {
       if (item.tipo !== 'DESPESA') return;
       const status = item.tipo === 'DESPESA' ? 'PAGA' : 'RECEBIDA';
-      const key = buildImportKey([
-        item.dataPagamento,
-        item.contaContabil,
-        item.valor.toFixed(2),
-        item.filialMapeada,
-        item.descricao,
-        item.tipo,
-      ]);
-      if (existingKeys.has(key)) {
-        skipped++;
-        return;
-      }
-      existingKeys.add(key);
+      const isRateio = item.rateio && rateioTargets.length > 0;
+      const splits = isRateio ? splitRateio(item.valor, rateioTargets.length) : [item.valor];
+      const targetFiliais = isRateio ? rateioTargets.map(t => t.codigo) : [item.filialMapeada];
 
-      const id = `CP-ERP-${Utilities.getUuid()}`;
-      const row = [
-        sanitizeSheetString(id),
-        sanitizeSheetString(item.dataCompetencia),
-        sanitizeSheetString(item.dataVencimento),
-        sanitizeSheetString(item.dataPagamento),
-        sanitizeSheetString(item.tipo),
-        sanitizeSheetString(item.filialMapeada),
-        '',
-        '',
-        sanitizeSheetString(item.contaContabil),
-        '',
-        '',
-        sanitizeSheetString(item.descricao),
-        item.valor,
-        0,
-        0,
-        0,
-        item.valor,
-        sanitizeSheetString(status),
-        '',
-        sanitizeSheetString('ERP_TXT'),
-        sanitizeSheetString(`Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal}`),
-      ];
+      splits.forEach((valorSplit, idx) => {
+        const filialDestino = targetFiliais[idx] || item.filialMapeada;
+        const key = buildImportKey([
+          item.dataPagamento,
+          item.contaContabil,
+          Number(valorSplit).toFixed(2),
+          filialDestino,
+          item.descricao,
+          item.tipo,
+        ]);
+        if (existingKeys.has(key)) {
+          skipped++;
+          return;
+        }
+        existingKeys.add(key);
 
-      rowsToAppend.push(row);
+        const id = `CP-ERP-${Utilities.getUuid()}`;
+        const descricao = isRateio
+          ? `${item.descricao} | Rateio ${idx + 1}/${targetFiliais.length} (${filialDestino})`
+          : item.descricao;
+        const obs = isRateio
+          ? `Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal} | Rateio`
+          : `Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal}`;
+
+        const row = [
+          sanitizeSheetString(id),
+          sanitizeSheetString(item.dataCompetencia),
+          sanitizeSheetString(item.dataVencimento),
+          sanitizeSheetString(item.dataPagamento),
+          sanitizeSheetString(item.tipo),
+          sanitizeSheetString(filialDestino),
+          '',
+          '',
+          sanitizeSheetString(item.contaContabil),
+          '',
+          '',
+          sanitizeSheetString(descricao),
+          valorSplit,
+          0,
+          0,
+          0,
+          valorSplit,
+          sanitizeSheetString(status),
+          '',
+          sanitizeSheetString('ERP_TXT'),
+          sanitizeSheetString(obs),
+        ];
+
+        rowsToAppend.push(row);
+      });
     });
 
     if (!rowsToAppend.length) {
