@@ -1303,6 +1303,16 @@ function pagarEmLote() {
       .cancelarContasEmLote(selected);
   }
 
+  function abrirConciliacaoPagar() {
+    currentComparativoTipo = 'PAGAR';
+    navigateTo('conciliacao');
+  }
+
+  function abrirConciliacaoReceber() {
+    currentComparativoTipo = 'RECEBER';
+    navigateTo('conciliacao');
+  }
+
   function importarContasPagasTxt() {
     const fileInput = document.getElementById('cp-txt-file');
     const file = fileInput && fileInput.files ? fileInput.files[0] : null;
@@ -3613,6 +3623,26 @@ function renderKPIs(kpis) {
   setDelta('kpi-desp-op-receita', kpis.operacional.despOperacionaisReceita.valor, prev.despOperacionaisReceita, fmtPct);
   setDelta('kpi-break-even', kpis.operacional.breakEven.valor, prev.breakEven, fmtMoney);
   setDelta('kpi-pmp', kpis.operacional.prazoMedioPagamento.valor, prev.prazoMedioPagamento, fmtInt);
+
+    const receitasTable = document.getElementById('kpi-receitas-filiais');
+    if (receitasTable) {
+      const itens = kpis.receitaPorFilial?.itens || [];
+      if (!itens.length) {
+        receitasTable.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Nenhum dado</td></tr>';
+      } else {
+        receitasTable.innerHTML = itens.map(item => {
+          const pct = (Number(item.percentual || 0) * 100).toFixed(1);
+          return `
+            <tr>
+              <td>${escapeHtml(item.filial || '-')}</td>
+              <td>${formatCurrency(Number(item.receita || 0))}</td>
+              <td>${pct}%</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
 }
 
 

@@ -3884,10 +3884,22 @@ export function uploadCaixaArquivo(payload: {
 // ============================================================================
 
 function normalizeKey(value: unknown): string {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+  let s = String(value || '');
+  // Tenta corrigir moji-bake (UTF-8 lido como Latin-1) apenas quando detectado.
+  if (/[\u00C3\u00C2\uFFFD]/.test(s)) {
+    try {
+      const decoded = Utilities.newBlob(s, 'ISO-8859-1').getDataAsString('UTF-8');
+      if (decoded && decoded !== s) s = decoded;
+    } catch (e) {
+      // ignore e segue com o texto original
+    }
+  }
+  s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
+
+
+
 
 function normalizeDateInput(value: unknown): string {
   if (!value) return '';
@@ -4361,6 +4373,82 @@ function findHeaderIndexByAliases(headers: string[], aliases: string[]): number 
   return normalized.findIndex(h => aliasSet.has(h));
 }
 
+function isPagoStatus(status: string): boolean {
+  return ['PAGO', 'PAGA', 'RECEBIDO', 'RECEBIDA'].includes((status || '').toUpperCase());
+}
+
+function buildRateioPercentuais(lancamentosMes: any[]): Array<{ filial: string; percentual: number }> {
+  const receitasRecebidas = lancamentosMes.filter(l => l.tipo === 'RECEITA' && isPagoStatus(l.status) && !isRateioFilial(l.filial));
+  const porFilial: Record<string, number> = {};
+  receitasRecebidas.forEach(r => {
+    const filial = String(r.filial || '').trim();
+    if (!filial) return;
+    porFilial[filial] = (porFilial[filial] || 0) + Number(r.valorLiquido || r.valor || 0);
+  });
+  let total = Object.values(porFilial).reduce((sum, v) => sum + v, 0);
+
+  const filiaisBase = Object.keys(porFilial);
+  if (total <= 0) {
+    const fallback = Array.from(new Set(lancamentosMes.map(l => String(l.filial || '').trim())))
+      .filter(f => f && !isRateioFilial(f));
+    const baseFiliais = fallback.length ? fallback : filiaisBase;
+    if (!baseFiliais.length) return [];
+    const pct = 1 / baseFiliais.length;
+    return baseFiliais.map(f => ({ filial: f, percentual: pct }));
+  }
+
+  return filiaisBase.map(f => ({ filial: f, percentual: porFilial[f] / total }));
+}
+
+function aplicarRateioDespesas(lancamentosMes: any[]): any[] {
+  const rateioDespesas = lancamentosMes.filter(l => l.tipo === 'DESPESA' && isRateioFilial(l.filial));
+  if (!rateioDespesas.length) return lancamentosMes;
+
+  const percentuais = buildRateioPercentuais(lancamentosMes);
+  if (!percentuais.length) return lancamentosMes;
+
+  const semRateio = lancamentosMes.filter(l => !(l.tipo === 'DESPESA' && isRateioFilial(l.filial)));
+  const alocados: any[] = [];
+
+  rateioDespesas.forEach((d) => {
+    const total = Number(d.valorLiquido || d.valor || 0);
+    if (!Number.isFinite(total) || total === 0) return;
+    const valores = percentuais.map(p => total * p.percentual);
+    const valoresAjustados = splitRateio(total, percentuais.length);
+    percentuais.forEach((p, idx) => {
+      const valor = valoresAjustados[idx] ?? valores[idx] ?? 0;
+      alocados.push({
+        ...d,
+        filial: p.filial,
+        valorLiquido: valor,
+        valorBruto: valor,
+        valor: valor,
+        descricao: `${d.descricao || ''} | Rateio ${Math.round(p.percentual * 100)}%`,
+        observacoes: `${d.observacoes || ''} Rateio origem: ${d.filial || ''}`.trim(),
+      });
+    });
+  });
+
+  return semRateio.concat(alocados);
+}
+
+function getLancamentosMesRateados(
+  lancamentos: any[],
+  mes: number,
+  ano: number,
+  canal?: string
+): any[] {
+  const base = lancamentos.filter(l => {
+    const data = new Date(l.dataCompetencia);
+    const mesLanc = data.getMonth() + 1;
+    const anoLanc = data.getFullYear();
+    const matchPeriodo = mesLanc === mes && anoLanc === ano;
+    const matchCanal = !canal || l.canal === canal;
+    return matchPeriodo && matchCanal;
+  });
+  return aplicarRateioDespesas(base);
+}
+
 export function previewContasPagasTxt(content: string): {
   success: boolean;
   message: string;
@@ -4412,8 +4500,16 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     if (!sheet) throw new Error('Aba de lan?amentos n?o encontrada');
 
     const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
-    const idCol = findHeaderIndexByAliases(headerRow, ['id']);
-    const dataPagCol = findHeaderIndexByAliases(headerRow, ['data pagamento', 'dt pagamento', 'data pgto', 'dt pgto']);
+    const idCol = findHeaderIndexByAliases(headerRow, ['id', 'codigo']);
+    const dataPagCol = findHeaderIndexByAliases(headerRow, [
+      'data pagamento',
+      'dt pagamento',
+      'data pgto',
+      'dt pgto',
+      'data baixa',
+      'dt baixa',
+      'baixa'
+    ]);
     const contaCol = findHeaderIndexByAliases(headerRow, ['conta contabil', 'conta']);
     const valorCol = findHeaderIndexByAliases(headerRow, ['valor liquido', 'valor']);
     const filialCol = findHeaderIndexByAliases(headerRow, ['filial']);
@@ -4446,64 +4542,53 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     const rowsToAppend: any[][] = [];
     let skipped = 0;
 
-    const rateioTargets = getRateioTargets();
     parsed.forEach((item) => {
       if (item.tipo !== 'DESPESA') return;
       const status = item.tipo === 'DESPESA' ? 'PAGA' : 'RECEBIDA';
-      const isRateio = item.rateio && rateioTargets.length > 0;
-      const splits = isRateio ? splitRateio(item.valor, rateioTargets.length) : [item.valor];
-      const targetFiliais = isRateio ? rateioTargets.map(t => t.codigo) : [item.filialMapeada];
+      const key = buildImportKey([
+        item.dataPagamento,
+        item.contaContabil,
+        Number(item.valor).toFixed(2),
+        item.filialMapeada,
+        item.descricao,
+        item.tipo,
+      ]);
+      if (existingKeys.has(key)) {
+        skipped++;
+        return;
+      }
+      existingKeys.add(key);
 
-      splits.forEach((valorSplit, idx) => {
-        const filialDestino = targetFiliais[idx] || item.filialMapeada;
-        const key = buildImportKey([
-          item.dataPagamento,
-          item.contaContabil,
-          Number(valorSplit).toFixed(2),
-          filialDestino,
-          item.descricao,
-          item.tipo,
-        ]);
-        if (existingKeys.has(key)) {
-          skipped++;
-          return;
-        }
-        existingKeys.add(key);
+      const id = `CP-ERP-${Utilities.getUuid()}`;
+      const obs = item.rateio
+        ? `Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal} | Rateio`
+        : `Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal}`;
 
-        const id = `CP-ERP-${Utilities.getUuid()}`;
-        const descricao = isRateio
-          ? `${item.descricao} | Rateio ${idx + 1}/${targetFiliais.length} (${filialDestino})`
-          : item.descricao;
-        const obs = isRateio
-          ? `Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal} | Rateio`
-          : `Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal}`;
+      const row = [
+        sanitizeSheetString(id),
+        sanitizeSheetString(item.dataCompetencia),
+        sanitizeSheetString(item.dataVencimento),
+        sanitizeSheetString(item.dataPagamento),
+        sanitizeSheetString(item.tipo),
+        sanitizeSheetString(item.filialMapeada),
+        '',
+        '',
+        sanitizeSheetString(item.contaContabil),
+        '',
+        '',
+        sanitizeSheetString(item.descricao),
+        item.valor,
+        0,
+        0,
+        0,
+        item.valor,
+        sanitizeSheetString(status),
+        '',
+        sanitizeSheetString('ERP_TXT'),
+        sanitizeSheetString(obs),
+      ];
 
-        const row = [
-          sanitizeSheetString(id),
-          sanitizeSheetString(item.dataCompetencia),
-          sanitizeSheetString(item.dataVencimento),
-          sanitizeSheetString(item.dataPagamento),
-          sanitizeSheetString(item.tipo),
-          sanitizeSheetString(filialDestino),
-          '',
-          '',
-          sanitizeSheetString(item.contaContabil),
-          '',
-          '',
-          sanitizeSheetString(descricao),
-          valorSplit,
-          0,
-          0,
-          0,
-          valorSplit,
-          sanitizeSheetString(status),
-          '',
-          sanitizeSheetString('ERP_TXT'),
-          sanitizeSheetString(obs),
-        ];
-
-        rowsToAppend.push(row);
-      });
+      rowsToAppend.push(row);
     });
 
     if (!rowsToAppend.length) {
@@ -5107,18 +5192,10 @@ export function getDREMensal(mes: number, ano: number, filial?: string, canal?: 
     const lancamentos = getLancamentosFromSheet();
     const planoMap = getPlanoContasMap();
 
-    // Filtrar por período e filial
-    const lancamentosMes = lancamentos.filter(l => {
-      const data = new Date(l.dataCompetencia);
-      const mesLanc = data.getMonth() + 1; // JavaScript months are 0-indexed
-      const anoLanc = data.getFullYear();
+    // Filtrar por per?odo e filial
+    const lancamentosMesBase = getLancamentosMesRateados(lancamentos, mes, ano, canal);
+    const lancamentosMes = lancamentosMesBase.filter(l => !filial || l.filial === filial);
 
-      const matchPeriodo = mesLanc === mes && anoLanc === ano;
-      const matchFilial = !filial || l.filial === filial;
-      const matchCanal = !canal || l.canal === canal;
-
-      return matchPeriodo && matchFilial && matchCanal;
-    });
 
     // Separar receitas e despesas
     const receitas = lancamentosMes.filter(l => l.tipo === 'RECEITA');
@@ -5326,18 +5403,10 @@ export function getFluxoCaixaMensal(mes: number, ano: number, filial?: string, c
   try {
     const lancamentos = getLancamentosFromSheet();
 
-    // Filtrar por período e filial
-    const lancamentosMes = lancamentos.filter(l => {
-      const data = new Date(l.dataCompetencia);
-      const mesLanc = data.getMonth() + 1;
-      const anoLanc = data.getFullYear();
+    // Filtrar por per?odo e filial
+    const lancamentosMesBase = getLancamentosMesRateados(lancamentos, mes, ano, canal);
+    const lancamentosMes = lancamentosMesBase.filter(l => !filial || l.filial === filial);
 
-      const matchPeriodo = mesLanc === mes && anoLanc === ano;
-      const matchFilial = !filial || l.filial === filial;
-      const matchCanal = !canal || l.canal === canal;
-
-      return matchPeriodo && matchFilial && matchCanal;
-    });
 
     // Separar por tipo e status
       const isPago = (s: string) => ['PAGO', 'PAGA', 'RECEBIDO', 'RECEBIDA'].includes((s || '').toUpperCase());
@@ -5457,30 +5526,32 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
     const lancamentos = getLancamentosFromSheet();
 
     // Filtrar lançamentos do mês atual
-    const lancamentosMes = lancamentos.filter(l => {
-      const data = new Date(l.dataCompetencia);
-      const mesLanc = data.getMonth() + 1;
-      const anoLanc = data.getFullYear();
-      const matchPeriodo = mesLanc === mes && anoLanc === ano;
-      const matchFilial = !filial || l.filial === filial;
-      const matchCanal = !canal || l.canal === canal;
-      return matchPeriodo && matchFilial && matchCanal;
+    const lancamentosMesBase = getLancamentosMesRateados(lancamentos, mes, ano, canal);
+    const lancamentosMes = lancamentosMesBase.filter(l => !filial || l.filial === filial);
+
+    const receitasRecebidasAll = lancamentosMesBase.filter(l => l.tipo === 'RECEITA' && isPagoStatus(l.status) && !isRateioFilial(l.filial));
+    const receitaPorFilialMap: Record<string, number> = {};
+    receitasRecebidasAll.forEach(r => {
+      const f = String(r.filial || '').trim();
+      if (!f) return;
+      receitaPorFilialMap[f] = (receitaPorFilialMap[f] || 0) + Number(r.valorLiquido || r.valor || 0);
     });
+    const receitaTotalAll = Object.values(receitaPorFilialMap).reduce((sum, v) => sum + v, 0);
+    const receitaPorFilial = Object.keys(receitaPorFilialMap).map(f => ({
+      filial: f,
+      receita: receitaPorFilialMap[f],
+      percentual: receitaTotalAll > 0 ? (receitaPorFilialMap[f] / receitaTotalAll) : 0
+    })).sort((a, b) => b.receita - a.receita);
+
 
     // Filtrar lançamentos do mês anterior
     const dataAnterior = new Date(ano, mes - 2, 1); // mes - 2 porque JavaScript months são 0-indexed
     const mesAnterior = dataAnterior.getMonth() + 1;
     const anoAnterior = dataAnterior.getFullYear();
 
-    const lancamentosMesAnterior = lancamentos.filter(l => {
-      const data = new Date(l.dataCompetencia);
-      const mesLanc = data.getMonth() + 1;
-      const anoLanc = data.getFullYear();
-      const matchPeriodo = mesLanc === mesAnterior && anoLanc === anoAnterior;
-      const matchFilial = !filial || l.filial === filial;
-      const matchCanal = !canal || l.canal === canal;
-      return matchPeriodo && matchFilial && matchCanal;
-    });
+    const lancamentosMesAnteriorBase = getLancamentosMesRateados(lancamentos, mesAnterior, anoAnterior, canal);
+    const lancamentosMesAnterior = lancamentosMesAnteriorBase.filter(l => !filial || l.filial === filial);
+
 
     // Calcular DRE do mês atual e anterior
     const dreAtual = getDREMensal(mes, ano, filial, canal);
@@ -5633,6 +5704,7 @@ export function getKPIsMensal(mes: number, ano: number, filial?: string, canal?:
     }
 
     return {
+      receitaPorFilial: { total: receitaTotalAll, itens: receitaPorFilial },
       periodo: {
         mes,
         ano,
