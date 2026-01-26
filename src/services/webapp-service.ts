@@ -4201,16 +4201,18 @@ type ParsedContaPaga = {
   descricao: string;
   valor: number;
   tipo: 'DESPESA' | 'RECEITA';
-  filial: string;
+  filialOriginal: string;
+  filialMapeada: string;
+  filialMapeadaOrigem: string;
 };
 
-function parseContasPagasTxt(content: string): ParsedContaPaga[] {
+function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; nome: string }> = []): ParsedContaPaga[] {
   const lines = String(content || '').split(/\r?\n/);
   const items: ParsedContaPaga[] = [];
   let filialAtual = '';
 
   const filialRegex = /^Filial:\s*(\d+)\s*-\s*([^\r]+?)\s{2,}/i;
-  const linhaRegex = /^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s+(.+?)\s+([0-9.]+,[0-9]{2})\s+([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
+  const tailRegex = /([0-9.]+,[0-9]{2})\s+([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
 
   for (const rawLine of lines) {
     const line = String(rawLine || '').trimRight();
@@ -4222,20 +4224,25 @@ function parseContasPagasTxt(content: string): ParsedContaPaga[] {
       filialAtual = `${codigo} - ${nome}`;
       continue;
     }
-    const match = line.match(linhaRegex);
-    if (!match) continue;
+    if (!/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+/.test(line)) continue;
+    const tail = line.match(tailRegex);
+    if (!tail) continue;
 
-    const dtVenc = normalizeDateInput(match[1]);
-    const dtOpe = normalizeDateInput(match[2]);
-    const conta = String(match[3] || '').trim();
-    const historico = String(match[4] || '').trim();
-    const valor = parseMoneyInput(match[5]);
-    const tipoFlag = String(match[6] || '').toUpperCase();
-    const dtBaixa = normalizeDateInput(match[8]);
+    const valor = parseMoneyInput(tail[1]);
+    const tipoFlag = String(tail[2] || '').toUpperCase();
+    const dtBaixa = normalizeDateInput(tail[4]);
+    const left = line.slice(0, tail.index).trimRight();
+    const leftParts = left.split(/\s+/);
+    if (leftParts.length < 3) continue;
+    const dtVenc = normalizeDateInput(leftParts[0]);
+    const dtOpe = normalizeDateInput(leftParts[1]);
+    const conta = String(leftParts[2] || '').trim();
+    const historico = leftParts.slice(3).join(' ').trim();
 
     const tipo = tipoFlag === 'D' ? 'DESPESA' : 'RECEITA';
     if (!dtVenc || !dtOpe || !dtBaixa || !conta || !historico || !Number.isFinite(valor)) continue;
 
+    const mapping = mapFilialTxt(filialAtual || '', filiais);
     items.push({
       dataVencimento: dtVenc,
       dataCompetencia: dtOpe,
@@ -4244,11 +4251,99 @@ function parseContasPagasTxt(content: string): ParsedContaPaga[] {
       descricao: historico,
       valor,
       tipo,
-      filial: filialAtual || 'N/A',
+      filialOriginal: filialAtual || 'N/A',
+      filialMapeada: mapping.codigo,
+      filialMapeadaOrigem: mapping.origem,
     });
   }
 
   return items;
+}
+
+function mapFilialTxt(filialTxt: string, filiais: Array<{ codigo: string; nome: string }>): { codigo: string; origem: string } {
+  const fallback = filialTxt || 'N/A';
+  if (!filiais || !filiais.length) return { codigo: fallback, origem: 'fallback' };
+
+  const normalize = (v: string) => normalizeKey(v || '');
+  const txt = String(filialTxt || '').trim();
+  const match = txt.match(/^(\d+)\s*-\s*(.+)$/);
+  const codigoTxt = match ? match[1] : '';
+  const nomeTxt = match ? match[2] : txt;
+
+  const codeNorm = normalize(codigoTxt);
+  const nameNorm = normalize(nomeTxt);
+
+  let best: { codigo: string; score: number; origem: string } | null = null;
+
+  filiais.forEach((f) => {
+    const codNorm = normalize(String(f.codigo || ''));
+    const nomeNorm = normalize(String(f.nome || ''));
+    let score = 0;
+    let origem = '';
+    if (codeNorm && codNorm === codeNorm) {
+      score = 3;
+      origem = 'codigo';
+    } else if (codeNorm && codNorm.includes(codeNorm)) {
+      score = 2;
+      origem = 'codigo-parcial';
+    }
+    if (nameNorm && (nomeNorm.includes(nameNorm) || nameNorm.includes(nomeNorm))) {
+      score = Math.max(score, 2);
+      origem = origem || 'nome';
+    }
+    if (score > 0 && (!best || score > best.score)) {
+      best = { codigo: String(f.codigo || '').trim() || fallback, score, origem };
+    }
+  });
+
+  const selected = best as { codigo: string; origem: string } | null;
+  if (selected) return { codigo: selected.codigo, origem: selected.origem };
+  return { codigo: fallback, origem: 'fallback' };
+}
+
+function getFiliaisForMapping(): Array<{ codigo: string; nome: string }> {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetFiliais = ss.getSheetByName(SHEET_REF_FILIAIS);
+  if (!sheetFiliais) return [];
+  ensureRefFiliaisSchema(sheetFiliais);
+  const data = sheetFiliais.getDataRange().getValues().slice(1);
+  return data
+    .filter((row) => row[0])
+    .map((row) => ({
+      codigo: String(row[0]),
+      nome: String(row[1] || ''),
+    }));
+}
+
+export function previewContasPagasTxt(content: string): {
+  success: boolean;
+  message: string;
+  total?: number;
+  preview?: ParsedContaPaga[];
+  unmapped?: number;
+} {
+  try {
+    const denied = requirePermission('importarArquivos', 'preview contas pagas');
+    if (denied) return { success: false, message: denied.message };
+    if (!content || !String(content).trim()) {
+      return { success: false, message: 'Arquivo vazio' };
+    }
+    const filiais = getFiliaisForMapping();
+    const parsed = parseContasPagasTxt(content, filiais);
+    if (!parsed.length) {
+      return { success: false, message: 'Nenhuma linha valida para importar' };
+    }
+    const unmapped = parsed.filter(p => p.filialMapeada === p.filialOriginal).length;
+    return {
+      success: true,
+      message: 'Preview gerado',
+      total: parsed.length,
+      preview: parsed.slice(0, 25),
+      unmapped,
+    };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
 }
 
 export function importarContasPagasTxt(content: string, fileName?: string): { success: boolean; message: string } {
@@ -4260,7 +4355,8 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
       return { success: false, message: 'Arquivo vazio' };
     }
 
-    const parsed = parseContasPagasTxt(content);
+    const filiais = getFiliaisForMapping();
+    const parsed = parseContasPagasTxt(content, filiais);
     if (!parsed.length) {
       return { success: false, message: 'Nenhuma linha valida para importar' };
     }
@@ -4311,7 +4407,7 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
         item.dataPagamento,
         item.contaContabil,
         item.valor.toFixed(2),
-        item.filial,
+        item.filialMapeada,
         item.descricao,
         item.tipo,
       ]);
@@ -4328,7 +4424,7 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
         sanitizeSheetString(item.dataVencimento),
         sanitizeSheetString(item.dataPagamento),
         sanitizeSheetString(item.tipo),
-        sanitizeSheetString(item.filial),
+        sanitizeSheetString(item.filialMapeada),
         '',
         '',
         sanitizeSheetString(item.contaContabil),
@@ -4343,7 +4439,7 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
         sanitizeSheetString(status),
         '',
         sanitizeSheetString('ERP_TXT'),
-        sanitizeSheetString(`Importado de ${fileName || 'TXT'}`),
+        sanitizeSheetString(`Importado de ${fileName || 'TXT'} | Filial origem: ${item.filialOriginal}`),
       ];
 
       rowsToAppend.push(row);
