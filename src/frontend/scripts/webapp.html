@@ -1186,14 +1186,13 @@ function renderContasPagarTable(contas) {
   updateElement('cp-total-registros', contas.length);
 
   if (!contas || contas.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Nenhuma conta encontrada</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhuma conta encontrada</td></tr>';
     return;
   }
 
   tbody.innerHTML = contas.map(c => `
     <tr>
       <td><input type="checkbox" class="select-cp" value="${escapeHtml(c.id)}"></td>
-      <td>${escapeHtml(c.id)}</td>
       <td>${formatDate(c.vencimento)}</td>
       <td>${escapeHtml(c.fornecedor)}</td>
       <td>${escapeHtml(c.descricao)}</td>
@@ -1384,23 +1383,37 @@ function pagarEmLote() {
               if (fileInput) fileInput.value = '';
               return;
             }
-            showLoading('Importando contas pagas...');
-            window.gasRun
-              .withSuccessHandler(function(result) {
-                hideLoading();
-                if (result && result.success) {
+            const totalRows = total || rows.length;
+            const batchLimit = 200;
+            let currentOffset = 0;
+
+            const runBatch = () => {
+              showLoading(`Importando contas pagas... ${Math.min(currentOffset, totalRows)}/${totalRows}`);
+              window.gasRun
+                .withSuccessHandler(function(result) {
+                  if (!result || !result.success) {
+                    hideLoading();
+                    showToast(result?.message || 'Erro ao importar contas pagas', 'error');
+                    return;
+                  }
+                  if (result.nextOffset !== null && result.nextOffset !== undefined) {
+                    currentOffset = result.nextOffset;
+                    setTimeout(runBatch, 50);
+                    return;
+                  }
+                  hideLoading();
                   showToast(result.message || 'Importacao concluida', 'success');
                   if (fileInput) fileInput.value = '';
                   loadContasPagarData();
-                } else {
-                  showToast(result?.message || 'Erro ao importar contas pagas', 'error');
-                }
-              })
-              .withFailureHandler(function(err) {
-                hideLoading();
-                handleError(err);
-              })
-              .importarContasPagasTxt(content, file.name);
+                })
+                .withFailureHandler(function(err) {
+                  hideLoading();
+                  handleError(err);
+                })
+                .importarContasPagasTxt(content, file.name, currentOffset, batchLimit);
+            };
+
+            runBatch();
           });
         })
         .withFailureHandler(function(err) {

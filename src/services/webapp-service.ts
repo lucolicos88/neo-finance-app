@@ -4570,7 +4570,19 @@ export function previewContasPagasTxt(content: string): {
   }
 }
 
-export function importarContasPagasTxt(content: string, fileName?: string): { success: boolean; message: string } {
+export function importarContasPagasTxt(
+  content: string,
+  fileName?: string,
+  offset: number = 0,
+  limit: number = 200
+): {
+  success: boolean;
+  message: string;
+  imported?: number;
+  skipped?: number;
+  nextOffset?: number | null;
+  total?: number;
+} {
   try {
     const denied = requirePermission('importarArquivos', 'importar contas pagas');
     if (denied) return denied;
@@ -4584,6 +4596,10 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     if (!parsed.length) {
       return { success: false, message: 'Nenhuma linha valida para importar' };
     }
+    const total = parsed.length;
+    const start = Math.max(0, Number(offset) || 0);
+    const end = Math.min(total, start + Math.max(1, Number(limit) || 200));
+    const slice = parsed.slice(start, end);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
@@ -4633,7 +4649,7 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     const rowsToAppend: any[][] = [];
     let skipped = 0;
 
-    parsed.forEach((item) => {
+    slice.forEach((item) => {
       if (item.tipo !== 'DESPESA') return;
       const status = item.tipo === 'DESPESA' ? 'PAGA' : 'RECEBIDA';
       const key = buildImportKey([
@@ -4684,15 +4700,24 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     });
 
     if (!rowsToAppend.length) {
-      return { success: false, message: 'Nenhuma linha nova para importar' };
+      const nextOffset = end < total ? end : null;
+      return { success: true, message: 'Nenhuma linha nova para importar', imported: 0, skipped, nextOffset, total };
     }
 
     const startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
 
     invalidateLancamentosCache();
-    appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped }, true);
-    return { success: true, message: `${rowsToAppend.length} contas pagas importadas (${skipped} duplicadas)` };
+    appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped, start, end }, true);
+    const nextOffset = end < total ? end : null;
+    return {
+      success: true,
+      message: `${rowsToAppend.length} contas pagas importadas (${skipped} duplicadas)`,
+      imported: rowsToAppend.length,
+      skipped,
+      nextOffset,
+      total
+    };
   } catch (error: any) {
     appendAuditLog('importarContasPagasTxt', { fileName }, false, error?.message);
     return { success: false, message: error.message };
