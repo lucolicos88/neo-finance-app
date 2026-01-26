@@ -4260,13 +4260,16 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
     const dtBaixa = normalizeDateInput(tail[3]);
     const tailIndex = typeof tail.index === 'number' ? tail.index : line.length;
 
-    let valorStr = '';
-    if (colValorStart >= 0) {
-      valorStr = line.substring(colValorStart, tailIndex).trim();
-    } else {
-      const valueMatch = line.match(/((?:\d{1,3}(?:\.\d{3})+|\d{1,6}),\d{2})\s+[A-Z]\s+[A-Z]\s+\d{2}\/\d{2}\/\d{4}\s*$/);
-      valorStr = valueMatch ? valueMatch[1] : '';
+    const preTail = line.slice(0, tailIndex);
+    const moneyRegex = /(?:\d{1,3}(?:\.\d{3})+|\d{1,6}),\d{2}/g;
+    let lastMoneyText = '';
+    let lastMoneyIndex = -1;
+    let moneyMatch: RegExpExecArray | null;
+    while ((moneyMatch = moneyRegex.exec(preTail)) !== null) {
+      lastMoneyText = moneyMatch[0];
+      lastMoneyIndex = moneyMatch.index ?? -1;
     }
+    const valorStr = lastMoneyText;
     const valor = parseMoneyInput(valorStr);
 
     let dtVenc = '';
@@ -4279,9 +4282,11 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
       dtVenc = normalizeDateInput(line.substring(0, 10).trim());
       dtOpe = normalizeDateInput(line.substring(11, 21).trim());
       conta = line.substring(colContaStart, colHistStart).trim();
-      if (colDocStart > colHistStart && colValorStart > colDocStart) {
+      const moneyIndex = lastMoneyIndex;
+      if (colDocStart > colHistStart && (moneyIndex > colDocStart || colValorStart > colDocStart)) {
         historico = line.substring(colHistStart, colDocStart).trim();
-        numeroDocumento = line.substring(colDocStart, colValorStart).trim().replace(/^\/+/, '').trim();
+        const docEnd = moneyIndex > colDocStart ? moneyIndex : colValorStart;
+        numeroDocumento = line.substring(colDocStart, docEnd).trim().replace(/^\/+/, '').trim();
       }
     } else {
       const left = line.slice(0, tailIndex).trimRight();
