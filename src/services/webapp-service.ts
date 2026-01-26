@@ -4229,7 +4229,11 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
   let filialAtual = '';
 
   const filialRegex = /^Filial:\s*(\d+)\s*-\s*([^\r]+?)\s{2,}/i;
-  const tailRegex = /((?:\d{1,3}(?:\.\d{3})+|\d{1,6}),\d{2})\s+([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
+  const tailRegex = /([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
+  let colContaStart = -1;
+  let colHistStart = -1;
+  let colDocStart = -1;
+  let colValorStart = -1;
 
   for (const rawLine of lines) {
     const line = String(rawLine || '').trimRight();
@@ -4241,31 +4245,63 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
       filialAtual = `${codigo} - ${nome}`;
       continue;
     }
+    if (line.includes('DT.VENC.') && line.includes('VALOR') && line.includes('DT.BAIXA')) {
+      colContaStart = line.indexOf('CONTA');
+      colHistStart = line.indexOf('HISTORICO');
+      colDocStart = line.indexOf('/N.DOCUMENTO');
+      colValorStart = line.indexOf('VALOR');
+      continue;
+    }
     if (!/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+/.test(line)) continue;
     const tail = line.match(tailRegex);
     if (!tail) continue;
 
-    const valor = parseMoneyInput(tail[1]);
-    const tipoFlag = String(tail[2] || '').toUpperCase();
-    const dtBaixa = normalizeDateInput(tail[4]);
-    const left = line.slice(0, tail.index).trimRight();
-    const startMatch = left.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(.*)$/);
-    if (!startMatch) continue;
-    const dtVenc = normalizeDateInput(startMatch[1]);
-    const dtOpe = normalizeDateInput(startMatch[2]);
-    const conta = String(startMatch[3] || '').trim();
-    const rest = String(startMatch[4] || '').trimRight();
-    let historico = rest;
-    let numeroDocumento = '';
-    const restParts = rest.split(/\s{2,}/).map(p => p.trim()).filter(Boolean);
-    if (restParts.length >= 2) {
-      numeroDocumento = restParts.pop() || '';
-      historico = restParts.join(' ').trim();
+    const tipoFlag = String(tail[1] || '').toUpperCase();
+    const dtBaixa = normalizeDateInput(tail[3]);
+    const tailIndex = typeof tail.index === 'number' ? tail.index : line.length;
+
+    let valorStr = '';
+    if (colValorStart >= 0) {
+      valorStr = line.substring(colValorStart, tailIndex).trim();
     } else {
-      const docMatch = rest.match(/^(.*?)(?:\s+)([0-9A-Z][0-9A-Z.\/-]{3,})$/);
-      if (docMatch) {
-        historico = docMatch[1].trim();
-        numeroDocumento = docMatch[2].trim();
+      const valueMatch = line.match(/((?:\d{1,3}(?:\.\d{3})+|\d{1,6}),\d{2})\s+[A-Z]\s+[A-Z]\s+\d{2}\/\d{2}\/\d{4}\s*$/);
+      valorStr = valueMatch ? valueMatch[1] : '';
+    }
+    const valor = parseMoneyInput(valorStr);
+
+    let dtVenc = '';
+    let dtOpe = '';
+    let conta = '';
+    let historico = '';
+    let numeroDocumento = '';
+
+    if (colContaStart >= 0 && colHistStart > colContaStart) {
+      dtVenc = normalizeDateInput(line.substring(0, 10).trim());
+      dtOpe = normalizeDateInput(line.substring(11, 21).trim());
+      conta = line.substring(colContaStart, colHistStart).trim();
+      if (colDocStart > colHistStart && colValorStart > colDocStart) {
+        historico = line.substring(colHistStart, colDocStart).trim();
+        numeroDocumento = line.substring(colDocStart, colValorStart).trim().replace(/^\/+/, '').trim();
+      }
+    } else {
+      const left = line.slice(0, tailIndex).trimRight();
+      const startMatch = left.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(.*)$/);
+      if (!startMatch) continue;
+      dtVenc = normalizeDateInput(startMatch[1]);
+      dtOpe = normalizeDateInput(startMatch[2]);
+      conta = String(startMatch[3] || '').trim();
+      const rest = String(startMatch[4] || '').trimRight();
+      historico = rest;
+      const restParts = rest.split(/\s{2,}/).map(p => p.trim()).filter(Boolean);
+      if (restParts.length >= 2) {
+        numeroDocumento = restParts.pop() || '';
+        historico = restParts.join(' ').trim();
+      } else {
+        const docMatch = rest.match(/^(.*?)(?:\s+)([0-9A-Z][0-9A-Z.\/-]{3,})$/);
+        if (docMatch) {
+          historico = docMatch[1].trim();
+          numeroDocumento = docMatch[2].trim();
+        }
       }
     }
 
@@ -5053,46 +5089,9 @@ function getLancamentosFromSheet(): any[] {
   if (cached) return cached;
 
   const data = getSheetValues(SHEET_TB_LANCAMENTOS);
-   if (!data || data.length <= 1) {
-    if (!isSeedDataEnabled()) {
-      cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, [], DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
-      return [];
-    }
-    const seed = [
-      ['CP-1001','2025-01-02','2025-01-12','2025-01-11','DESPESA','MATRIZ','OPS','Compra MP','10201','','ONLINE','Compra matéria-prima lote A',1500,0,0,0,1500,'PAGO','EXT-5002','Fornecedor X','Lote inicial','' ],
-      ['CP-1002','2025-01-05','2025-01-20','','DESPESA','MATRIZ','OPS','Frete Compras','10205','','ONLINE','Frete compras fornecedores',400,0,0,0,400,'PENDENTE','','Fornecedor Y','À espera de pagamento','' ],
-      ['CP-1003','2025-01-03','2025-01-30','','DESPESA','MATRIZ','ADM','Honorários','10402','','ONLINE','Honorários contábeis mês jan',900,0,0,0,900,'PENDENTE','','Escritório Z','Contrato mensal','' ],
-      ['CR-2001','2025-01-02','2025-01-02','2025-01-02','RECEITA','MATRIZ','COM','Receita Fórmulas','20101','Receita Varejo','ONLINE','Venda balcão fórmulas',3200,0,0,0,3200,'RECEBIDA','EXT-5001','Venda Direta','Balcão janeiro','' ],
-      ['CR-2002','2025-01-04','2025-01-14','','RECEITA','MATRIZ','COM','Receita Varejo','20102','Receita Varejo','ONLINE','Venda varejo online',2800,0,0,0,2800,'PENDENTE','','E-commerce','Pedido #234','' ],
-      ['CR-2003','2025-01-06','2025-01-21','','RECEITA','FILIAL_RJ','COM','Receita Convênio','20108','Receita Convênio','PARCEIRO','Convenio Varejo',2100,0,0,0,2100,'PENDENTE','','Convênio Varejo','Ref. janeiro','' ],
-    ];
-    appendRows(SHEET_TB_LANCAMENTOS, seed);
-    const seeded = seed.map(r => ({
-      id: String(r[0]),
-      dataCompetencia: normalizeDateCell(r[1]),
-      dataVencimento: normalizeDateCell(r[2]),
-      dataPagamento: normalizeDateCell(r[3]),
-      tipo: String(r[4]),
-      filial: String(r[5]),
-      centroCusto: String(r[6]),
-      contaGerencial: String(r[7]),
-      contaContabil: String(r[8] ?? ''),
-      grupoReceita: String(r[9] ?? ''),
-      canal: String(r[10] ?? ''),
-      descricao: String(r[11] ?? ''),
-      valorBruto: parseFloat(String(r[12] || 0)),
-      desconto: parseFloat(String(r[13] || 0)),
-      juros: parseFloat(String(r[14] || 0)),
-      multa: parseFloat(String(r[15] || 0)),
-      valorLiquido: parseFloat(String(r[16] || 0)),
-      status: String(r[17] || 'PENDENTE'),
-      idExtratoBanco: String(r[18] || ''),
-      origem: String(r[19] || ''),
-      observacoes: String(r[20] || ''),
-      numeroDocumento: String(r[21] || ''),
-    }));
-    cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, seeded, DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
-    return seeded;
+  if (!data || data.length <= 1) {
+    cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, [], DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
+    return [];
   }
 
   const parsed = data.slice(1).map((row: any) => ({
