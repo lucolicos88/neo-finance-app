@@ -4545,6 +4545,7 @@ export function previewContasPagasTxt(content: string): {
   total?: number;
   preview?: ParsedContaPaga[];
   unmapped?: number;
+  sessionId?: string;
 } {
   try {
     const denied = requirePermission('importarArquivos', 'preview contas pagas');
@@ -4558,23 +4559,35 @@ export function previewContasPagasTxt(content: string): {
       return { success: false, message: 'Nenhuma linha valida para importar' };
     }
     const unmapped = parsed.filter(p => p.filialMapeada === p.filialOriginal).length;
+    const sessionId = computeContentHash(content);
     return {
       success: true,
       message: 'Preview gerado',
       total: parsed.length,
       preview: parsed.slice(0, 25),
       unmapped,
+      sessionId,
     };
   } catch (error: any) {
     return { success: false, message: error.message };
   }
 }
 
+function computeContentHash(content: string): string {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.MD5,
+    content,
+    Utilities.Charset.UTF_8
+  );
+  return bytes.map(b => (`0${((b + 256) % 256).toString(16)}`).slice(-2)).join('');
+}
+
 export function importarContasPagasTxt(
   content: string,
   fileName?: string,
   offset: number = 0,
-  limit: number = 200
+  limit: number = 200,
+  sessionId?: string
 ): {
   success: boolean;
   message: string;
@@ -4627,24 +4640,40 @@ export function importarContasPagasTxt(
       throw new Error(`Cabecalhos obrigatorios nao encontrados em lancamentos: ${headerRow.join(' | ')}`);
     }
 
-    const lastRow = sheet.getLastRow();
-    const numRows = lastRow > 1 ? lastRow - 1 : 0;
-    const existingValues = numRows > 0
-      ? sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getDisplayValues()
-      : [];
+    const cache = CacheService.getScriptCache();
+    const cacheKey = sessionId ? `import_cp_keys_${sessionId}` : '';
+    let existingKeys = new Set<string>();
+    let cachedKeys: string[] | null = null;
+    if (cacheKey) {
+      const cached = cache.get(cacheKey);
+      if (cached) {
+        try {
+          cachedKeys = JSON.parse(cached);
+          if (Array.isArray(cachedKeys)) {
+            existingKeys = new Set<string>(cachedKeys);
+          }
+        } catch (_) {}
+      }
+    }
 
-    const existingKeys = new Set<string>();
-    existingValues.forEach(row => {
-      const key = buildImportKey([
-        row[dataPagCol ?? 0],
-        row[contaCol ?? 0],
-        row[valorCol ?? 0],
-        row[filialCol ?? 0],
-        row[descCol ?? 0],
-        row[tipoCol ?? 0],
-      ]);
-      if (key) existingKeys.add(key);
-    });
+    if (!cachedKeys) {
+      const lastRow = sheet.getLastRow();
+      const numRows = lastRow > 1 ? lastRow - 1 : 0;
+      const existingValues = numRows > 0
+        ? sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getDisplayValues()
+        : [];
+      existingValues.forEach(row => {
+        const key = buildImportKey([
+          row[dataPagCol ?? 0],
+          row[contaCol ?? 0],
+          row[valorCol ?? 0],
+          row[filialCol ?? 0],
+          row[descCol ?? 0],
+          row[tipoCol ?? 0],
+        ]);
+        if (key) existingKeys.add(key);
+      });
+    }
 
     const rowsToAppend: any[][] = [];
     let skipped = 0;
@@ -4701,6 +4730,13 @@ export function importarContasPagasTxt(
 
     if (!rowsToAppend.length) {
       const nextOffset = end < total ? end : null;
+      if (cacheKey) {
+        const keysArr = Array.from(existingKeys);
+        const serialized = JSON.stringify(keysArr);
+        if (serialized.length < 90000) {
+          cache.put(cacheKey, serialized, 600);
+        }
+      }
       return { success: true, message: 'Nenhuma linha nova para importar', imported: 0, skipped, nextOffset, total };
     }
 
@@ -4708,6 +4744,13 @@ export function importarContasPagasTxt(
     sheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
 
     invalidateLancamentosCache();
+    if (cacheKey) {
+      const keysArr = Array.from(existingKeys);
+      const serialized = JSON.stringify(keysArr);
+      if (serialized.length < 90000) {
+        cache.put(cacheKey, serialized, 600);
+      }
+    }
     appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped, start, end }, true);
     const nextOffset = end < total ? end : null;
     return {

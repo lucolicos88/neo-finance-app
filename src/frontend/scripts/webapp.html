@@ -1335,6 +1335,7 @@ function pagarEmLote() {
           const rows = preview.preview || [];
           const total = preview.total || rows.length;
           const unmapped = preview.unmapped || 0;
+          const sessionId = preview.sessionId || '';
           const html = `
             <div style="max-height: 320px; overflow:auto; border:1px solid #e0e0e0; border-radius:8px;">
               <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
@@ -1384,7 +1385,7 @@ function pagarEmLote() {
               return;
             }
             const totalRows = total || rows.length;
-            const batchLimit = 200;
+            const batchLimit = 100;
             let currentOffset = 0;
 
             const runBatch = () => {
@@ -1410,7 +1411,7 @@ function pagarEmLote() {
                   hideLoading();
                   handleError(err);
                 })
-                .importarContasPagasTxt(content, file.name, currentOffset, batchLimit);
+                .importarContasPagasTxt(content, file.name, currentOffset, batchLimit, sessionId);
             };
 
             runBatch();
