@@ -4269,8 +4269,8 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
       lastMoneyText = moneyMatch[0];
       lastMoneyIndex = moneyMatch.index ?? -1;
     }
-    const valorStr = lastMoneyText;
-    const valor = parseMoneyInput(valorStr);
+    let valorStr = lastMoneyText;
+    let valor = parseMoneyInput(valorStr);
 
     let dtVenc = '';
     let dtOpe = '';
@@ -4308,6 +4308,15 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
           numeroDocumento = docMatch[2].trim();
         }
       }
+    }
+
+    // Regra especial: DARF PIS/COFINS vem com documento colado no valor.
+    const darfMatch = line.match(/DARF\s+(PIS|COFINS)\s+(\d{2}\.\d{2}\.\d{5}\.\d{6})(\d{1,3}(?:\.\d{3})*,\d{2})/);
+    if (darfMatch) {
+      historico = `DARF ${darfMatch[1]}`;
+      numeroDocumento = darfMatch[2];
+      valorStr = darfMatch[3];
+      valor = parseMoneyInput(valorStr);
     }
 
     const tipo = tipoFlag === 'D' ? 'DESPESA' : 'RECEITA';
