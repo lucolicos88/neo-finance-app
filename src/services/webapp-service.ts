@@ -2836,6 +2836,7 @@ export function salvarLancamento(lancamento: any): { success: boolean; message: 
       sanitizeSheetString(lancamento.idExtratoBanco || ''),      // ID Extrato Banco
       sanitizeSheetString(lancamento.origem || 'MANUAL'),        // Origem
       sanitizeSheetString(lancamento.observacoes || ''),         // Observações
+      sanitizeSheetString((lancamento as any).numeroDocumento || ''), // N Documento
     ];
 
       // Adicionar linha à planilha (mais rápido que appendRow)
@@ -2964,6 +2965,7 @@ export function atualizarLancamento(lancamento: any): { success: boolean; messag
       setValue('Multa', multa);
       setValue('Valor LÇðquido', valorLiquido);
       setValue('ObservaÇõÇæes', sanitizeSheetString(lancamento.observacoes || ''));
+      setValue('N Documento', sanitizeSheetString((lancamento as any).numeroDocumento || ''));
 
       sheet.getRange(row, 1, 1, lastCol).setValues([rowValues]);
 
@@ -4211,6 +4213,7 @@ type ParsedContaPaga = {
   dataPagamento: string;
   contaContabil: string;
   descricao: string;
+  numeroDocumento: string;
   valor: number;
   tipo: 'DESPESA' | 'RECEITA';
   filialOriginal: string;
@@ -4226,7 +4229,7 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
   let filialAtual = '';
 
   const filialRegex = /^Filial:\s*(\d+)\s*-\s*([^\r]+?)\s{2,}/i;
-  const tailRegex = /([0-9.]+,[0-9]{2})\s+([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
+  const tailRegex = /((?:\d{1,3}(?:\.\d{3})+|\d{1,6}),\d{2})\s+([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
 
   for (const rawLine of lines) {
     const line = String(rawLine || '').trimRight();
@@ -4246,12 +4249,25 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
     const tipoFlag = String(tail[2] || '').toUpperCase();
     const dtBaixa = normalizeDateInput(tail[4]);
     const left = line.slice(0, tail.index).trimRight();
-    const leftParts = left.split(/\s+/);
-    if (leftParts.length < 3) continue;
-    const dtVenc = normalizeDateInput(leftParts[0]);
-    const dtOpe = normalizeDateInput(leftParts[1]);
-    const conta = String(leftParts[2] || '').trim();
-    const historico = leftParts.slice(3).join(' ').trim();
+    const startMatch = left.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(.*)$/);
+    if (!startMatch) continue;
+    const dtVenc = normalizeDateInput(startMatch[1]);
+    const dtOpe = normalizeDateInput(startMatch[2]);
+    const conta = String(startMatch[3] || '').trim();
+    const rest = String(startMatch[4] || '').trimRight();
+    let historico = rest;
+    let numeroDocumento = '';
+    const restParts = rest.split(/\s{2,}/).map(p => p.trim()).filter(Boolean);
+    if (restParts.length >= 2) {
+      numeroDocumento = restParts.pop() || '';
+      historico = restParts.join(' ').trim();
+    } else {
+      const docMatch = rest.match(/^(.*?)(?:\s+)([0-9A-Z][0-9A-Z.\/-]{3,})$/);
+      if (docMatch) {
+        historico = docMatch[1].trim();
+        numeroDocumento = docMatch[2].trim();
+      }
+    }
 
     const tipo = tipoFlag === 'D' ? 'DESPESA' : 'RECEITA';
     if (!dtVenc || !dtOpe || !dtBaixa || !conta || !historico || !Number.isFinite(valor)) continue;
@@ -4265,6 +4281,7 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
       dataPagamento: dtBaixa,
       contaContabil: conta,
       descricao: historico,
+      numeroDocumento,
       valor,
       tipo,
       filialOriginal: filialAtual || 'N/A',
@@ -4371,6 +4388,23 @@ function findHeaderIndexByAliases(headers: string[], aliases: string[]): number 
   const normalized = headers.map(h => normalizeKey(h));
   const aliasSet = new Set(aliases.map(a => normalizeKey(a)));
   return normalized.findIndex(h => aliasSet.has(h));
+}
+
+function ensureLancamentosNumeroDocumentoColumn(sheet: GoogleAppsScript.Spreadsheet.Sheet): number {
+  const lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return -1;
+  const headers = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0] || [];
+  let idx = findHeaderIndexByAliases(headers, [
+    'n documento',
+    'ndocumento',
+    'numero documento',
+    'num documento',
+    'documento'
+  ]);
+  if (idx !== -1) return idx;
+  sheet.insertColumnsAfter(lastCol, 1);
+  sheet.getRange(1, lastCol + 1).setValue('N Documento');
+  return lastCol;
 }
 
 function isPagoStatus(status: string): boolean {
@@ -4499,6 +4533,7 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
     if (!sheet) throw new Error('Aba de lan?amentos n?o encontrada');
 
+    ensureLancamentosNumeroDocumentoColumn(sheet);
     const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
     const idCol = findHeaderIndexByAliases(headerRow, ['id', 'codigo']);
     const dataPagCol = findHeaderIndexByAliases(headerRow, [
@@ -4586,6 +4621,7 @@ export function importarContasPagasTxt(content: string, fileName?: string): { su
         '',
         sanitizeSheetString('ERP_TXT'),
         sanitizeSheetString(obs),
+        sanitizeSheetString(item.numeroDocumento || ''),
       ];
 
       rowsToAppend.push(row);
@@ -5002,8 +5038,16 @@ function getLancamentosFromSheet(): any[] {
     'Status',
     'ID Extrato Banco',
     'Origem',
-    'Observações'
+    'Observações',
+    'N Documento'
   ]);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
+  if (sheet) {
+    ensureLancamentosNumeroDocumentoColumn(sheet);
+  }
+
 
   const cached = cacheGet<any[]>(CacheNamespace.LANCAMENTOS, LANCAMENTOS_CACHE_KEY, CacheScope.SCRIPT);
   if (cached) return cached;
@@ -5015,12 +5059,12 @@ function getLancamentosFromSheet(): any[] {
       return [];
     }
     const seed = [
-      ['CP-1001','2025-01-02','2025-01-12','2025-01-11','DESPESA','MATRIZ','OPS','Compra MP','10201','','ONLINE','Compra matéria-prima lote A',1500,0,0,0,1500,'PAGO','EXT-5002','Fornecedor X','Lote inicial'],
-      ['CP-1002','2025-01-05','2025-01-20','','DESPESA','MATRIZ','OPS','Frete Compras','10205','','ONLINE','Frete compras fornecedores',400,0,0,0,400,'PENDENTE','','Fornecedor Y','À espera de pagamento'],
-      ['CP-1003','2025-01-03','2025-01-30','','DESPESA','MATRIZ','ADM','Honorários','10402','','ONLINE','Honorários contábeis mês jan',900,0,0,0,900,'PENDENTE','','Escritório Z','Contrato mensal'],
-      ['CR-2001','2025-01-02','2025-01-02','2025-01-02','RECEITA','MATRIZ','COM','Receita Fórmulas','20101','Receita Varejo','ONLINE','Venda balcão fórmulas',3200,0,0,0,3200,'RECEBIDA','EXT-5001','Venda Direta','Balcão janeiro'],
-      ['CR-2002','2025-01-04','2025-01-14','','RECEITA','MATRIZ','COM','Receita Varejo','20102','Receita Varejo','ONLINE','Venda varejo online',2800,0,0,0,2800,'PENDENTE','','E-commerce','Pedido #234'],
-      ['CR-2003','2025-01-06','2025-01-21','','RECEITA','FILIAL_RJ','COM','Receita Convênio','20108','Receita Convênio','PARCEIRO','Convenio Varejo',2100,0,0,0,2100,'PENDENTE','','Convênio Varejo','Ref. janeiro'],
+      ['CP-1001','2025-01-02','2025-01-12','2025-01-11','DESPESA','MATRIZ','OPS','Compra MP','10201','','ONLINE','Compra matéria-prima lote A',1500,0,0,0,1500,'PAGO','EXT-5002','Fornecedor X','Lote inicial','' ],
+      ['CP-1002','2025-01-05','2025-01-20','','DESPESA','MATRIZ','OPS','Frete Compras','10205','','ONLINE','Frete compras fornecedores',400,0,0,0,400,'PENDENTE','','Fornecedor Y','À espera de pagamento','' ],
+      ['CP-1003','2025-01-03','2025-01-30','','DESPESA','MATRIZ','ADM','Honorários','10402','','ONLINE','Honorários contábeis mês jan',900,0,0,0,900,'PENDENTE','','Escritório Z','Contrato mensal','' ],
+      ['CR-2001','2025-01-02','2025-01-02','2025-01-02','RECEITA','MATRIZ','COM','Receita Fórmulas','20101','Receita Varejo','ONLINE','Venda balcão fórmulas',3200,0,0,0,3200,'RECEBIDA','EXT-5001','Venda Direta','Balcão janeiro','' ],
+      ['CR-2002','2025-01-04','2025-01-14','','RECEITA','MATRIZ','COM','Receita Varejo','20102','Receita Varejo','ONLINE','Venda varejo online',2800,0,0,0,2800,'PENDENTE','','E-commerce','Pedido #234','' ],
+      ['CR-2003','2025-01-06','2025-01-21','','RECEITA','FILIAL_RJ','COM','Receita Convênio','20108','Receita Convênio','PARCEIRO','Convenio Varejo',2100,0,0,0,2100,'PENDENTE','','Convênio Varejo','Ref. janeiro','' ],
     ];
     appendRows(SHEET_TB_LANCAMENTOS, seed);
     const seeded = seed.map(r => ({
@@ -5045,6 +5089,7 @@ function getLancamentosFromSheet(): any[] {
       idExtratoBanco: String(r[18] || ''),
       origem: String(r[19] || ''),
       observacoes: String(r[20] || ''),
+      numeroDocumento: String(r[21] || ''),
     }));
     cacheSet(CacheNamespace.EXTRATOS, EXTRATOS_CACHE_KEY, seeded, DATA_CACHE_TTL_SECONDS, CacheScope.SCRIPT);
     return seeded;
@@ -5072,6 +5117,7 @@ function getLancamentosFromSheet(): any[] {
     idExtratoBanco: String(row[18] || ''),
     origem: String(row[19] || ''),
     observacoes: String(row[20] || ''),
+    numeroDocumento: String(row[21] || ''),
   })).map(l => {
     const tipoNorm = String(l.tipo || '').toUpperCase();
     if (tipoNorm === 'AP') l.tipo = 'DESPESA';
@@ -5109,10 +5155,10 @@ function getExtratosFromSheet(): any[] {
       return [];
     }
     const seed = [
-      ['EXT-5001','2025-01-02','Recebimento cartão venda balcão',3200,'ENTRADA','BANCO_A','CC_MATRIZ','CONCILIADO','CR-2001','Pedido balcão','2025-01-03'],
-      ['EXT-5002','2025-01-11','Pagamento fornecedor matéria-prima',-1500,'SAIDA','BANCO_A','CC_MATRIZ','CONCILIADO','CP-1001','Pagto lote A','2025-01-11'],
-      ['EXT-5003','2025-01-15','Taxa bancária jan',-25,'SAIDA','BANCO_A','CC_MATRIZ','PENDENTE','','Tarifa débito','2025-01-15'],
-      ['EXT-5004','2025-01-16','Recebimento boleto convênio',2100,'ENTRADA','BANCO_A','CC_MATRIZ','PENDENTE','CR-2003','Convênio varejo','2025-01-16'],
+      ['EXT-5001','2025-01-02','Recebimento cartão venda balcão',3200,'ENTRADA','BANCO_A','CC_MATRIZ','CONCILIADO','CR-2001','Pedido balcão','2025-01-03','' ],
+      ['EXT-5002','2025-01-11','Pagamento fornecedor matéria-prima',-1500,'SAIDA','BANCO_A','CC_MATRIZ','CONCILIADO','CP-1001','Pagto lote A','2025-01-11','' ],
+      ['EXT-5003','2025-01-15','Taxa bancária jan',-25,'SAIDA','BANCO_A','CC_MATRIZ','PENDENTE','','Tarifa débito','2025-01-15','' ],
+      ['EXT-5004','2025-01-16','Recebimento boleto convênio',2100,'ENTRADA','BANCO_A','CC_MATRIZ','PENDENTE','CR-2003','Convênio varejo','2025-01-16','' ],
     ];
     appendRows(SHEET_TB_EXTRATOS, seed);
     const seeded = seed.map(r => ({

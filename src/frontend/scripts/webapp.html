@@ -1345,6 +1345,7 @@ function pagarEmLote() {
                     <th style="padding:6px 8px; text-align:left;">Baixa</th>
                     <th style="padding:6px 8px; text-align:left;">Conta</th>
                     <th style="padding:6px 8px; text-align:left;">Descricao</th>
+                    <th style="padding:6px 8px; text-align:left;">N Documento</th>
                     <th style="padding:6px 8px; text-align:right;">Valor</th>
                     <th style="padding:6px 8px; text-align:left;">Filial</th>
                     <th style="padding:6px 8px; text-align:left;">Mapeamento</th>
@@ -1358,6 +1359,7 @@ function pagarEmLote() {
                       <td style="padding:6px 8px;">${escapeHtml(r.dataPagamento)}</td>
                       <td style="padding:6px 8px;">${escapeHtml(r.contaContabil)}</td>
                       <td style="padding:6px 8px;">${escapeHtml(r.descricao)}</td>
+                      <td style="padding:6px 8px;">${escapeHtml(r.numeroDocumento || '')}</td>
                       <td style="padding:6px 8px; text-align:right;">${formatCurrency(Number(r.valor || 0))}</td>
                       <td style="padding:6px 8px;">${escapeHtml(r.filialOriginal)}</td>
                       <td style="padding:6px 8px;">${escapeHtml(r.filialMapeada)}</td>
