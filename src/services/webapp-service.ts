@@ -4698,6 +4698,14 @@ export function previewContasPagasTxt(content: string): {
     }
     const unmapped = parsed.filter(p => p.filialMapeada === p.filialOriginal).length;
     const sessionId = computeContentHash(content);
+    const props = PropertiesService.getScriptProperties();
+    const key = `import_cp_file_${sessionId}`;
+    if (!props.getProperty(key)) {
+      if (content.length > 450000) {
+        return { success: false, message: 'Arquivo muito grande para importar via webapp. Envie um arquivo menor ou contate o suporte.' };
+      }
+      props.setProperty(key, content);
+    }
     return {
       success: true,
       message: 'Preview gerado',
@@ -4745,7 +4753,17 @@ export function importarContasPagasTxt(
     }
 
     const filiais = getFiliaisForMapping();
-    const sliceResult = parseContasPagasTxtSlice(content, filiais, offset, limit);
+    let sourceContent = content;
+    if (sessionId) {
+      const props = PropertiesService.getScriptProperties();
+      const stored = props.getProperty(`import_cp_file_${sessionId}`);
+      if (stored) sourceContent = stored;
+    }
+    if (!sourceContent || !String(sourceContent).trim()) {
+      return { success: false, message: 'Arquivo nao encontrado para importacao. Gere o preview novamente.' };
+    }
+
+    const sliceResult = parseContasPagasTxtSlice(sourceContent, filiais, offset, limit);
     const parsed = sliceResult.items;
     if (!parsed.length) {
       return { success: false, message: 'Nenhuma linha valida para importar' };
@@ -4881,6 +4899,9 @@ export function importarContasPagasTxt(
           cache.put(cacheKey, serialized, 600);
         }
       }
+      if (sessionId && nextOffset === null) {
+        PropertiesService.getScriptProperties().deleteProperty(`import_cp_file_${sessionId}`);
+      }
       return { success: true, message: 'Nenhuma linha nova para importar', imported: 0, skipped, nextOffset, total: totalCount || undefined };
     }
 
@@ -4897,6 +4918,9 @@ export function importarContasPagasTxt(
     }
     appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped, start, nextOffsetRaw }, true);
     const nextOffset = totalCount > 0 ? (nextOffsetRaw < totalCount ? nextOffsetRaw : null) : nextOffsetRaw;
+    if (sessionId && nextOffset === null) {
+      PropertiesService.getScriptProperties().deleteProperty(`import_cp_file_${sessionId}`);
+    }
     return {
       success: true,
       message: `${rowsToAppend.length} contas pagas importadas (${skipped} duplicadas)`,

@@ -1385,7 +1385,7 @@ function pagarEmLote() {
               return;
             }
             const totalRows = total || rows.length;
-            const batchLimit = 100;
+            const batchLimit = 50;
             let currentOffset = 0;
             const skipDedup = true;
 
@@ -1412,7 +1412,7 @@ function pagarEmLote() {
                   hideLoading();
                   handleError(err);
                 })
-                .importarContasPagasTxt(content, file.name, currentOffset, batchLimit, sessionId, totalRows, skipDedup);
+                .importarContasPagasTxt('', file.name, currentOffset, batchLimit, sessionId, totalRows, skipDedup);
             };
 
             runBatch();
