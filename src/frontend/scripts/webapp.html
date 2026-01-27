@@ -1323,6 +1323,7 @@ function pagarEmLote() {
     readFileText(file).then(content => {
       if (!content) {
         hideLoading();
+        showToast(`Arquivo vazio (size: ${file.size} bytes)`, 'error');
         return;
       }
       window.gasRun
@@ -1909,13 +1910,27 @@ function fetchSheetData(sheetIdOrUrl) {
     return new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = function(e) {
-        resolve(e.target.result ? String(e.target.result) : '');
+        try {
+          const buffer = e.target.result;
+          if (!buffer) {
+            resolve('');
+            return;
+          }
+          const bytes = buffer instanceof ArrayBuffer ? buffer : buffer.buffer;
+          let text = new TextDecoder('iso-8859-1').decode(bytes);
+          if (!text || !String(text).trim()) {
+            text = new TextDecoder('utf-8').decode(bytes);
+          }
+          resolve(String(text || ''));
+        } catch (err) {
+          resolve('');
+        }
       };
       reader.onerror = function() {
         showToast('Erro ao ler TXT', 'error');
         resolve('');
       };
-      reader.readAsText(file, 'ISO-8859-1');
+      reader.readAsArrayBuffer(file);
     });
   }
 

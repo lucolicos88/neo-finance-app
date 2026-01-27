@@ -4512,7 +4512,7 @@ export function iniciarImportacaoContasPagasTxt(content: string): {
     const denied = requirePermission('importarArquivos', 'iniciar importacao contas pagas');
     if (denied) return { success: false, message: denied.message };
     if (!content || !String(content).trim()) {
-      return { success: false, message: 'Arquivo vazio' };
+      return { success: false, message: `Arquivo vazio (len=${String(content || '').length})` };
     }
     const sessionId = computeContentHash(content);
     const props = PropertiesService.getScriptProperties();
