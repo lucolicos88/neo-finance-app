@@ -4351,6 +4351,144 @@ function parseContasPagasTxt(content: string, filiais: Array<{ codigo: string; n
   return items;
 }
 
+function parseContasPagasTxtSlice(
+  content: string,
+  filiais: Array<{ codigo: string; nome: string }> = [],
+  start: number = 0,
+  limit: number = 200
+): { items: ParsedContaPaga[]; nextOffset: number } {
+  const lines = String(content || '').split(/\r?\n/);
+  const items: ParsedContaPaga[] = [];
+  let filialAtual = '';
+  let colContaStart = -1;
+  let colHistStart = -1;
+  let colDocStart = -1;
+  let colValorStart = -1;
+  const filialRegex = /^Filial:\s*(\d+)\s*-\s*([^\r]+?)\s{2,}/i;
+  const tailRegex = /([A-Z])\s+([A-Z])\s+(\d{2}\/\d{2}\/\d{4})\s*$/;
+  let count = 0;
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trimRight();
+    if (!line) continue;
+    const filialMatch = line.match(filialRegex);
+    if (filialMatch) {
+      const codigo = filialMatch[1];
+      const nome = filialMatch[2].trim();
+      filialAtual = `${codigo} - ${nome}`;
+      continue;
+    }
+    if (line.includes('DT.VENC.') && line.includes('VALOR') && line.includes('DT.BAIXA')) {
+      colContaStart = line.indexOf('CONTA');
+      colHistStart = line.indexOf('HISTORICO');
+      colDocStart = line.indexOf('/N.DOCUMENTO');
+      colValorStart = line.indexOf('VALOR');
+      continue;
+    }
+    if (!/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+/.test(line)) continue;
+    const tail = line.match(tailRegex);
+    if (!tail) continue;
+
+    const tipoFlag = String(tail[1] || '').toUpperCase();
+    const dtBaixa = normalizeDateInput(tail[3]);
+    const tailIndex = typeof tail.index === 'number' ? tail.index : line.length;
+
+    const preTail = line.slice(0, tailIndex);
+    const moneyRegex = /(?:\d{1,3}(?:\.\d{3})+|\d{1,6}),\d{2}/g;
+    let lastMoneyText = '';
+    let lastMoneyIndex = -1;
+    let moneyMatch: RegExpExecArray | null;
+    while ((moneyMatch = moneyRegex.exec(preTail)) !== null) {
+      lastMoneyText = moneyMatch[0];
+      lastMoneyIndex = moneyMatch.index ?? -1;
+    }
+    let valorStr = lastMoneyText;
+    let valor = parseMoneyInput(valorStr);
+
+    let dtVenc = '';
+    let dtOpe = '';
+    let conta = '';
+    let historico = '';
+    let numeroDocumento = '';
+
+    if (colContaStart >= 0 && colHistStart > colContaStart) {
+      dtVenc = normalizeDateInput(line.substring(0, 10).trim());
+      dtOpe = normalizeDateInput(line.substring(11, 21).trim());
+      conta = line.substring(colContaStart, colHistStart).trim();
+      const moneyIndex = lastMoneyIndex;
+      if (colDocStart > colHistStart && (moneyIndex > colDocStart || colValorStart > colDocStart)) {
+        historico = line.substring(colHistStart, colDocStart).trim();
+        const docEnd = moneyIndex > colDocStart ? moneyIndex : colValorStart;
+        numeroDocumento = line.substring(colDocStart, docEnd).trim().replace(/^\/+/, '').trim();
+      }
+    } else {
+      const left = line.slice(0, tailIndex).trimRight();
+      const startMatch = left.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(\S+)\s+(.*)$/);
+      if (!startMatch) continue;
+      dtVenc = normalizeDateInput(startMatch[1]);
+      dtOpe = normalizeDateInput(startMatch[2]);
+      conta = String(startMatch[3] || '').trim();
+      const rest = String(startMatch[4] || '').trimRight();
+      historico = rest;
+      const restParts = rest.split(/\s{2,}/).map(p => p.trim()).filter(Boolean);
+      if (restParts.length >= 2) {
+        numeroDocumento = restParts.pop() || '';
+        historico = restParts.join(' ').trim();
+      } else {
+        const docMatch = rest.match(/^(.*?)(?:\s+)([0-9A-Z][0-9A-Z.\/-]{3,})$/);
+        if (docMatch) {
+          historico = docMatch[1].trim();
+          numeroDocumento = docMatch[2].trim();
+        }
+      }
+    }
+
+    if (/DARF\s+(PIS|COFINS)/.test(line)) {
+      const docMatch = line.match(/(DARF\s+(?:PIS|COFINS))\s+(\d{2}\.\d{2}\.\d{5}\.\d{6})/);
+      if (docMatch) {
+        historico = docMatch[1].trim();
+        numeroDocumento = docMatch[2];
+        const afterDoc = line.slice(line.indexOf(numeroDocumento) + numeroDocumento.length);
+        const valMatch = afterDoc.match(/(\d{1,3}(?:\.\d{3})*,\d{2})/);
+        if (valMatch) {
+          valorStr = valMatch[1];
+          valor = parseMoneyInput(valorStr);
+        }
+      }
+    }
+
+    const tipo = tipoFlag === 'D' ? 'DESPESA' : 'RECEITA';
+    if (!dtVenc || !dtOpe || !dtBaixa || !conta || !historico || !Number.isFinite(valor)) continue;
+
+    if (count >= start && items.length < limit) {
+      const mapping = mapFilialTxt(filialAtual || '', filiais);
+      const rateio = isRateioFilial(filialAtual) || isRateioFilial(mapping.codigo);
+      const rateioTargets = rateio ? getRateioTargets() : [];
+      items.push({
+        dataVencimento: dtVenc,
+        dataCompetencia: dtOpe,
+        dataPagamento: dtBaixa,
+        contaContabil: conta,
+        descricao: historico,
+        numeroDocumento,
+        valor,
+        tipo,
+        filialOriginal: filialAtual || 'N/A',
+        filialMapeada: mapping.codigo,
+        filialMapeadaOrigem: mapping.origem,
+        rateio,
+        rateioCount: rateioTargets.length,
+      });
+    }
+    count += 1;
+    if (items.length >= limit) {
+      return { items, nextOffset: count };
+    }
+  }
+
+  return { items, nextOffset: count };
+}
+
 function mapFilialTxt(filialTxt: string, filiais: Array<{ codigo: string; nome: string }>): { codigo: string; origem: string } {
   const fallback = filialTxt || 'N/A';
   if (isRateioFilial(filialTxt)) return { codigo: 'RATEIO', origem: 'rateio' };
@@ -4587,7 +4725,9 @@ export function importarContasPagasTxt(
   fileName?: string,
   offset: number = 0,
   limit: number = 200,
-  sessionId?: string
+  sessionId?: string,
+  total?: number,
+  skipDedup: boolean = false
 ): {
   success: boolean;
   message: string;
@@ -4605,14 +4745,14 @@ export function importarContasPagasTxt(
     }
 
     const filiais = getFiliaisForMapping();
-    const parsed = parseContasPagasTxt(content, filiais);
+    const sliceResult = parseContasPagasTxtSlice(content, filiais, offset, limit);
+    const parsed = sliceResult.items;
     if (!parsed.length) {
       return { success: false, message: 'Nenhuma linha valida para importar' };
     }
-    const total = parsed.length;
     const start = Math.max(0, Number(offset) || 0);
-    const end = Math.min(total, start + Math.max(1, Number(limit) || 200));
-    const slice = parsed.slice(start, end);
+    const nextOffsetRaw = sliceResult.nextOffset;
+    const totalCount = Number(total || 0);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
@@ -4644,41 +4784,43 @@ export function importarContasPagasTxt(
     const cacheKey = sessionId ? `import_cp_keys_${sessionId}` : '';
     let existingKeys = new Set<string>();
     let cachedKeys: string[] | null = null;
-    if (cacheKey) {
-      const cached = cache.get(cacheKey);
-      if (cached) {
-        try {
-          cachedKeys = JSON.parse(cached);
-          if (Array.isArray(cachedKeys)) {
-            existingKeys = new Set<string>(cachedKeys);
-          }
-        } catch (_) {}
+    if (!skipDedup) {
+      if (cacheKey) {
+        const cached = cache.get(cacheKey);
+        if (cached) {
+          try {
+            cachedKeys = JSON.parse(cached);
+            if (Array.isArray(cachedKeys)) {
+              existingKeys = new Set<string>(cachedKeys);
+            }
+          } catch (_) {}
+        }
       }
-    }
 
-    if (!cachedKeys) {
-      const lastRow = sheet.getLastRow();
-      const numRows = lastRow > 1 ? lastRow - 1 : 0;
-      const existingValues = numRows > 0
-        ? sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getDisplayValues()
-        : [];
-      existingValues.forEach(row => {
-        const key = buildImportKey([
-          row[dataPagCol ?? 0],
-          row[contaCol ?? 0],
-          row[valorCol ?? 0],
-          row[filialCol ?? 0],
-          row[descCol ?? 0],
-          row[tipoCol ?? 0],
-        ]);
-        if (key) existingKeys.add(key);
-      });
+      if (!cachedKeys) {
+        const lastRow = sheet.getLastRow();
+        const numRows = lastRow > 1 ? lastRow - 1 : 0;
+        const existingValues = numRows > 0
+          ? sheet.getRange(2, 1, numRows, sheet.getLastColumn()).getDisplayValues()
+          : [];
+        existingValues.forEach(row => {
+          const key = buildImportKey([
+            row[dataPagCol ?? 0],
+            row[contaCol ?? 0],
+            row[valorCol ?? 0],
+            row[filialCol ?? 0],
+            row[descCol ?? 0],
+            row[tipoCol ?? 0],
+          ]);
+          if (key) existingKeys.add(key);
+        });
+      }
     }
 
     const rowsToAppend: any[][] = [];
     let skipped = 0;
 
-    slice.forEach((item) => {
+    parsed.forEach((item) => {
       if (item.tipo !== 'DESPESA') return;
       const status = item.tipo === 'DESPESA' ? 'PAGA' : 'RECEBIDA';
       const key = buildImportKey([
@@ -4689,11 +4831,13 @@ export function importarContasPagasTxt(
         item.descricao,
         item.tipo,
       ]);
-      if (existingKeys.has(key)) {
-        skipped++;
-        return;
+      if (!skipDedup) {
+        if (existingKeys.has(key)) {
+          skipped++;
+          return;
+        }
+        existingKeys.add(key);
       }
-      existingKeys.add(key);
 
       const id = `CP-ERP-${Utilities.getUuid()}`;
       const obs = item.rateio
@@ -4729,37 +4873,37 @@ export function importarContasPagasTxt(
     });
 
     if (!rowsToAppend.length) {
-      const nextOffset = end < total ? end : null;
-      if (cacheKey) {
+      const nextOffset = totalCount > 0 ? (nextOffsetRaw < totalCount ? nextOffsetRaw : null) : nextOffsetRaw;
+      if (cacheKey && !skipDedup) {
         const keysArr = Array.from(existingKeys);
         const serialized = JSON.stringify(keysArr);
         if (serialized.length < 90000) {
           cache.put(cacheKey, serialized, 600);
         }
       }
-      return { success: true, message: 'Nenhuma linha nova para importar', imported: 0, skipped, nextOffset, total };
+      return { success: true, message: 'Nenhuma linha nova para importar', imported: 0, skipped, nextOffset, total: totalCount || undefined };
     }
 
     const startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
 
     invalidateLancamentosCache();
-    if (cacheKey) {
+    if (cacheKey && !skipDedup) {
       const keysArr = Array.from(existingKeys);
       const serialized = JSON.stringify(keysArr);
       if (serialized.length < 90000) {
         cache.put(cacheKey, serialized, 600);
       }
     }
-    appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped, start, end }, true);
-    const nextOffset = end < total ? end : null;
+    appendAuditLog('importarContasPagasTxt', { imported: rowsToAppend.length, skipped, start, nextOffsetRaw }, true);
+    const nextOffset = totalCount > 0 ? (nextOffsetRaw < totalCount ? nextOffsetRaw : null) : nextOffsetRaw;
     return {
       success: true,
       message: `${rowsToAppend.length} contas pagas importadas (${skipped} duplicadas)`,
       imported: rowsToAppend.length,
       skipped,
       nextOffset,
-      total
+      total: totalCount || undefined
     };
   } catch (error: any) {
     appendAuditLog('importarContasPagasTxt', { fileName }, false, error?.message);

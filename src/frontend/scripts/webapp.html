@@ -1387,6 +1387,7 @@ function pagarEmLote() {
             const totalRows = total || rows.length;
             const batchLimit = 100;
             let currentOffset = 0;
+            const skipDedup = true;
 
             const runBatch = () => {
               showLoading(`Importando contas pagas... ${Math.min(currentOffset, totalRows)}/${totalRows}`);
@@ -1411,7 +1412,7 @@ function pagarEmLote() {
                   hideLoading();
                   handleError(err);
                 })
-                .importarContasPagasTxt(content, file.name, currentOffset, batchLimit, sessionId);
+                .importarContasPagasTxt(content, file.name, currentOffset, batchLimit, sessionId, totalRows, skipDedup);
             };
 
             runBatch();
