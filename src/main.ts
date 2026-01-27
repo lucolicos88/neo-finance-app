@@ -36,6 +36,7 @@ import {
   importarSieg,
   importarContasPagasTxt,
   previewContasPagasTxt,
+  iniciarImportacaoContasPagasTxt,
   getSheetData,
   toggleCentroCusto,
   seedPlanoContasFromList,
@@ -489,8 +490,9 @@ global.conciliarAutomatico = wrapApi('conciliarAutomatico', conciliarAutomatico)
 global.importarFc = wrapApi('importarFc', importarFc);
 global.importarItau = wrapApi('importarItau', importarItau);
 global.importarSieg = wrapApi('importarSieg', importarSieg);
-  global.importarContasPagasTxt = wrapApi('importarContasPagasTxt', importarContasPagasTxt);
-  global.previewContasPagasTxt = wrapApi('previewContasPagasTxt', previewContasPagasTxt);
+global.importarContasPagasTxt = wrapApi('importarContasPagasTxt', importarContasPagasTxt);
+global.previewContasPagasTxt = wrapApi('previewContasPagasTxt', previewContasPagasTxt);
+global.iniciarImportacaoContasPagasTxt = wrapApi('iniciarImportacaoContasPagasTxt', iniciarImportacaoContasPagasTxt);
 global.getSheetData = wrapApi('getSheetData', getSheetData);
 global.toggleCentroCusto = wrapApi('toggleCentroCusto', toggleCentroCusto);
 global.seedPlanoContasFromList = wrapApi('seedPlanoContasFromList', seedPlanoContasFromList);
