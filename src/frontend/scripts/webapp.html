@@ -1326,103 +1326,51 @@ function pagarEmLote() {
         return;
       }
       window.gasRun
-        .withSuccessHandler(function(preview) {
-          hideLoading();
-          if (!preview || !preview.success) {
-            showToast(preview?.message || 'Erro ao gerar preview', 'error');
+        .withSuccessHandler(function(result) {
+          if (!result || !result.success) {
+            hideLoading();
+            showToast(result?.message || 'Erro ao iniciar importacao', 'error');
             return;
           }
-          const rows = preview.preview || [];
-          const total = preview.total || rows.length;
-          const unmapped = preview.unmapped || 0;
-          const sessionId = preview.sessionId || '';
-          const html = `
-            <div style="max-height: 320px; overflow:auto; border:1px solid #e0e0e0; border-radius:8px;">
-              <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-                <thead>
-                  <tr style="background:#f8f9fa;">
-                    <th style="padding:6px 8px; text-align:left;">Venc.</th>
-                    <th style="padding:6px 8px; text-align:left;">Baixa</th>
-                    <th style="padding:6px 8px; text-align:left;">Conta</th>
-                    <th style="padding:6px 8px; text-align:left;">Descricao</th>
-                    <th style="padding:6px 8px; text-align:left;">N Documento</th>
-                    <th style="padding:6px 8px; text-align:right;">Valor</th>
-                    <th style="padding:6px 8px; text-align:left;">Filial</th>
-                    <th style="padding:6px 8px; text-align:left;">Mapeamento</th>
-                    <th style="padding:6px 8px; text-align:left;">Rateio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows.map(r => `
-                    <tr>
-                      <td style="padding:6px 8px;">${escapeHtml(r.dataVencimento)}</td>
-                      <td style="padding:6px 8px;">${escapeHtml(r.dataPagamento)}</td>
-                      <td style="padding:6px 8px;">${escapeHtml(r.contaContabil)}</td>
-                      <td style="padding:6px 8px;">${escapeHtml(r.descricao)}</td>
-                      <td style="padding:6px 8px;">${escapeHtml(r.numeroDocumento || '')}</td>
-                      <td style="padding:6px 8px; text-align:right;">${formatCurrency(Number(r.valor || 0))}</td>
-                      <td style="padding:6px 8px;">${escapeHtml(r.filialOriginal)}</td>
-                      <td style="padding:6px 8px;">${escapeHtml(r.filialMapeada)}</td>
-                      <td style="padding:6px 8px;">${r.rateio ? `Sim (${r.rateioCount || 0})` : 'Nao'}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-            <div style="margin-top:0.6rem; font-size:0.9rem;">
-              <strong>Total:</strong> ${total} registros<br>
-              <strong>Filiais sem mapeamento:</strong> ${unmapped}
-            </div>
-          `;
-          openConfirmModal({
-            title: `Preview - Contas Pagas (.TXT)`,
-            messageHtml: html,
-            confirmLabel: 'Importar',
-            cancelLabel: 'Cancelar'
-          }).then(ok => {
-            if (!ok) {
-              if (fileInput) fileInput.value = '';
-              return;
-            }
-            const totalRows = total || rows.length;
-            const batchLimit = 50;
-            let currentOffset = 0;
-            const skipDedup = true;
+          const sessionId = result.sessionId || '';
+          const totalRows = result.total || 0;
+          const batchLimit = 50;
+          let currentOffset = 0;
+          const skipDedup = true;
 
-            const runBatch = () => {
-              showLoading(`Importando contas pagas... ${Math.min(currentOffset, totalRows)}/${totalRows}`);
-              window.gasRun
-                .withSuccessHandler(function(result) {
-                  if (!result || !result.success) {
-                    hideLoading();
-                    showToast(result?.message || 'Erro ao importar contas pagas', 'error');
-                    return;
-                  }
-                  if (result.nextOffset !== null && result.nextOffset !== undefined) {
-                    currentOffset = result.nextOffset;
-                    setTimeout(runBatch, 50);
-                    return;
-                  }
+          const runBatch = () => {
+            showLoading(`Importando contas pagas... ${Math.min(currentOffset, totalRows)}/${totalRows}`);
+            window.gasRun
+              .withSuccessHandler(function(importResult) {
+                if (!importResult || !importResult.success) {
                   hideLoading();
-                  showToast(result.message || 'Importacao concluida', 'success');
-                  if (fileInput) fileInput.value = '';
-                  loadContasPagarData();
-                })
-                .withFailureHandler(function(err) {
-                  hideLoading();
-                  handleError(err);
-                })
-                .importarContasPagasTxt('', file.name, currentOffset, batchLimit, sessionId, totalRows, skipDedup);
-            };
+                  showToast(importResult?.message || 'Erro ao importar contas pagas', 'error');
+                  return;
+                }
+                if (importResult.nextOffset !== null && importResult.nextOffset !== undefined) {
+                  currentOffset = importResult.nextOffset;
+                  setTimeout(runBatch, 50);
+                  return;
+                }
+                hideLoading();
+                showToast(importResult.message || 'Importacao concluida', 'success');
+                if (fileInput) fileInput.value = '';
+                loadContasPagarData();
+              })
+              .withFailureHandler(function(err) {
+                hideLoading();
+                handleError(err);
+              })
+              .importarContasPagasTxt('', file.name, currentOffset, batchLimit, sessionId, totalRows, skipDedup);
+          };
 
-            runBatch();
-          });
+          runBatch();
         })
         .withFailureHandler(function(err) {
           hideLoading();
           handleError(err);
         })
-        .previewContasPagasTxt(content);
+        .iniciarImportacaoContasPagasTxt(content);
     });
   }
 

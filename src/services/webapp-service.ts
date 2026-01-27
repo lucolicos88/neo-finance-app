@@ -4356,7 +4356,7 @@ function parseContasPagasTxtSlice(
   filiais: Array<{ codigo: string; nome: string }> = [],
   start: number = 0,
   limit: number = 200
-): { items: ParsedContaPaga[]; nextOffset: number } {
+): { items: ParsedContaPaga[]; nextOffset: number; total: number } {
   const lines = String(content || '').split(/\r?\n/);
   const items: ParsedContaPaga[] = [];
   let filialAtual = '';
@@ -4482,11 +4482,52 @@ function parseContasPagasTxtSlice(
     }
     count += 1;
     if (items.length >= limit) {
-      return { items, nextOffset: count };
+      return { items, nextOffset: count, total: count };
     }
   }
 
-  return { items, nextOffset: count };
+  return { items, nextOffset: count, total: count };
+}
+
+function countContasPagasEntries(content: string): number {
+  const lines = String(content || '').split(/\r?\n/);
+  let total = 0;
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trimRight();
+    if (!line) continue;
+    if (/^\d{2}\/\d{2}\/\d{4}\s+\d{2}\/\d{2}\/\d{4}\s+/.test(line)) {
+      total += 1;
+    }
+  }
+  return total;
+}
+
+export function iniciarImportacaoContasPagasTxt(content: string): {
+  success: boolean;
+  message: string;
+  sessionId?: string;
+  total?: number;
+} {
+  try {
+    const denied = requirePermission('importarArquivos', 'iniciar importacao contas pagas');
+    if (denied) return { success: false, message: denied.message };
+    if (!content || !String(content).trim()) {
+      return { success: false, message: 'Arquivo vazio' };
+    }
+    const sessionId = computeContentHash(content);
+    const props = PropertiesService.getScriptProperties();
+    const key = `import_cp_file_${sessionId}`;
+    if (!props.getProperty(key)) {
+      if (content.length > 450000) {
+        return { success: false, message: 'Arquivo muito grande para importar via webapp. Envie um arquivo menor ou contate o suporte.' };
+      }
+      props.setProperty(key, content);
+    }
+    const total = countContasPagasEntries(content);
+    return { success: true, message: 'Importacao iniciada', sessionId, total };
+  } catch (error: any) {
+    return { success: false, message: error.message };
+  }
 }
 
 function mapFilialTxt(filialTxt: string, filiais: Array<{ codigo: string; nome: string }>): { codigo: string; origem: string } {
@@ -4770,7 +4811,7 @@ export function importarContasPagasTxt(
     }
     const start = Math.max(0, Number(offset) || 0);
     const nextOffsetRaw = sliceResult.nextOffset;
-    const totalCount = Number(total || 0);
+    const totalCount = Number(total || sliceResult.total || 0);
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_TB_LANCAMENTOS);
